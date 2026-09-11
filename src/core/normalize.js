@@ -1,0 +1,495 @@
+// ═══════════════════════════════════════════════════════════════
+//  تطبيع استجابة /api/bootstrap إلى نفس أشكال الحالة المحلية القديمة
+// ═══════════════════════════════════════════════════════════════
+//
+// ⚠ نطاق متعمَّد: يغطي فقط الموارد التي حُوِّلت فعليًا لتستدعي الباك إند
+// (المبيعات بأنواعها، المشتريات) + بيانات مرجعية بسيطة (عملاء/موردين/
+// أصناف/فئات/مستخدمين/يوم العمل). عناصر أخرى (الكسر تحديدًا) ليست جزءًا
+// من هذا التطبيع بعد — راجع التحذير أسفل normalizeBootstrap.
+
+function toMoney(v) {
+  return v == null ? 0 : Number(v);
+}
+function toWeight(v) {
+  return v == null ? 0 : Number(v);
+}
+
+/** items + item_units (DB) → items[] بشكل units[] متداخل، مطابق للمرجع القديم. */
+function normalizeItems(itemRows, itemUnitRows) {
+  const unitsByItem = new Map();
+  for (const u of itemUnitRows) {
+    const list = unitsByItem.get(u.item_id) || [];
+    list.push({
+      id: u.id,
+      code: u.code,
+      printed: !!u.printed,
+      sold: !!u.sold,
+      issued: !!u.issued,
+    });
+    unitsByItem.set(u.item_id, list);
+  }
+  return itemRows.map((it) => ({
+    id: it.id,
+    ref: it.ref,
+    lotId: it.lot_id,
+    categoryId: it.category_id,
+    karat: it.karat,
+    weight: toWeight(it.weight),
+    stonesWeight: toWeight(it.stones_weight),
+    costPerGram: it.cost_per_gram == null ? null : Number(it.cost_per_gram),
+    workmanship: toMoney(it.workmanship),
+    lotWorkmanshipShare: toMoney(it.lot_workmanship_share),
+    fromScrap: !!it.from_scrap,
+    photoUrl: it.photo_url,
+    dateAdded: it.date_added,
+    businessDayId: it.business_day_id,
+    createdBy: it.created_by,
+    units: unitsByItem.get(it.id) || [],
+  }));
+}
+
+/** sales + sale_lines (DB) → sales[]، بنفس حقول sale المبنية في handleCreateSale. */
+function normalizeSales(saleRows, saleLineRows) {
+  const linesBySale = new Map();
+  for (const l of saleLineRows) {
+    const list = linesBySale.get(l.sale_id) || [];
+    list.push({
+      itemId: l.item_id,
+      category: l.category,
+      karatSnapshot: l.karat,
+      quantity: Number(l.quantity),
+      unitPrice: toMoney(l.unit_price),
+      weightSnapshot: toWeight(l.weight_snapshot),
+      costPerGramSnapshot: l.cost_per_gram_snapshot == null ? null : Number(l.cost_per_gram_snapshot),
+      workmanshipSnapshot: toMoney(l.workmanship_snapshot),
+    });
+    linesBySale.set(l.sale_id, list);
+  }
+  return saleRows.map((s) => ({
+    id: s.id,
+    ref: s.ref,
+    date: s.date,
+    businessDayId: s.business_day_id,
+    customerId: s.customer_id,
+    customerName: s.customer_name,
+    paymentMethod: s.payment_method,
+    price24Snapshot: s.price24_snapshot == null ? null : Number(s.price24_snapshot),
+    priceFrozenAt: s.price_frozen_at,
+    cardNetwork: s.card_network,
+    cashPart: toMoney(s.cash_part),
+    networkPart: toMoney(s.network_part),
+    networkFeePct: s.network_fee_pct == null ? 0 : Number(s.network_fee_pct),
+    subtotal: toMoney(s.subtotal),
+    total: toMoney(s.total),
+    taxApplicable: !!s.tax_applicable,
+    taxRate: s.tax_rate == null ? 0 : Number(s.tax_rate),
+    taxAmount: toMoney(s.tax_amount),
+    netAmount: toMoney(s.net_amount),
+    tradeInValue: toMoney(s.trade_in_value),
+    sellerId: s.seller_id,
+    sellerName: s.seller_name,
+    createdBy: s.created_by,
+    lines: linesBySale.get(s.id) || [],
+  }));
+}
+
+/**
+ * cash_tx (DB، جدول موحّد بعمود pool) → ثلاث مصفوفات منفصلة (cashTx/
+ * safeTx/scrapCustodyTx) — مطابقة لبنية المرجع القديم حيث كانت هذي
+ * الصناديق الثلاثة معزولة عن بعضها في التخزين والشاشات (CashTab يقرأ
+ * cashTx فقط، شاشة الخزنة تقرأ safeTx، وعهدة الكسر تقرأ scrapCustodyTx).
+ */
+/**
+ * سطر cash_tx واحد (DB) → شكل حركة الكاش المحلي المستخدم في الشاشات.
+ * مُصدَّرة (لا داخلية فقط) لأن الشاشات المحوَّلة لاحقًا (عمليات الخزنة)
+ * تستقبل سطر cash_tx واحدًا من رد الباك إند مباشرة (لا bootstrap كامل)
+ * وتحتاج نفس التطبيع بالضبط ليطابق شكل الحالة المحلية.
+ */
+function normalizeCashTxRow(r) {
+  return {
+    id: r.id,
+    date: r.created_at,
+    type: r.direction,
+    method: r.method,
+    amount: toMoney(r.amount),
+    note: r.note,
+    source: r.ref_table,
+    refId: r.ref_id,
+    category: r.category,
+    createdBy: r.created_by,
+    businessDayId: r.business_day_id,
+  };
+}
+
+function normalizeCashPools(cashTxRows) {
+  const cashTx = [];
+  const safeTx = [];
+  const scrapCustodyTx = [];
+  for (const r of cashTxRows) {
+    const entry = normalizeCashTxRow(r);
+    if (r.pool === "safe") safeTx.push(entry);
+    else if (r.pool === "custody") scrapCustodyTx.push(entry);
+    else cashTx.push(entry);
+  }
+  return { cashTx, safeTx, scrapCustodyTx };
+}
+
+/** safe_gold_tx (DB) → حركة ذهب الخزنة المحلية — handleAddSafeGoldTx/الجرد. */
+function normalizeSafeGoldTx(rows) {
+  return rows.map((r) => ({
+    id: r.id,
+    date: r.created_at,
+    type: r.direction,
+    kind: r.kind,
+    karat: r.karat,
+    weight: toWeight(r.weight),
+    destination: r.destination,
+    // ⚠ destinationLabel/supplierName غير محفوظين في safe_gold_tx نفسه —
+    // يُشتقّان في المرجع وقت الإنشاء فقط من نصوص محلية (goldDestLabel)
+    // ومن قائمة الموردين. للحركات المحمَّلة من bootstrap (جلسات سابقة)
+    // تبقى null — تُعرَض القيم الخام (destination/supplierId) بدلًا من
+    // ذلك حيث تظهر؛ لا يمنع هذا حساب الأرصدة (safeGoldBalance) الذي لا
+    // يقرأ إلا type/kind/karat/weight/date.
+    destinationLabel: null,
+    supplierId: r.supplier_id,
+    supplierName: null,
+    officeId: r.office_id,
+    note: r.note,
+    createdBy: r.created_by,
+    businessDayId: r.business_day_id,
+  }));
+}
+
+/** safe_audits (DB) → سجل جرد الخزنة المحلي — SafeAuditPage. */
+function normalizeSafeAudits(rows) {
+  return rows.map((r) => ({
+    id: r.id,
+    ref: r.ref,
+    date: r.created_at,
+    countedCash: toMoney(r.counted_cash),
+    countedNetwork: toMoney(r.counted_network),
+    varianceCash: toMoney(r.diff_cash),
+    varianceNetwork: toMoney(r.diff_network),
+    gold: Array.isArray(r.gold_lines) ? r.gold_lines : [],
+    note: r.note,
+    createdBy: r.created_by,
+    businessDayId: r.business_day_id,
+  }));
+}
+
+function normalizeCustomers(rows) {
+  return rows.map((c) => ({ id: c.id, ref: c.ref, name: c.name, phone: c.phone, createdBy: c.created_by, createdAt: c.created_at }));
+}
+
+function normalizeSuppliers(rows) {
+  return rows.map((s) => ({
+    id: s.id, ref: s.ref, name: s.name, phone: s.phone,
+    isOfficial: !!s.is_official, createdBy: s.created_by, createdAt: s.created_at,
+  }));
+}
+
+/**
+ * expenses/expenseNames — الفجوة الأخطر عمليًا بين كل الفجوات المحلية
+ * السابقة: /day/close (migration 008) يقرأ فعليًا sum(amount) from
+ * expenses لحساب expenses_sum عند إقفال اليوم، وكانت المصروفات محفوظة
+ * محليًا فقط، فالرقم كان صفرًا زائفًا صامتًا في كل إقفال. usersFull
+ * (اختياري): Map من users.id إلى {name, ref}، لإعادة بناء
+ * employeeName/employeeRef كما كانت في الشكل المحلي القديم (الباك إند
+ * يخزّن employee_id فقط لا اسمًا مكررًا).
+ */
+function normalizeExpenses(rows, usersFull) {
+  const empOf = (id) => (usersFull && id ? usersFull.get(id) || null : null);
+  return rows.map((e) => {
+    const emp = empOf(e.employee_id);
+    return {
+      id: e.id, ref: e.ref, date: e.created_at,
+      category: e.category, name: e.name, amount: Number(e.amount) || 0,
+      recurring: !!e.recurring, fundingSource: e.funding_source,
+      employeeId: e.employee_id, employeeName: emp?.name || null, employeeRef: emp?.ref || null,
+      periodMonth: e.period_month, note: e.note || "",
+      createdBy: null, createdById: e.created_by,
+      businessDayId: e.business_day_id,
+    };
+  });
+}
+
+function normalizeExpenseNames(rows) {
+  return rows.map((n) => ({ id: n.id, name: n.name, category: n.category || "other" }));
+}
+
+function normalizeCategories(rows) {
+  return rows.map((c) => ({
+    id: c.id, name: c.name, saleMode: c.sale_mode, minSaleWeight: c.min_sale_weight == null ? null : Number(c.min_sale_weight),
+  }));
+}
+
+function normalizeLots(rows) {
+  return rows.map((l) => ({ id: l.id, ref: l.ref, supplierId: l.supplier_id, date: l.date, createdBy: l.created_by }));
+}
+
+/**
+ * scrap_items (DB) → عنصر كسر محلي بشكل weight/karat واحد ظاهري، مطابق
+ * لِما تقرأه شاشات الكسر القديمة (ScrapCustodyPage.jsx وغيرها) — رغم أن
+ * الباك إند يفصل karat_est/weight_est (وقت الشراء، ثابت) عن karat_final/
+ * weight_final (يُثبَّت مرة واحدة عند التكسير أو الاستلام). القيمة
+ * الظاهرة هنا هي "الأحدث المعروف": final إن وُجد، وإلا est.
+ *
+ * requestsById (اختياري): Map من scrap_requests.id إلى صفٍّ خام، تُستخدَم
+ * لاشتقاق requestRef (المرجع النصي) بدل تسريب UUID للواجهة.
+ */
+function normalizeScrapItems(rows, requestsById) {
+  return rows.map((r) => {
+    const hasFinal = r.weight_final != null;
+    const weight = toWeight(hasFinal ? r.weight_final : r.weight_est);
+    const karat = hasFinal ? r.karat_final : r.karat_est;
+    const req = requestsById && r.request_id ? requestsById.get(r.request_id) : null;
+    return {
+      id: r.id,
+      ref: r.ref,
+      karat,
+      weight,
+      // ⚠ الوزن الأصلي وقت الشراء يبقى متاحًا (مثلًا لعرض فرق التكسير في
+      // الواجهة) حتى بعد تثبيت final — لا يُستبدَل به.
+      originalWeight: toWeight(r.weight_est),
+      grossWeight: r.gross_weight == null ? null : toWeight(r.gross_weight),
+      // ⚠ اسمان مختلفان لنفس القيمة (stones_margin_est) لأن
+      // ScrapCustodyPage.jsx يقرأ أحيانًا stonesMarginEstimate وأحيانًا
+      // stonesMargin (تسمية غير متسقة في الشاشة القديمة نفسها) — يُطابَق
+      // كلاهما بدل تعديل الشاشة.
+      stonesMarginEstimate: toWeight(r.stones_margin_est),
+      stonesMargin: toWeight(r.stones_margin_est),
+      pricePerGram: r.price_per_gram == null ? null : Number(r.price_per_gram),
+      total: toMoney(r.total_paid),
+      paymentMethod: r.payment_method,
+      customerName: r.customer_name,
+      description: r.description,
+      date: r.created_at,
+      stage: r.stage,
+      breakVariance: r.break_variance == null ? null : toWeight(r.break_variance),
+      weightRemaining: r.weight_remaining == null ? null : toWeight(r.weight_remaining),
+      requestId: r.request_id,
+      requestRef: req ? req.ref : null,
+      businessDayId: r.business_day_id,
+      createdBy: r.created_by,
+    };
+  });
+}
+
+/** يعيد تسمية مفتاح scrapItemId → scrapId في مصفوفة أسطر (سواء مُرسَلة/مُقيَّمة/مؤكَّدة). */
+function renameScrapLineKeys(lines) {
+  return (Array.isArray(lines) ? lines : []).map((l) => {
+    const { scrapItemId, ...rest } = l;
+    return { scrapId: scrapItemId, ...rest };
+  });
+}
+
+/**
+ * scrap_requests (DB، payload بشكل JSONB) → طلب كسر محلي بحقول مسطَّحة
+ * على المستوى الأعلى (sentLines/assessedLines/confirmedLines)، مطابقًا
+ * لِما تقرأه ScrapCustodyPage.jsx مباشرة من كائن الطلب (لا من payload
+ * متداخل) — وبإعادة تسمية scrapItemId إلى scrapId داخل كل سطر (الاتفاقية
+ * التي تقرأها هذه الشاشة تحديدًا: l.scrapId).
+ *
+ * usersById (اختياري): Map من users.id إلى الاسم، لعرض created_by/
+ * approved_by كاسم بدل UUID خام.
+ */
+function normalizeScrapRequests(rows, usersById) {
+  const nameOf = (id) => (usersById && id ? usersById.get(id) || null : null);
+  return rows.map((r) => {
+    const payload = r.payload || {};
+    return {
+      id: r.id,
+      ref: r.ref,
+      status: r.status,
+      itemCount: Array.isArray(payload.sentLines) ? payload.sentLines.length : 0,
+      sentLines: renameScrapLineKeys(payload.sentLines),
+      assessedLines: renameScrapLineKeys(payload.assessedLines),
+      confirmedLines: renameScrapLineKeys(payload.confirmedLines),
+      sentFine: toWeight(r.sent_fine),
+      assessedFine: r.assessed_fine == null ? null : toWeight(r.assessed_fine),
+      confirmedFine: r.confirmed_fine == null ? null : toWeight(r.confirmed_fine),
+      variance: r.variance == null ? null : toWeight(r.variance),
+      note: r.note,
+      assessNote: r.assess_note,
+      createdAt: r.created_at,
+      createdBy: r.created_by,
+      createdByName: nameOf(r.created_by),
+      assessedBy: r.assessed_by,
+      approvedBy: r.approved_by,
+      approvedByName: nameOf(r.approved_by),
+      receivedBy: r.received_by,
+      businessDayId: r.business_day_id,
+    };
+  });
+}
+
+/**
+ * business_days (DB) → يوم عمل محلي، بشكل `snapshot` متداخل مُصطنَع من
+ * أعمدة اللقطة المسطَّحة (sales_sum/expenses_sum/...) — مطابقًا لِما
+ * تقرأه WorkDayPage.jsx/DayControl.jsx (`d.snapshot?.salesSum` إلخ)، رغم
+ * أن الباك إند يخزّنها أعمدة مباشرة على business_days نفسه لا JSON متداخل.
+ *
+ * ⚠ نطاق متعمَّد: `profit` (الربح) ليس ضمن اللقطة الآتية من الخادم —
+ * حسابه يحتاج تكلفة كل صنف + نصيبه من مصنعية الدفعة (saleProfitOf)، وهي
+ * بيانات تعيش أصلًا في bootstrap المحمَّل لدى الفرونت إند (sales+items).
+ * يبقى الربح محسوبًا محليًا كما كان (WorkDayPage يحسبه بنفسه من
+ * todaySales)، لا مُعادًا بناؤه هنا. `snapshot.profit` لذلك يبقى `null`
+ * لليوم المُقفَل (لا يظهر إلا في سجل "الأيام السابقة" الذي لا يملك
+ * أصلًا وصولًا لبيانات الأصناف التاريخية لحساب ربح دقيق لكل يوم ماضٍ —
+ * فجوة موثَّقة، لا صفرًا مضلِّلًا).
+ */
+function normalizeBusinessDays(rows, usersById) {
+  const nameOf = (id) => (usersById && id ? usersById.get(id) || null : null);
+  return rows.map((d) => ({
+    id: d.id,
+    ref: d.ref,
+    status: d.status,
+    tillFloat: toMoney(d.till_float),
+    scrapFloat: toMoney(d.scrap_float),
+    openedAt: d.opened_at,
+    // ⚠ الشاشات القديمة (WorkDayPage/DayControl) تقرأ openedBy/closedBy
+    // كاسمٍ للعرض مباشرة ("فتحه {openDay.openedBy}") لا كمعرّف — نحلّه هنا
+    // بدل تسريب UUID خام للواجهة.
+    openedBy: nameOf(d.opened_by),
+    openedById: d.opened_by,
+    closedAt: d.closed_at,
+    closedBy: nameOf(d.closed_by),
+    closedById: d.closed_by,
+    note: d.note,
+    closeNote: d.close_note,
+    snapshot:
+      d.status === "closed"
+        ? {
+            salesCount: d.sales_count == null ? 0 : Number(d.sales_count),
+            salesSum: toMoney(d.sales_sum),
+            profit: null,
+            expenses: toMoney(d.expenses_sum),
+            purchases: toMoney(d.purchases_sum),
+            cashAtClose: toMoney(d.cash_at_close),
+            safeAtClose: toMoney(d.safe_at_close),
+            custodyAtClose: toMoney(d.custody_at_close),
+            suspendedScrap:
+              d.suspended_scrap_count > 0
+                ? { count: Number(d.suspended_scrap_count), weight: toWeight(d.suspended_scrap_weight) }
+                : null,
+          }
+        : null,
+  }));
+}
+
+/** daily_custody (DB) → عهدة صندوق يومي محلية — WorkDayPage/DayControl. */
+function normalizeDailyCustody(rows, usersById) {
+  const nameOf = (id) => (usersById && id ? usersById.get(id) || null : null);
+  return rows.map((c) => ({
+    id: c.id,
+    ref: c.ref,
+    businessDayId: c.business_day_id,
+    status: c.status,
+    floatCash: toMoney(c.float_cash),
+    floatNetwork: toMoney(c.float_network),
+    countedCash: c.counted_cash == null ? null : toMoney(c.counted_cash),
+    countedNetwork: c.counted_network == null ? null : toMoney(c.counted_network),
+    expectedCash: c.expected_cash == null ? null : toMoney(c.expected_cash),
+    expectedNetwork: c.expected_network == null ? null : toMoney(c.expected_network),
+    varianceCash: c.variance_cash == null ? null : toMoney(c.variance_cash),
+    varianceNetwork: c.variance_network == null ? null : toMoney(c.variance_network),
+    note: c.note,
+    closeNote: c.close_note,
+    openedAt: c.opened_at,
+    openedBy: nameOf(c.opened_by),
+    openedById: c.opened_by,
+    closedAt: c.closed_at,
+    closedBy: nameOf(c.closed_by),
+    closedById: c.closed_by,
+  }));
+}
+
+function normalizeUsers(rows) {
+  return rows.map((u) => ({
+    id: u.id,
+    name: u.name,
+    ref: u.ref,
+    role: u.role,
+    canUseAi: !!u.can_use_ai,
+    allowedPages: u.allowed_pages,
+    active: !!u.active,
+    allowedTabs: u.allowed_tabs,
+    allowedMore: u.allowed_more,
+    createdAt: u.created_at,
+  }));
+}
+
+/**
+ * نقطة الدخول الرئيسية — تُستدعى مرة واحدة بعد الدخول بنتيجة
+ * fetchBootstrap()، وتُرجع كائنًا جاهزًا للتوزيع مباشرة على setters
+ * الحالة الموجودة أصلًا في GoldInventoryApp.jsx.
+ *
+ * ⚠ الكسر (scrapEntries/scrapRequests) الآن جزء من هذا التطبيع: يُشتق
+ * weight/karat ظاهري واحد (final إن وُجد، وإلا est) ليطابق شكل الشاشات
+ * القديمة، ويُسطَّح payload الطلبات لحقول أعلى المستوى مع إعادة تسمية
+ * scrapItemId إلى scrapId (اتفاقية ScrapCustodyPage.jsx).
+ */
+function normalizeBootstrap(boot) {
+  const { cashTx, safeTx, scrapCustodyTx } = normalizeCashPools(boot.cashTx || []);
+  const users = normalizeUsers(boot.users || []);
+  const usersById = new Map(users.map((u) => [u.id, u.name]));
+  const usersFullById = new Map(users.map((u) => [u.id, { name: u.name, ref: u.ref }]));
+  const requestsById = new Map((boot.scrapRequests || []).map((r) => [r.id, r]));
+  return {
+    items: normalizeItems(boot.items || [], boot.itemUnits || []),
+    sales: normalizeSales(boot.sales || [], boot.saleLines || []),
+    cashTx,
+    safeTx,
+    scrapCustodyTx,
+    safeGoldTx: normalizeSafeGoldTx(boot.safeGoldTx || []),
+    safeAudits: normalizeSafeAudits(boot.safeAudits || []),
+    scrapEntries: normalizeScrapItems(boot.scrapItems || [], requestsById),
+    scrapRequests: normalizeScrapRequests(boot.scrapRequests || [], usersById),
+    customers: normalizeCustomers(boot.customers || []),
+    suppliers: normalizeSuppliers(boot.suppliers || []),
+    categories: normalizeCategories(boot.categories || []),
+    lots: normalizeLots(boot.lots || []),
+    users,
+    // ⚠ فجوة حقيقية أُغلقت هنا: loadBootstrap لم يكن يستهلك businessDay
+    // إطلاقًا (لا setBusinessDays في كل الملف) — يوم العمل نفسه لم يكن
+    // موصولًا بالباك إند بعد. businessDays (جمع، من boot.businessDays —
+    // القائمة الكاملة) هو ما تقرأه فعليًا WorkDayPage/DayControl (سجل
+    // "الأيام السابقة" + اليوم المفتوح عبر .find(status==='open')).
+    businessDays: normalizeBusinessDays(boot.businessDays || [], usersById),
+    dailyCustody: normalizeDailyCustody(boot.dailyCustody || [], usersById),
+    // ⚠ يطابق تمامًا اتفاقية المرجع القديمة: null = غير مقفل، كائن = مقفل
+    // (راجع handleToggleStocktakeLock) — لا {locked:false} ثابت، لأن أي
+    // كائن (حتى {locked:false}) صادق (truthy) في JS، وأغلب الشاشات تتحقق
+    // بـ`if (stocktakeLock)` مباشرة لا `.locked`.
+    stocktakeLock:
+      boot.stocktakeLock && boot.stocktakeLock.locked
+        ? { startedAt: boot.stocktakeLock.locked_at, startedBy: null, startedById: boot.stocktakeLock.locked_by }
+        : null,
+    appSettings: boot.settings
+      ? { taxEnabled: !!boot.settings.tax_enabled, taxRate: Number(boot.settings.tax_rate) || 0, cardFees: boot.settings.card_fees || {} }
+      : null,
+    expenses: normalizeExpenses(boot.expenses || [], usersFullById),
+    expenseNames: normalizeExpenseNames(boot.expenseNames || []),
+  };
+}
+
+export {
+  normalizeBootstrap,
+  normalizeItems,
+  normalizeSales,
+  normalizeCashPools,
+  normalizeCashTxRow,
+  normalizeSafeGoldTx,
+  normalizeSafeAudits,
+  normalizeScrapItems,
+  normalizeScrapRequests,
+  normalizeBusinessDays,
+  normalizeDailyCustody,
+  normalizeCustomers,
+  normalizeSuppliers,
+  normalizeCategories,
+  normalizeLots,
+  normalizeUsers,
+  normalizeExpenses,
+  normalizeExpenseNames,
+};

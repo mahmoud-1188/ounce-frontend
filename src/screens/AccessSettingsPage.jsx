@@ -1,0 +1,387 @@
+import React, { useState } from "react";
+import { AlertTriangle, Plus, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
+import { fmt } from "../core/money.js";
+import { MAIN_TAB_IDS } from "../core/navigation.js";
+import { inputStyle, normalizeName, toLatinDigits } from "../domain/helpers.js";
+import { Card } from "../ui/Card.jsx";
+import { Field } from "../ui/Field.jsx";
+import { NumericInput } from "../ui/NumericInput.jsx";
+import { SubPageHeader } from "../ui/SubPageHeader.jsx";
+
+// ⚠ حُوِّلت للباك إند: كل فعل هنا الآن ينادي نقطة نهايته الخاصة (راجع
+// users.routes.js) بدل "onSave(nextUsers)" الذي كان يستبدل مصفوفة
+// المستخدمين المحلية كاملة. الباك إند لا يُرجع رقم PIN ولا حتى تجزئته
+// إطلاقًا (أمنيًا) — فتحقّق "الرقم مكرر" لم يعد ممكنًا محليًا، ويظهر فقط
+// بعد رفض الخادم الفعلي (409 pin_taken). نفس الأمر لعرض الرقم السري في
+// بطاقة كل موظف: u.pin لم يعد موجودًا في الحالة المحلية إطلاقًا — كان
+// ‌`{"•".repeat(u.pin.length)}` سيرمي خطأ فورًا (u.pin === undefined)، فصار
+// عرضًا ثابتًا بلا اعتماد على طول فعلي.
+function AccessSettingsPage({ users, navRegistry = [], roles = {}, onAddUser, onRenameUser, onToggleAi, onSetPermissions, onRemoveUser, onBack }) {
+  const [showAdd, setShowAdd] = useState(false);
+  const [name, setName] = useState("");
+  const [pin, setPin] = useState("");
+  const [role, setRole] = useState("employee");
+  const [salary, setSalary] = useState("");
+  const [permUser, setPermUser] = useState(null); // المستخدم قيد تعديل صلاحياته
+  const [renaming, setRenaming] = useState(null);
+  const [newName, setNewName] = useState("");
+  const [guardMsg, setGuardMsg] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const nameTaken = users.some((u) => normalizeName(u.name) === normalizeName(name));
+  const valid = name.trim() && /^\d{4,6}$/.test(pin) && !nameTaken;
+
+  const add = async () => {
+    setSubmitting(true);
+    try {
+      const ok = await onAddUser({ name, pin, role, salary });
+      if (ok) {
+        setName("");
+        setPin("");
+        setSalary("");
+        setShowAdd(false);
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+  /// فتح أدوات الذكاء لمستخدمٍ بعينه أو إغلاقها.
+  ///
+  /// ⚠ لكل مستخدم لا لكل دور: منحُها للدور يفتحها لكل من يحمله،
+  /// ومنحُها للشخص قرارٌ يُتّخذ في كل حالة ويُسجَّل باسمه.
+  const toggleAi = (u) => onToggleAi(u.id, !u.canUseAi);
+
+  const remove = (id) => {
+    if (users.filter((u) => u.role === "manager").length <= 1 && users.find((u) => u.id === id)?.role === "manager") return;
+    onRemoveUser(id);
+  };
+  const rename = async (id) => {
+    if (!newName.trim()) return;
+    const ok = await onRenameUser(id, newName);
+    if (ok) {
+      setRenaming(null);
+      setNewName("");
+    }
+  };
+  // القائمة الفعلية لمستخدم: المخصّصة إن وُجدت، وإلا افتراضي دوره.
+  const currentAllowed = (u) => {
+    if (Array.isArray(u.allowedPages)) return u.allowedPages;
+    const base = roles[u.role];
+    if (!base) return [];
+    return [...base.allowedTabs.filter((x) => x !== "more"), ...base.allowedMore];
+  };
+
+  const togglePage = (id, pageId) => {
+    const target = users.find((u) => u.id === id);
+    if (!target) return;
+    const cur = currentAllowed(target);
+    const turningOff = cur.includes(pageId);
+
+    // حارس ضد قفل النظام: لا يجوز إزالة صفحة الصلاحيات من آخر من يملكها،
+    // وإلا فقد أحد القدرة على تعديل أي صلاحية إلى الأبد. الباك إند يطبّق
+    // نفس الحارس فعليًا (wouldLockOutAccess) — هذا فقط لتفادي طلب مرفوض
+    // مؤكَّد ولإظهار الرسالة فورًا بلا انتظار الشبكة.
+    if (turningOff && pageId === "access") {
+      const stillHave = users.filter((u) => u.id !== id && currentAllowed(u).includes("access"));
+      if (stillHave.length === 0) {
+        setGuardMsg("لا يمكن إزالة «صلاحيات الوصول» من آخر مستخدم يملكها — سيتعذّر تعديل أي صلاحية بعدها.");
+        return;
+      }
+    }
+    setGuardMsg("");
+    const next = turningOff ? cur.filter((x) => x !== pageId) : [...cur, pageId];
+    onSetPermissions(id, next);
+  };
+
+  const resetToRole = (id) => {
+    setGuardMsg("");
+    onSetPermissions(id, null);
+  };
+
+  if (permUser) {
+    const u = users.find((x) => x.id === permUser);
+    if (!u) return null;
+    const allowed = currentAllowed(u);
+    const customized = Array.isArray(u.allowedPages);
+    const pages = navRegistry.filter((n) => n.id !== "more");
+    const mainPages = pages.filter((n) => MAIN_TAB_IDS.includes(n.id));
+    const morePages = pages.filter((n) => !MAIN_TAB_IDS.includes(n.id));
+
+    const Group = ({ title, list }) => (
+      <>
+        <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2 mt-3">
+          {title}
+        </p>
+        <div className="flex flex-col gap-2">
+          {list.map((pg) => {
+            const on = allowed.includes(pg.id);
+            const Icon = pg.icon;
+            return (
+              <Card key={pg.id} style={{ padding: 10 }}>
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    {Icon && <Icon size={15} color={on ? "var(--accent)" : "var(--text3)"} />}
+                    <span style={{ color: on ? "var(--text)" : "var(--text2)" }} className="text-sm">
+                      {pg.label}
+                    </span>
+                  </span>
+                  <button
+                    onClick={() => togglePage(u.id, pg.id)}
+                    style={{
+                      width: 44,
+                      height: 24,
+                      borderRadius: 12,
+                      background: on ? "var(--goodSolid)" : "var(--edge)",
+                      position: "relative",
+                      transition: "background .2s",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 18,
+                        height: 18,
+                        borderRadius: "50%",
+                        background: "var(--text)",
+                        position: "absolute",
+                        top: 3,
+                        right: on ? 23 : 3,
+                        transition: "right .2s",
+                      }}
+                    />
+                  </button>
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      </>
+    );
+
+    return (
+      <div>
+        <SubPageHeader title={`صلاحيات ${u.name}`} onBack={() => setPermUser(null)} />
+        <div className="px-4 pt-3">
+          <Card style={{ padding: 12, marginBottom: 10 }}>
+            <p style={{ color: "var(--text)" }} className="text-sm font-bold">
+              {u.name}
+              {u.ref && <span style={{ color: "var(--text3)" }} className="text-[10px] mr-1">{u.ref}</span>}
+            </p>
+            <p style={{ color: "var(--text2)" }} className="text-[11px] mt-0.5">
+              {roles[u.role]?.label} · {allowed.length} من {pages.length} صفحة مفعّلة
+              {customized ? " · مخصّصة" : " · افتراضي الدور"}
+            </p>
+          </Card>
+
+          <p style={{ color: "var(--text2)" }} className="text-xs mb-2">
+            شغّل أو أوقف أي صفحة لهذا الموظف تحديدًا. التغيير يسري فور دخوله برقمه السري.
+          </p>
+
+          {guardMsg && (
+            <Card style={{ padding: 10, marginBottom: 10, border: "1px solid var(--badLine)" }}>
+              <p style={{ color: "var(--bad)" }} className="text-[11px] flex items-start gap-1">
+                <AlertTriangle size={12} style={{ marginTop: 1, flexShrink: 0 }} /> {guardMsg}
+              </p>
+            </Card>
+          )}
+
+          <div className="grid grid-cols-2 gap-2 mb-1">
+            <button
+              onClick={() => {
+                setGuardMsg("");
+                onSetPermissions(u.id, pages.map((pg) => pg.id));
+              }}
+              className="py-2 rounded-xl text-[11px] font-bold"
+              style={{ background: "var(--panel)", color: "var(--good)", border: "1px solid var(--goodLine)" }}
+            >
+              تفعيل الكل
+            </button>
+            <button
+              onClick={() => resetToRole(u.id)}
+              className="py-2 rounded-xl text-[11px] font-bold"
+              style={{ background: "var(--panel)", color: "var(--accentText)", border: "1px solid var(--line)" }}
+            >
+              إرجاع افتراضي الدور
+            </button>
+          </div>
+
+          <Group title="الصفحات الأساسية (الشريط السفلي)" list={mainPages} />
+          <Group title="صفحات المزيد" list={morePages} />
+          <div style={{ height: 24 }} />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <SubPageHeader title="صلاحيات الوصول" onBack={onBack} />
+      <div className="px-4 pt-3">
+        <p style={{ color: "var(--text2)" }} className="text-xs mb-3">
+          كل موظف برقم سري خاص. كل عملية يقوم بها تُحفظ باسمه — البيع والشراء والصرف والجرد.
+        </p>
+
+        {!showAdd ? (
+          <button
+            onClick={() => setShowAdd(true)}
+            className="w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 mb-4"
+            style={{ background: "linear-gradient(135deg,var(--gradFrom),var(--gradTo))", color: "var(--panel)" }}
+          >
+            <Plus size={18} /> إضافة موظف
+          </button>
+        ) : (
+          <Card style={{ padding: 14, marginBottom: 16 }}>
+            <Field label="الاسم">
+              <input style={inputStyle} value={name} onChange={(e) => setName(e.target.value)} />
+            </Field>
+            <Field label="الرقم السري (4-6 أرقام)">
+              <input style={inputStyle} value={pin} onChange={(e) => setPin(toLatinDigits(e.target.value).replace(/\D/g, "").slice(0, 6))} inputMode="numeric" />
+            </Field>
+            <Field label="الراتب الشهري (اختياري)">
+              <NumericInput value={salary} onChange={setSalary} placeholder="0" />
+            </Field>
+            <Field label="الصلاحية">
+              <div className="grid grid-cols-3 gap-2">
+                {Object.entries(roles).map(([id, r]) => (
+                  <button
+                    key={id}
+                    onClick={() => setRole(id)}
+                    className="py-2 rounded-xl text-[11px] font-bold"
+                    style={{ background: role === id ? "var(--accentBg)" : "var(--panel)", color: role === id ? "var(--accent)" : "var(--text2)", border: "1px solid var(--line)" }}
+                  >
+                    {r.label}
+                  </button>
+                ))}
+              </div>
+            </Field>
+            {nameTaken && name.trim() && (
+              <p style={{ color: "var(--bad)" }} className="text-[11px] mb-2">يوجد موظف بهذا الاسم</p>
+            )}
+            {/* ⚠ لم يعد يمكن التحقق من تكرار الرقم السري محليًا (الباك إند
+                لا يُرجع أي رقم سري أو تجزئته إطلاقًا) — يظهر فقط بعد رفض
+                الخادم الفعلي عبر flashToast (409 pin_taken). */}
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => setShowAdd(false)} className="py-2 rounded-xl text-xs font-bold" style={{ background: "var(--panel)", color: "var(--text2)", border: "1px solid var(--line)" }}>
+                إلغاء
+              </button>
+              <button
+                disabled={!valid || submitting}
+                onClick={add}
+                className="py-2 rounded-xl text-xs font-bold"
+                style={{ background: valid ? "linear-gradient(135deg,var(--gradFrom),var(--gradTo))" : "var(--accentBg)", color: valid ? "var(--panel)" : "var(--text3)" }}
+              >
+                {submitting ? "جارٍ الإضافة..." : "إضافة"}
+              </button>
+            </div>
+          </Card>
+        )}
+
+        <div className="flex flex-col gap-2">
+          {users.map((u) => {
+            const allowedCount = currentAllowed(u).length;
+            const customized = Array.isArray(u.allowedPages);
+            return (
+              <Card key={u.id} style={{ padding: 12 }}>
+                {renaming === u.id ? (
+                  <>
+                    <Field label="الاسم الجديد">
+                      <input style={inputStyle} value={newName} onChange={(e) => setNewName(e.target.value)} />
+                    </Field>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button onClick={() => setRenaming(null)} className="py-2 rounded-xl text-xs font-bold" style={{ background: "var(--panel)", color: "var(--text2)", border: "1px solid var(--line)" }}>
+                        إلغاء
+                      </button>
+                      <button onClick={() => rename(u.id)} className="py-2 rounded-xl text-xs font-bold" style={{ background: "linear-gradient(135deg,var(--gradFrom),var(--gradTo))", color: "var(--panel)" }}>
+                        حفظ
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span style={{ color: "var(--text)", fontFamily: "'Cairo', sans-serif" }} className="font-bold text-sm">
+                        {u.name}
+                        {u.ref && <span style={{ color: "var(--text3)" }} className="text-[10px] mr-1">{u.ref}</span>}
+                      </span>
+                      <span style={{ color: "var(--text2)" }} className="text-[11px]">{roles[u.role]?.label}</span>
+                    </div>
+                    <p style={{ color: "var(--text3)" }} className="text-[11px] mt-0.5">
+                      •••• · {allowedCount} صفحة
+                      {customized ? " (مخصّصة)" : ""}
+                      {u.salary > 0 ? ` · راتب ${fmt(u.salary, 0)}` : ""}
+                    </p>
+                    {/* ── أدوات الذكاء ── */}
+                    {u.role !== "manager" && (
+                      <button
+                        onClick={() => toggleAi(u)}
+                        className="w-full flex items-center gap-2 mt-2 px-2.5 py-2 rounded-xl"
+                        style={{
+                          background: u.canUseAi ? "var(--accentBg)" : "var(--field)",
+                          border: `1px solid ${u.canUseAi ? "var(--accentLine)" : "var(--line)"}`,
+                        }}
+                      >
+                        <span
+                          style={{
+                            width: 34, height: 19, borderRadius: 10, flexShrink: 0,
+                            background: u.canUseAi ? "var(--accent)" : "var(--edge)",
+                            position: "relative", transition: "background .2s",
+                          }}
+                        >
+                          <span style={{
+                            position: "absolute", top: 2,
+                            [u.canUseAi ? "left" : "right"]: 2,
+                            width: 15, height: 15, borderRadius: "50%",
+                            background: "var(--panel)", transition: "all .2s",
+                          }} />
+                        </span>
+                        <span
+                          style={{ color: u.canUseAi ? "var(--accent)" : "var(--text2)" }}
+                          className="text-[11px] font-bold flex-1 text-right"
+                        >
+                          أدوات الذكاء {u.canUseAi ? "مفتوحة" : "مغلقة"}
+                        </span>
+                        <Sparkles size={13} color={u.canUseAi ? "var(--accent)" : "var(--text3)"} />
+                      </button>
+                    )}
+                    {u.canUseAi && u.role !== "manager" && (
+                      <p style={{ color: "var(--text3)" }} className="text-[10px] mt-1">
+                        ⚠ يرى ما تسمح به صفحاته فقط — لكنه يجمعه في إجابةٍ واحدة.
+                      </p>
+                    )}
+
+                    <div className="flex items-center gap-2 mt-2">
+                      <button
+                        onClick={() => setPermUser(u.id)}
+                        className="text-[11px] px-2.5 py-1 rounded-full flex items-center gap-1"
+                        style={{ background: "var(--panel)", color: "var(--accent)", border: "1px solid var(--accentLine)" }}
+                      >
+                        <ShieldCheck size={11} /> الصلاحيات
+                      </button>
+                      <button
+                        onClick={() => {
+                          setRenaming(u.id);
+                          setNewName(u.name);
+                        }}
+                        className="text-[11px] px-2.5 py-1 rounded-full"
+                        style={{ background: "var(--panel)", color: "var(--accentText)", border: "1px solid var(--line)" }}
+                      >
+                        تغيير الاسم
+                      </button>
+                      {users.length > 1 && (
+                        <button onClick={() => remove(u.id)} style={{ color: "var(--bad)", marginRight: "auto" }}>
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
+              </Card>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export { AccessSettingsPage };
