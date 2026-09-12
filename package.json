@@ -4,23 +4,25 @@
   "private": true,
   "type": "module",
   "description": "أونصة — نظام محاسبة الذهب والمعادن الثمينة بنظام العددي والوزني المزدوج (فرونت إند، مبني اعتمادًا على ounce-source)",
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
-  },
+     "scripts": {
+     "dev": "vite",
+     "build": "vite build",
+     "preview": "vite preview",
+     "start": "serve -s dist -l $PORT"
+   },
   "dependencies": {
+    "lucide-react": "0.383.0",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "lucide-react": "0.383.0",
     "xlsx": "0.18.5"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "4.3.1",
-    "vite": "5.3.1",
-    "tailwindcss": "3.4.4",
+    "autoprefixer": "10.4.19",
     "postcss": "8.4.38",
-    "autoprefixer": "10.4.19"
+    "serve": "^14.2.6",
+    "tailwindcss": "3.4.4",
+    "vite": "5.3.1"
   },
   "overrides": {
     "react": "18.3.1",
