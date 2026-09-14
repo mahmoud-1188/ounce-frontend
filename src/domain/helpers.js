@@ -1,8 +1,8 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Search } from "lucide-react";
 import { AI_APP_GUIDE, ARABIC_INDIC, EASTERN_INDIC, TRACE_TOPICS } from "../core/assistant.js";
 import { CATEGORY_TO_ACCOUNT, CHART_OF_ACCOUNTS } from "../core/chart.js";
-import { ACCOUNT_TREE, ALL_ACCOUNT_NODES, APP_MODES, ATTACH_PREFIX, B32, BREAKPOINTS, CATEGORY_STATE, DEFAULT_CATEGORIES, EXPENSE_CATEGORIES, MIGRATION_FLAG, OUNCE_SECRET } from "../core/constants.js";
+import { ACCOUNT_TREE, ALL_ACCOUNT_NODES, APP_MODES, ATTACH_PREFIX, B32, BREAKPOINTS, CATEGORY_STATE, DEFAULT_CATEGORIES, EXPENSE_CATEGORIES, MIGRATION_FLAG, NHR, NHR_POWER_MAX_DBM, OUNCE_SECRET, RFID_DEFAULTS, RFID_SECTIONS } from "../core/constants.js";
 import { GRAMS_PER_OUNCE, PURITY, WEIGHT_UNITS, fine24, fmt, fmtW, fromHalalas, halalas, pricePerGram, roundW, weightTimesPrice } from "../core/money.js";
 import { BANK_COLUMN_HINTS, DEFAULT_CARD_FEES, DEFAULT_MARGINS, USD_TO_SAR_PEG } from "../core/money-rules.js";
 import { NAV_BUNDLES, NAV_MAX_PER_ROW } from "../core/navigation.js";
@@ -1842,4 +1842,461 @@ function useDebounced(value, ms = 220) {
   return out;
 }
 
-export { accountForCategory, accountGroup, accountLabel, accountPath, aiAllowedFor, aiAllowedForRole, aiScope, askReportAi, attachmentByteSize, b32Decode, b32Encode, branchDataKey, branchSnapshotKey, btSupported, bundleById, bundledPages, cardFeeOf, cashTrialBalance, categoryById, categoryLabel, childrenOf, cleanToken, codeCounter, compressImage, contentWidth, detectColumns, detectTraceTopic, emptyRow, exportTablesPdf, fetchAiAuditNarrative, fetchAiBusinessInsights, fetchAiChatReply, fetchAiReportSpec, fetchGoldPriceSAR, fineAt, fmtWeight, fromGram, fundingSourceLabel, generateUnitCode, goldDestLabel, hiddenNumbersScan, inPeriod, inputStyle, isBundle, isGoldCogs, isLiveScrap, isPartial, isUnder, issueBranchCode, issueLicense, itemLabel, journalTrialBalance, loadAttachment, lotAllocatedWeight, marginFor, migrateLegacyKeys, modeAllowsAction, modeAllowsPage, modeAllowsTab, nameExists, navPerRow, normHeader, normalizeFundingSource, normalizeName, onlineBlockReason, openAttachment, ounceHash, periodRange, prettyToken, priceBreakdown, printedCount, r2, r3, readFileAsDataUrl, readKeyOrNull, remainingQty, reportFactsText, reportFindings, runAuditChecks, saleModeOf, saleProfitOf, saleProfitSplit, saveAttachment, scrapPrice24, sellPrice24, setRuntimeCategories, splitCsvLine, toGram, toLatinDigits, trustBalance, unitById, unitCostBasis, unitCurrentValue, useDebounced, useViewport, useVoice, weightTrialBalance };
+// ═══════════════════════════════════════════════════════════════════════
+//  قارئ RFID — بروتوكول NHR-10 (بلوتوث) + قارئ HID (لوحة مفاتيح)
+//
+//  منقول حرفيًا عن بروتوكول المصنّع في نسخة المرجع (نفس الثوابت في
+//  core/constants.js: NHR/NHR_POWER_MAX_DBM/RFID_SECTIONS/RFID_DEFAULTS)
+//  بقرارك الصريح: NHR-10 + HID + الكاميرا/الإدخال اليدوي كبدائل.
+//
+//  ⚠ فرقٌ جوهري عن المرجع: هناك matchEpcToUnits تعمل على بيانات محلية
+//  بحتة (لا سيرفر). هنا item_units.epc عمود حقيقي في قاعدة البيانات
+//  (migration 014) — الربط يُكتب بـapi.rfid.bind فيظهر لكل مستخدم بعد
+//  أي تحديث، لا في متصفح من ربطها فقط.
+// ═══════════════════════════════════════════════════════════════════════
+
+/// هل هذه الحمولة إطار EPC حيّ أم ردّ JSON؟
+function nhrIsLiveFrame(bytes) {
+  return !!bytes && bytes.length >= 9
+    && bytes[0] === NHR.MAGIC_LIVE[0] && bytes[1] === NHR.MAGIC_LIVE[1];
+}
+
+const nhrHex = (bytes) => Array.from(bytes, (b) => b.toString(16).padStart(2, "0").toUpperCase()).join("");
+
+/// يفكّ إطار الجرد الحيّ.
+///
+/// البنية: 4E 48 | نسخة | نوع | تسلسل u32le | عدد | ثم لكل عنصر:
+/// طول EPC u8 · بايتات EPC · rssi i8 · delta u16le · total u32le
+function nhrParseLiveFrame(bytes) {
+  if (!nhrIsLiveFrame(bytes)) return null;
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const seq = dv.getUint32(4, true);
+  const count = bytes[8];
+  const tags = [];
+  let p = 9;
+  for (let i = 0; i < count; i++) {
+    // ⚠ نتحقّق من الطول قبل كل قراءة: حزمةٌ مبتورة تُنتج قراءةً خارج
+    // الحدود، وDataView يرمي — فيسقط الإشعار كلّه بدل ما وصل منه.
+    if (p >= bytes.length) break;
+    const epcLen = bytes[p]; p += 1;
+    if (epcLen === 0 || epcLen > NHR.MAX_EPC_BYTES || p + epcLen + 7 > bytes.length) break;
+    const epc = nhrHex(bytes.subarray(p, p + epcLen)); p += epcLen;
+    const rssi = dv.getInt8(p); p += 1;
+    const delta = dv.getUint16(p, true); p += 2;
+    const total = dv.getUint32(p, true); p += 4;
+    tags.push({ epc, rssi, delta, total });
+  }
+  return { seq, count, tags, truncated: tags.length < count };
+}
+
+function nhrParseJson(bytes) {
+  try {
+    const text = new TextDecoder("utf-8").decode(bytes).trim();
+    if (!text || text[0] !== "{") return null;
+    return JSON.parse(text);
+  } catch (e) {
+    return null;
+  }
+}
+
+/// يصنّف أي إشعار من 0xFF01.
+function nhrClassify(bytes) {
+  if (nhrIsLiveFrame(bytes)) return { kind: "live", frame: nhrParseLiveFrame(bytes) };
+  const json = nhrParseJson(bytes);
+  if (!json) return { kind: "unknown" };
+  if (json.status === "err" && json.msg === "busy") return { kind: "busy", json };
+  if (json.cmd === "SAVE") return { kind: "save", json };
+  return { kind: "json", json };
+}
+
+const nhrCrc32 = (() => {
+  let table = null;
+  return (bytes) => {
+    if (!table) {
+      table = new Uint32Array(256);
+      for (let i = 0; i < 256; i++) {
+        let c = i;
+        for (let k = 0; k < 8; k++) c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+        table[i] = c >>> 0;
+      }
+    }
+    let crc = 0xffffffff;
+    for (const b of bytes) crc = table[(crc ^ b) & 0xff] ^ (crc >>> 8);
+    return (crc ^ 0xffffffff) >>> 0;
+  };
+})();
+
+/// يفكّ ملف الدفعة NHRB ويتحقّق من سلامته.
+///
+/// ⚠ التحقّق قبل الاستعمال: ملفٌ مبتور يُنتج قائمة EPC ناقصة تبدو
+/// سليمة — والجرد يُعلن عجزًا لم يقع.
+function nhrParseBatchFile(bytes) {
+  if (!bytes || bytes.length < NHR.HEADER_LEN) return { ok: false, why: "ملف أقصر من الترويسة" };
+  const magic = String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]);
+  if (magic !== NHR.MAGIC_FILE) return { ok: false, why: `توقيع غير معروف: ${magic}` };
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const version = bytes[4];
+  const headerLen = bytes[5] || NHR.HEADER_LEN;
+  const recLen = bytes[7] || NHR.REC_LEN;
+  const recordCount = dv.getUint32(8, true);
+  const payloadBytes = dv.getUint32(12, true);
+  const crcStated = dv.getUint32(16, true);
+  const stamp = dv.getUint32(20, true);
+  const payload = bytes.subarray(headerLen, headerLen + payloadBytes);
+  if (payload.length < payloadBytes) {
+    return { ok: false, why: `الحمولة مبتورة: ${payload.length} من ${payloadBytes}` };
+  }
+  const crcActual = nhrCrc32(payload);
+  if (crcStated !== 0 && crcActual !== crcStated) {
+    return { ok: false, why: "CRC لا يطابق — الملف تالف" };
+  }
+  const epcs = [];
+  for (let p = 0; p + recLen <= payload.length; p += recLen) {
+    const len = payload[p];
+    if (len === 0 || len > NHR.MAX_EPC_BYTES) continue;   // سجلّ محشوّ بأصفار
+    epcs.push(nhrHex(payload.subarray(p + 1, p + 1 + len)));
+  }
+  return {
+    ok: true, version, recordCount, payloadBytes,
+    crc: crcActual, readerStamp: stamp,
+    epcs,
+    // العدد المُعلَن قد يخالف المقروء إن حُشيت سجلات — يُقال ولا يُخفى
+    countMatches: epcs.length === recordCount,
+  };
+}
+
+/// يجمّع حزم 0xFF03 في ملفٍ واحد.
+///
+/// ⚠ البايتان الأولان ترويسة تسلسل لا بيانات. الدليل يُحذّر صراحةً:
+/// من يُمرّرهما للمُفكّك يحصل على توقيعٍ خاطئ ويظنّ الملف تالفًا.
+function createNhrFileAssembler() {
+  const chunks = new Map();
+  let meta = null;
+  let done = false;
+  let error = null;
+  return {
+    /// يُعيد: "start" | "data" | "eof" | "error" | "late"
+    feed(bytes) {
+      if (!bytes || bytes.length < 2) return "late";
+      const seq = (bytes[0] << 8) | bytes[1];
+      const body = bytes.subarray(2);
+      if (seq === NHR.PKT_START) { meta = nhrParseJson(body) || {}; return "start"; }
+      if (seq === NHR.PKT_EOF) { done = true; return "eof"; }
+      // ⚠ التسلسل 0 يحمل معنيين في الدليل: حزمة خطأ، وأول حزمة بيانات.
+      // نُفرّق بالمحتوى: الخطأ حمولته JSON تحمل `error`، والبيانات
+      // بايتات خام. الاعتماد على الرقم وحده يُسقط أول 20 بايت من كل
+      // ملف — والتوقيع يصير NHRB ناقصًا.
+      if (seq === NHR.PKT_ERR) {
+        const j = nhrParseJson(body);
+        if (!j || (j.error === undefined && j.state === undefined)) {
+          chunks.set(seq, body);
+          return "data";
+        }
+        error = j.error === 1 ? "لا ملف محفوظ على القارئ"
+          : j.state === "busy" ? "القارئ يحفظ أو يرفع — أعد المحاولة"
+            : "خطأ في نقل الملف";
+        return "error";
+      }
+      if (done) return "late";
+      chunks.set(seq, body);
+      return "data";
+    },
+    get meta() { return meta; },
+    get error() { return error; },
+    get received() { return chunks.size; },
+    get complete() { return done; },
+    /// يجمع الحزم بترتيب تسلسلها — لا بترتيب وصولها
+    assemble() {
+      if (error) return { ok: false, why: error };
+      const keys = [...chunks.keys()].sort((a, b) => a - b);
+      const missing = keys.length ? keys.filter((k, i) => i > 0 && k !== keys[i - 1] + 1) : [];
+      if (missing.length) return { ok: false, why: `حزم مفقودة عند ${missing[0]}` };
+      const total = keys.reduce((a, k) => a + chunks.get(k).length, 0);
+      const out = new Uint8Array(total);
+      let p = 0;
+      for (const k of keys) { out.set(chunks.get(k), p); p += chunks.get(k).length; }
+      return nhrParseBatchFile(out);
+    },
+  };
+}
+
+/// يبني أمرًا نصيًّا لقناة 0xFF01.
+///
+/// ⚠ المفتاح `val` لا `value`: الدليل ينصّ عليه، والفرق صامت — الجهاز
+/// يقبل الأمر ويتجاهل المعامل.
+function nhrCommand(cmd, params = {}) {
+  const body = JSON.stringify({ cmd, ...params });
+  if (body.length > 500) throw new Error("أمر أطول من حدّ 512 بايت");
+  return new TextEncoder().encode(body);
+}
+
+const nhrCommands = () => ({
+  identify: () => nhrCommand("DI"),
+  battery: () => nhrCommand("GB"),
+  readerInfo: () => nhrCommand("GRI"),
+  temperature: () => nhrCommand("GT"),
+  getPower: () => nhrCommand("GP"),
+  setPower: (dbm) => nhrCommand("SP", { val: Math.max(0, Math.min(30, Math.round(dbm))) }),
+  getProfile: () => nhrCommand("GRP"),
+  setProfile: (profile, q, session, target) => nhrCommand("SRP", { val: `${profile},${q},${session},${target}` }),
+  getQuery: () => nhrCommand("GQP"),
+  startLive: () => nhrCommand("S"),
+  stop: () => nhrCommand("X"),
+  startBatch: () => nhrCommand("SB"),
+  stopBatch: () => nhrCommand("XB"),
+  find: (epc) => nhrCommand("F", { val: String(epc || "").toUpperCase() }),
+  popup: (content, beep = true) => nhrCommand("POPUP", { content: String(content).slice(0, 60), beep }),
+});
+
+/// خطاف الاتصال بقارئ NHR-10 عبر بلوتوث الويب — يتصل، يزامن الحالة،
+/// يبدأ/يوقف المسح الحي أو الدفعي، يبحث عن بطاقة بعينها، يضبط الطاقة،
+/// ويرفع ملف دفعة محفوظ على القارئ.
+function useNhrReader({ onTags, onBatch, onLog, config } = {}) {
+  const [state, setState] = useState("idle");     // idle | connecting | ready | live | batch | saving | uploading | error
+  const [device, setDevice] = useState(null);
+  const [info, setInfo] = useState({});           // اسم · بطارية · طاقة · ملف RF
+  const [err, setErr] = useState("");
+  const refs = useRef({ cmd: null, ctrl: null, data: null, asm: null, lastScanAt: 0 });
+  // ⚠ المعالجات في مرجع لا في اعتمادية: إعادة الاشتراك مع كل رسم تُسقط
+  // إشعاراتٍ وصلت بين الإلغاء والاشتراك — ووسطها قراءات ضاعت.
+  const cbs = useRef({});
+  cbs.current = { onTags, onBatch, onLog };
+  // ⚠ الإعداد في مرجع لا في اعتمادية: وضعُه اعتماديةً يُعيد بناء `connect`
+  // مع كل تغيير إعداد، فتُلغى الاشتراكات وتُعاد — ووسطها قراءات تضيع.
+  const cfgRef = useRef(null);
+  cfgRef.current = config || null;
+
+  const supported = typeof navigator !== "undefined" && !!navigator.bluetooth;
+
+  const log = useCallback((line) => { cbs.current.onLog?.(line); }, []);
+
+  const handleCmdNotify = useCallback((ev) => {
+    const bytes = new Uint8Array(ev.target.value.buffer);
+    const c = nhrClassify(bytes);
+    if (c.kind === "live" && c.frame) {
+      if (c.frame.truncated) log("⚠ إطار مبتور — قراءات جزئية");
+      cbs.current.onTags?.(c.frame.tags);
+      return;
+    }
+    if (c.kind === "busy") { setErr("القارئ مشغول — أوقف المسح ثم أعد المحاولة"); log("busy"); return; }
+    if (c.kind === "save") {
+      setState(c.json.state === "saved" ? "ready" : "saving");
+      log(`حفظ: ${c.json.state}${c.json.progress != null ? ` ${c.json.progress}٪` : ""}`);
+      if (c.json.state === "save_failed") setErr("فشل حفظ الدفعة على القارئ");
+      return;
+    }
+    if (c.kind === "json") {
+      const j = c.json;
+      setInfo((prev) => ({
+        ...prev,
+        ...(j.cmd === "DI" ? { name: j.val } : {}),
+        ...(j.cmd === "GB" ? { battery: j } : {}),
+        ...(j.cmd === "GP" ? { power: j.val } : {}),
+        ...(j.cmd === "GRP" ? { profile: j.val } : {}),
+        ...(j.cmd === "GT" ? { temp: j.val } : {}),
+        ...(j.cmd === "F" ? { findRssi: j.rssi ?? j.val } : {}),
+        ...(j.cmd === "XB" ? { batchCount: j.count } : {}),
+      }));
+      log(`${j.cmd}: ${JSON.stringify(j).slice(0, 90)}`);
+    }
+  }, [log]);
+
+  const handleFileNotify = useCallback((ev) => {
+    const bytes = new Uint8Array(ev.target.value.buffer);
+    const asm = refs.current.asm;
+    if (!asm) return;
+    const kind = asm.feed(bytes);
+    if (kind === "error") { setErr(asm.error || "فشل نقل الملف"); setState("ready"); return; }
+    if (kind === "eof") {
+      const out = asm.assemble();
+      refs.current.asm = null;
+      setState("ready");
+      if (!out.ok) { setErr(out.why); return; }
+      if (!out.countMatches) log(`⚠ العدد المُعلَن ${out.recordCount} والمقروء ${out.epcs.length}`);
+      cbs.current.onBatch?.(out);
+    }
+  }, [log]);
+
+  const write = useCallback(async (bytes) => {
+    const ch = refs.current.cmd;
+    if (!ch) throw new Error("غير متصل");
+    // writeValueWithResponse يُبلّغ بالفشل؛ بلا استجابة يبتلع الخطأ
+    await (ch.writeValueWithResponse ? ch.writeValueWithResponse(bytes) : ch.writeValue(bytes));
+  }, []);
+
+  const connect = useCallback(async () => {
+    if (!supported) { setErr("متصفّحك لا يدعم البلوتوث — استعمل كروم على أندرويد أو الحاسب"); return false; }
+    setErr(""); setState("connecting");
+    try {
+      const dev = await navigator.bluetooth.requestDevice({
+        filters: [{ name: NHR.DEVICE_NAME }, { services: [NHR.SERVICE] }],
+        optionalServices: [NHR.SERVICE],
+      });
+      const server = await dev.gatt.connect();
+      const svc = await server.getPrimaryService(NHR.SERVICE);
+      const cmd = await svc.getCharacteristic(NHR.CMD);
+      const ctrl = await svc.getCharacteristic(NHR.FILE_CTRL).catch(() => null);
+      const data = await svc.getCharacteristic(NHR.FILE_DATA).catch(() => null);
+      refs.current = { ...refs.current, cmd, ctrl, data };
+      // ⚠ الاشتراك قبل أي أمر: الدليل ينصّ عليه، وإلا ضاع أول ردّ
+      await cmd.startNotifications();
+      cmd.addEventListener("characteristicvaluechanged", handleCmdNotify);
+      if (data) {
+        await data.startNotifications();
+        data.addEventListener("characteristicvaluechanged", handleFileNotify);
+      }
+      dev.addEventListener("gattserverdisconnected", () => {
+        setState("idle"); setDevice(null);
+        setErr("انقطع الاتصال بالقارئ");
+      });
+      setDevice(dev); setState("ready");
+      // مزامنة الحالة كما يوصي الدليل
+      for (const c of [nhrCommands().identify(), nhrCommands().battery(), nhrCommands().getPower(), nhrCommands().getProfile()]) {
+        await write(c);
+        await new Promise((r) => setTimeout(r, 120));
+      }
+      // ⚠ الإعدادات بعد المزامنة لا قبلها: الدليل يمنع أوامر الراديو أثناء
+      // أي نشاط، والقارئ لحظةَ الاتصال قد يُنهي جلسةً سابقة. وبعد ردّ
+      // GRP نكون واثقين أنه خامل.
+      const wanted = cfgRef.current;
+      if (wanted && wanted.enabled !== false) {
+        if (wanted.power != null) {
+          await write(nhrCommands().setPower(Math.min(wanted.power, NHR_POWER_MAX_DBM)));
+          await new Promise((r) => setTimeout(r, 140));
+        }
+        if (wanted.profile != null) {
+          await write(nhrCommands().setProfile(wanted.profile, wanted.q ?? 6, wanted.session ?? 1, wanted.target ?? 0));
+          await new Promise((r) => setTimeout(r, 140));
+          await write(nhrCommands().getPower());
+        }
+      }
+      return true;
+    } catch (e) {
+      setState("idle");
+      setErr(e && e.name === "NotFoundError" ? "لم تختر جهازًا" : `تعذّر الاتصال: ${e && e.message}`);
+      return false;
+    }
+  }, [supported, handleCmdNotify, handleFileNotify, write]);
+
+  const disconnect = useCallback(() => {
+    try { device?.gatt?.disconnect(); } catch (e) { /* مقطوع سلفًا */ }
+    setDevice(null); setState("idle");
+  }, [device]);
+
+  /// يحترم مهلة 300 مللي بين أوامر بدء/إيقاف المسح
+  const scanCommand = useCallback(async (bytes, next) => {
+    const gap = Date.now() - refs.current.lastScanAt;
+    if (gap < NHR.SCAN_GAP_MS) await new Promise((r) => setTimeout(r, NHR.SCAN_GAP_MS - gap));
+    refs.current.lastScanAt = Date.now();
+    await write(bytes);
+    setState(next);
+  }, [write]);
+
+  const startLive = useCallback(() => scanCommand(nhrCommands().startLive(), "live"), [scanCommand]);
+  const stop = useCallback(() => scanCommand(nhrCommands().stop(), "ready"), [scanCommand]);
+  const startBatch = useCallback(() => scanCommand(nhrCommands().startBatch(), "batch"), [scanCommand]);
+  const stopBatch = useCallback(() => scanCommand(nhrCommands().stopBatch(), "saving"), [scanCommand]);
+  const find = useCallback((epc) => write(nhrCommands().find(epc)).then(() => setState("live")), [write]);
+
+  const setPower = useCallback(async (dbm) => {
+    if (state === "live" || state === "batch" || state === "saving") {
+      setErr("أوقف المسح قبل تغيير الطاقة");
+      return false;
+    }
+    if (dbm > NHR_POWER_MAX_DBM) {
+      setErr(`الحدّ المسموح ${NHR_POWER_MAX_DBM} dBm في هذه المنطقة`);
+      return false;
+    }
+    await write(nhrCommands().setPower(dbm));
+    await write(nhrCommands().getPower());
+    return true;
+  }, [state, write]);
+
+  /// يسحب ملف الدفعة المحفوظ.
+  ///
+  /// ⚠ بعد `saved` فقط: الدليل يُحذّر من الرفع أثناء الحفظ، والجهاز يردّ
+  /// بـ`busy` فيُظنّ الملف مفقودًا.
+  const uploadBatch = useCallback(async () => {
+    const { ctrl, data } = refs.current;
+    if (!ctrl || !data) { setErr("قناة الملفات غير متاحة"); return false; }
+    if (state === "saving") { setErr("انتظر اكتمال الحفظ"); return false; }
+    refs.current.asm = createNhrFileAssembler();
+    setState("uploading"); setErr("");
+    try {
+      await ctrl.writeValueWithResponse(new TextEncoder().encode("send_file"));
+      return true;
+    } catch (e) {
+      setState("ready"); setErr(`تعذّر طلب الملف: ${e && e.message}`);
+      refs.current.asm = null;
+      return false;
+    }
+  }, [state]);
+
+  useEffect(() => () => { try { device?.gatt?.disconnect(); } catch (e) { /* */ } }, [device]);
+
+  return { supported, state, device, info, err, setErr,
+    connect, disconnect, startLive, stop, startBatch, stopBatch, find, setPower, uploadBatch,
+    write, battery: info.battery };
+}
+
+/// خطاف قارئ HID (لوحة مفاتيح) — يعمل مع أي قارئ باركود/RFID يُهيَّأ
+/// ليحاكي لوحة مفاتيح، بلا حاجة لبلوتوث الويب، ويعمل على كل المنصّات.
+function useWedgeScanner(onScan, { enabled = true, maxGapMs = 50, minLength = 4 } = {}) {
+  const buf = useRef("");
+  const lastAt = useRef(0);
+  useEffect(() => {
+    if (!enabled) return undefined;
+    const onKey = (e) => {
+      const t = e.target;
+      // حقلٌ مركَّز عليه؟ ندعه له — إلا إن كانت الدفقة سريعة أصلًا
+      const typing = t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName);
+      const now = Date.now();
+      const gap = now - lastAt.current;
+      lastAt.current = now;
+      if (gap > maxGapMs) buf.current = "";
+      if (e.key === "Enter") {
+        const code = buf.current;
+        buf.current = "";
+        if (code.length >= minLength) {
+          if (typing) e.preventDefault();
+          onScan(code, "wedge");
+        }
+        return;
+      }
+      if (e.key.length === 1) buf.current += e.key;
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [enabled, onScan, maxGapMs, minLength]);
+}
+
+/// يُعطي الإعداد الفعّال لقسمٍ بعينه (الجرد/المبيعات/التكويد/…).
+function rfidSettingsFor(sectionId, settings) {
+  const cfg = { ...RFID_DEFAULTS, ...(settings?.rfid || {}) };
+  const section = RFID_SECTIONS.find((s) => s.id === sectionId);
+  if (!cfg.enabled) return { enabled: false };
+  // «خيار للكل» يتجاوز التخصيص: صاحب المحل يضبط رقمًا واحدًا وينتهي
+  if (cfg.applyToAll) {
+    return {
+      enabled: true,
+      power: Math.min(cfg.globalPower, NHR_POWER_MAX_DBM),
+      mode: section?.def.mode || "single",
+      autoStart: false,
+      beep: true,
+      source: "عام",
+    };
+  }
+  const own = cfg.perSection?.[sectionId];
+  const base = section?.def || RFID_SECTIONS[1].def;
+  if (own && own.enabled === false) return { enabled: false };
+  return {
+    enabled: true,
+    power: Math.min(own?.power ?? base.power, NHR_POWER_MAX_DBM),
+    mode: own?.mode ?? base.mode,
+    autoStart: own?.autoStart ?? base.autoStart,
+    beep: own?.beep ?? base.beep,
+    source: own ? "مخصّص" : "افتراضي القسم",
+  };
+}
+
+export { accountForCategory, accountGroup, accountLabel, accountPath, aiAllowedFor, aiAllowedForRole, aiScope, askReportAi, attachmentByteSize, b32Decode, b32Encode, branchDataKey, branchSnapshotKey, btSupported, bundleById, bundledPages, cardFeeOf, cashTrialBalance, categoryById, categoryLabel, childrenOf, cleanToken, codeCounter, compressImage, contentWidth, createNhrFileAssembler, detectColumns, detectTraceTopic, emptyRow, exportTablesPdf, fetchAiAuditNarrative, fetchAiBusinessInsights, fetchAiChatReply, fetchAiReportSpec, fetchGoldPriceSAR, fineAt, fmtWeight, fromGram, fundingSourceLabel, generateUnitCode, goldDestLabel, hiddenNumbersScan, inPeriod, inputStyle, isBundle, isGoldCogs, isLiveScrap, isPartial, isUnder, issueBranchCode, issueLicense, itemLabel, journalTrialBalance, loadAttachment, lotAllocatedWeight, marginFor, migrateLegacyKeys, modeAllowsAction, modeAllowsPage, modeAllowsTab, nameExists, navPerRow, nhrClassify, nhrCommand, nhrCommands, nhrCrc32, nhrHex, nhrIsLiveFrame, nhrParseBatchFile, nhrParseJson, nhrParseLiveFrame, normHeader, normalizeFundingSource, normalizeName, onlineBlockReason, openAttachment, ounceHash, periodRange, prettyToken, priceBreakdown, printedCount, r2, r3, readFileAsDataUrl, readKeyOrNull, remainingQty, reportFactsText, reportFindings, rfidSettingsFor, runAuditChecks, saleModeOf, saleProfitOf, saleProfitSplit, saveAttachment, scrapPrice24, sellPrice24, setRuntimeCategories, splitCsvLine, toGram, toLatinDigits, trustBalance, unitById, unitCostBasis, unitCurrentValue, useDebounced, useNhrReader, useViewport, useVoice, useWedgeScanner, weightTrialBalance };

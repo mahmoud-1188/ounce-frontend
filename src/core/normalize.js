@@ -25,6 +25,8 @@ function normalizeItems(itemRows, itemUnitRows) {
       printed: !!u.printed,
       sold: !!u.sold,
       issued: !!u.issued,
+      epc: u.epc || null,
+      epcBoundAt: u.epc_bound_at || null,
     });
     unitsByItem.set(u.item_id, list);
   }
@@ -214,6 +216,44 @@ function normalizeExpenses(rows, usersFull) {
       businessDayId: e.business_day_id,
     };
   });
+}
+
+function normalizeAssetClasses(rows) {
+  return rows.map((c) => ({
+    id: c.id, label: c.label, account: c.account_code,
+    years: c.years, salvagePct: Number(c.salvage_pct) * 100 || 0,
+  }));
+}
+
+/**
+ * fixed_assets (DB) → assets[] بشكل المرجع (FixedAssetsPage/AssetForm):
+ * classId/years/salvagePct/method قد تكون NULL في القاعدة (يتّبع الأصل
+ * فئته حينها) — لا نُسقِط null هنا فتبقى الشاشة تعرف الفرق بين "خصّصها
+ * المستخدم" و"موروثة من الفئة"؛ assetStatus/monthlyDepreciation
+ * المحليان (helpers.js) هما من يدمجان مع قيم الفئة عند الحاجة، تمامًا
+ * كـ`Number(f.years) || cls.years` في AssetForm الأصلي.
+ */
+function normalizeFixedAssets(rows) {
+  return rows.map((a) => ({
+    id: a.id, ref: a.ref, classId: a.class_id, name: a.name,
+    cost: toMoney(a.cost), purchasedAt: a.purchased_at,
+    years: a.years == null ? null : Number(a.years),
+    salvagePct: a.salvage_pct == null ? null : Number(a.salvage_pct) * 100,
+    method: a.method || "straight",
+    disposed: !!a.disposed_at, disposedAt: a.disposed_at,
+    disposalReason: a.disposal_reason || null,
+    disposalProceeds: a.disposal_proceeds == null ? null : toMoney(a.disposal_proceeds),
+    disposalGain: a.disposal_gain == null ? null : toMoney(a.disposal_gain),
+    createdBy: a.created_by,
+  }));
+}
+
+function normalizeDepreciationSchedule(rows) {
+  return rows.map((d) => ({
+    id: d.id, assetId: d.asset_id,
+    period: typeof d.period === "string" ? d.period.slice(0, 7) : String(d.period).slice(0, 7),
+    amount: toMoney(d.amount), posted: !!d.posted, journalEntryId: d.journal_entry_id,
+  }));
 }
 
 function normalizeExpenseNames(rows) {
@@ -629,6 +669,13 @@ function normalizeBootstrap(boot) {
     repairs: normalizeRepairs(boot.repairs || []),
     returns: normalizeReturns(boot.returns || []),
     receipts: normalizeReceipts(boot.receipts || []),
+    assetClasses: normalizeAssetClasses(boot.assetClasses || []),
+    fixedAssets: normalizeFixedAssets(boot.fixedAssets || []),
+    depreciationSchedule: normalizeDepreciationSchedule(boot.depreciationSchedule || []),
+    // ⚠ migration 017: boot.branch (كائن الفرع) كان موجودًا في الاستجابة
+    // منذ البداية لكن بلا أي مستهلك في كل الفرونت إند — أول استخدام له
+    // هنا فقط: isHq يقرّر ظهور تبويب "تقرير الفروع" من عدمه.
+    isHq: !!boot.branch?.is_hq,
   };
 }
 
@@ -658,4 +705,7 @@ export {
   normalizeRepairs,
   normalizeReturns,
   normalizeReceipts,
+  normalizeAssetClasses,
+  normalizeFixedAssets,
+  normalizeDepreciationSchedule,
 };

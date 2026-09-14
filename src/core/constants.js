@@ -182,8 +182,12 @@ const DEFAULT_SETTINGS = {
   cardFees: DEFAULT_CARD_FEES,
   marginByKarat: DEFAULT_MARGINS,
   freezeMinutes: 30,
-  // ⚠ مطفأ افتراضيًا: الدخول باختيار الاسم فقط. من يفتح الجهاز يفتح
-  // التطبيق — يُفعَّل من الإعدادات حين يشارك المحل أكثر من شخص.
+  // ⚠ مفعَّل افتراضيًا: الباك إند (auth.routes.js) يتطلب رقمًا سريًا
+  // دائمًا — لا يوجد مسار دخول بلا PIN فعليًا (راجع handleDirectLogin في
+  // GoldInventoryApp.jsx). القيمة الافتراضية السابقة (false) كانت تطابق
+  // فقط سلوك النسخة المرجعية القديمة بلا باك إند حقيقي، وتؤدي لرسالة
+  // "الدخول بلا رقم سري غير مدعوم" دومًا. يمكن مستقبلًا بناء نقطة دخول
+  // آمنة بلا PIN كقرار منفصل، وحينها تُعاد هذه القيمة لـfalse.
   requirePin: true,
   // ⚠ من يفحص الكسر ويعتمد وزنه؟
   //
@@ -293,7 +297,16 @@ const ROLES = {
     canManageDay: true,
     canBreak: true,
     allowedTabs: ["inventory", "sales", "cash", "expenses", "stocktake", "more"],
-    allowedMore: ["addGoods", "printing", "printerSetup", "salesHistory", "sellerReports", "price", "reports", "journal", "trialBalance", "search", "bankRecon", "supplierLedger", "officeLedger", "salesReturn", "scrap", "scrapIntake", "scrapCustody", "conversions", "itemEdit", "goldOut", "categories", "workday", "customers", "trustAccounts", "reservations", "safeAudit", "integration", "storeLink", "backup", "purchases", "suppliers", "taskirat", "partners", "access", "taxReport", "settings", "financials", "openingCompare", "repairs", "aiAssistant", "navCustomize", "openingBalance"],
+    // ⚠ إصلاح حقيقي: fixedAssets/payroll/attendanceHr (migration 015/016)
+    // كانتا مضافتين فقط إلى roles.allowed_more في قاعدة البيانات (يقرأه
+    // requirePage في الباك إند فعليًا)، لا إلى ROLES هذا الثابت المحلي —
+    // وroleFor أعلاه في GoldInventoryApp.jsx يقرأ حصرًا من ROLES المحلي
+    // حين allowedPages المستخدم = null (الحالة الافتراضية لأي مستخدم لم
+    // يُخصَّص له شيء بعد)، بلا أي دمج مع ما يرجعه الباك إند. النتيجة:
+    // كانت الصفحتان مبنيتين ومُفعَّلتين خادميًّا لكن غير قابلتين للوصول
+    // فعليًا من القائمة لأي مدير افتراضي — هذا الإصلاح يضيفهما هنا، ومعهما
+    // hqReports (migration 017) مباشرة بلا نفس الفجوة من أول يوم.
+    allowedMore: ["addGoods", "printing", "printerSetup", "salesHistory", "sellerReports", "price", "reports", "journal", "trialBalance", "search", "bankRecon", "supplierLedger", "officeLedger", "salesReturn", "scrap", "scrapIntake", "scrapCustody", "conversions", "itemEdit", "goldOut", "categories", "workday", "customers", "trustAccounts", "reservations", "safeAudit", "integration", "storeLink", "backup", "purchases", "suppliers", "taskirat", "partners", "access", "taxReport", "settings", "financials", "openingCompare", "repairs", "aiAssistant", "navCustomize", "openingBalance", "fixedAssets", "payroll", "attendanceHr", "hqReports", "priceFix"],
   },
 };
 
@@ -488,6 +501,72 @@ const PRINTER_SERVICES = [
   "e7810a71-73ae-499d-8c15-faa9aef0c3f2",
 ];
 
+// ═══════════════════════════════════════════════════════════════════════
+//  قارئ RFID — قرارك الصريح: NHR-10 (بلوتوث) + قارئ HID (لوحة مفاتيح) +
+//  الكاميرا/الإدخال اليدوي كبدائل، بنفس ثوابت المرجع حرفيًا (بروتوكول
+//  المصنّع الموثّق في core/constants.js هناك).
+// ═══════════════════════════════════════════════════════════════════════
+
+const NHR = {
+  DEVICE_NAME: "NHR-10",
+  SERVICE: 0x00ff,
+  CMD: 0xff01,          // كتابة الأوامر · إشعارات الردود والإطارات الحيّة
+  FILE_CTRL: 0xff02,    // كتابة `send_file` نصًّا صريحًا
+  FILE_DATA: 0xff03,    // بثّ ملف الدفعة
+  MTU: 185,
+  // ⚠ الدليل: 300 مللي على الأقل بين أوامر بدء/إيقاف المسح
+  SCAN_GAP_MS: 300,
+  MAGIC_LIVE: [0x4e, 0x48],        // "NH"
+  MAGIC_FILE: "NHRB",
+  PKT_START: 0xffff,
+  PKT_EOF: 0xfffe,
+  PKT_ERR: 0x0000,
+  REC_LEN: 17,
+  HEADER_LEN: 32,
+  MAX_EPC_BYTES: 16,
+};
+
+/// حدّ الطاقة بحسب المنطقة — البرنامج الثابت يقبل 0–30 dBm، والدليل
+/// يُلزم التطبيق بفرض الحدّ النظامي (السعودية ضمن نطاق 865–868).
+const NHR_POWER_MAX_DBM = 27;
+
+/// كل قسمٍ يحتاج مدًى مختلفًا من القارئ: الجرد يريد مدى واسعًا يلتقط
+/// الرفّ كلّه، والبيع يريد مدى ضيّقًا كي لا يلتقط قطعة الزبون المجاور،
+/// والاسترجاع/التكويد يريدان قطعة واحدة بالضبط.
+const RFID_SECTIONS = [
+  { id: "stocktake", label: "الجرد", hint: "مسحٌ جماعي للرفّ — مدًى واسع",
+    def: { enabled: true, power: 26, mode: "bulk", autoStart: true, beep: false } },
+  { id: "inventory", label: "المخزون", hint: "بحثٌ عن قطعة بين القطع",
+    def: { enabled: true, power: 20, mode: "single", autoStart: false, beep: true } },
+  { id: "sales", label: "البيع", hint: "قطعة الزبون وحدها — مدًى ضيّق",
+    def: { enabled: true, power: 12, mode: "single", autoStart: false, beep: true } },
+  { id: "salesReturn", label: "الاسترجاع", hint: "قطعة واحدة بالضبط",
+    def: { enabled: true, power: 12, mode: "single", autoStart: false, beep: true } },
+  { id: "addGoods", label: "التكويد", hint: "ربط البطاقة بالقطعة عند الإدخال",
+    def: { enabled: true, power: 10, mode: "single", autoStart: false, beep: true } },
+  { id: "safeAudit", label: "جرد الخزنة", hint: "مسحٌ جماعي داخل الخزنة",
+    def: { enabled: true, power: 24, mode: "bulk", autoStart: true, beep: false } },
+];
+
+const RFID_MODES = [
+  { id: "single", label: "قطعة واحدة", hint: "أول قراءة تكفي ثم يتوقّف" },
+  { id: "bulk", label: "مسح جماعي", hint: "يجمع كل ما يُقرأ حتى توقفه" },
+];
+
+/// إعدادات القارئ الافتراضية — محلية بحتة (بلا مزامنة سيرفر، تمامًا
+/// كإعدادات الطابعة DEFAULT_PRINTER): كل جهاز/متصفح يقترن بقارئه
+/// الفعلي بنفسه، فلا معنى لمزامنة "جهاز مقترن" عبر الأجهزة.
+///
+/// ⚠ `perSection` فارغة تعني «الكل يتبع العام» — لا «كل الأقسام مُعطَّلة».
+/// القيمة الغائبة تُقرأ من الافتراضي لا تُعامَل صفرًا.
+const RFID_DEFAULTS = {
+  enabled: false,
+  globalPower: 20,
+  profile: 53, q: 6, session: 1, target: 0,
+  applyToAll: true,           // إعدادٌ واحد لكل الأقسام
+  perSection: {},
+};
+
 const ISSUE_REASONS = [
   { id: "returned_supplier", label: "إعادة للمورد", account: "1320",
     hint: "تعود لحساب المورد — يُخصم من دَينك" },
@@ -505,4 +584,4 @@ const ISSUE_REASONS = [
     hint: "القطعة لم تكن موجودة أصلًا" },
 ];
 
-export { ACCOUNT_GROUPS, ACCOUNT_TREE, ALL_ACCOUNT_NODES, APP_MODES, ATTACH_PREFIX, B32, BREAKPOINTS, CATEGORY_STATE, DEFAULT_APP_MODE, DEFAULT_CATEGORIES, DEFAULT_INTEGRATION, DEFAULT_OPENING_BALANCE, DEFAULT_PRINTER, DEFAULT_SETTINGS, DEFAULT_STORE, DEFAULT_USERS, DEMO_VERSION, EXPENSE_CATEGORIES, EXT_SAMPLE, ISSUE_REASONS, LEGACY_ACCOUNT_NODES, MANUAL_ACCOUNT_TREE, MAX_ATTACH_BYTES, MIGRATION_FLAG, OUNCE_SECRET, PARTNER_REQUIRED, PRINTER_SERVICES, PUBLISH_CAP, ROLES, STORE_SAMPLE, TRUST_MOVES };
+export { ACCOUNT_GROUPS, ACCOUNT_TREE, ALL_ACCOUNT_NODES, APP_MODES, ATTACH_PREFIX, B32, BREAKPOINTS, CATEGORY_STATE, DEFAULT_APP_MODE, DEFAULT_CATEGORIES, DEFAULT_INTEGRATION, DEFAULT_OPENING_BALANCE, DEFAULT_PRINTER, DEFAULT_SETTINGS, DEFAULT_STORE, DEFAULT_USERS, DEMO_VERSION, EXPENSE_CATEGORIES, EXT_SAMPLE, ISSUE_REASONS, LEGACY_ACCOUNT_NODES, MANUAL_ACCOUNT_TREE, MAX_ATTACH_BYTES, MIGRATION_FLAG, NHR, NHR_POWER_MAX_DBM, OUNCE_SECRET, PARTNER_REQUIRED, PRINTER_SERVICES, PUBLISH_CAP, RFID_DEFAULTS, RFID_MODES, RFID_SECTIONS, ROLES, STORE_SAMPLE, TRUST_MOVES };
