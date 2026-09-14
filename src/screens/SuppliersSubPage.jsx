@@ -375,7 +375,15 @@ function SuppliersSubPage({ suppliers, lots, items, safeTx, cashTx, taskirEntrie
         {(() => {
           // الفواتير المؤجّلة تُعدّ وتُعرض: السماح بتأجيلها بلا تذكير يعني
           // أنها لن تُرفق أبدًا، ويضيع الأثر المستندي للمشتريات.
-          const pending = lots.filter((l) => !l.invoiceAttachId && !l.invoiceFile);
+          // ⚠ بعد إعادة التحميل من الخادم invoiceAttachId/invoiceFile
+          // تبقيان دائمًا null (رفع المرفق نفسه غير موصول بالباك إند بعد)
+          // — الاعتماد عليهما وحدهما كان سيُظهر كل دفعة "بانتظار الفاتورة"
+          // للأبد. invoicePending (من صفّ purchases) هو المصدر الصحيح
+          // الآن؛ نتساقط لفحص المرفقين القديم فقط حين تكون undefined
+          // (دفعة أُنشئت في نفس الجلسة قبل أي refresh).
+          const pending = lots.filter((l) =>
+            l.invoicePending != null ? l.invoicePending : !l.invoiceAttachId && !l.invoiceFile
+          );
           if (pending.length === 0) return null;
           return (
             <Card style={{ padding: 12, marginBottom: 12, border: "1px solid var(--badLine)" }}>
@@ -447,8 +455,13 @@ function SuppliersSubPage({ suppliers, lots, items, safeTx, cashTx, taskirEntrie
                 </button>
                 <button
                   disabled={!valid}
-                  onClick={() => {
-                    onAddSupplier(name.trim(), phone.trim(), isOfficial);
+                  onClick={async () => {
+                    // ⚠ الإغلاق/المسح مشروط بالنجاح الآن: onAddSupplier
+                    // يستدعي الخادم فعليًا وقد يفشل (اسم مكرر على الخادم،
+                    // انقطاع شبكة) — إغلاق النموذج قبل معرفة النتيجة كان
+                    // يُفقد المستخدم ما كتبه دون تفسير عند الفشل.
+                    const sup = await onAddSupplier(name.trim(), phone.trim(), isOfficial);
+                    if (!sup) return;
                     setName("");
                     setPhone("");
                     setShowAdd(false);

@@ -151,6 +151,15 @@ function createPurchase(payload) {
   return apiFetch("/purchases", { method: "POST", body: payload });
 }
 
+// ⚠ إصلاح حقيقي: إضافة مورد كانت تُكتب محليًا فقط (persistSuppliers →
+// window.storage) بلا أي استدعاء للباك إند — فيُبنى الشراء عليه بمعرّف
+// لا وجود له في جدول suppliers الحقيقي، ويختفي المورد والشراء معًا عند
+// أي refresh لأن loadBootstrap يستبدل suppliers بالكامل بما يرجعه
+// الخادم. هذا يضيف المورد فعليًا في قاعدة البيانات (POST /api/suppliers).
+function createSupplier(payload) {
+  return apiFetch("/suppliers", { method: "POST", body: payload });
+}
+
 // ── الكسر ──
 
 const scrap = {
@@ -287,6 +296,7 @@ export {
   createSale,
   createPartialSale,
   createPurchase,
+  createSupplier,
   scrap,
   safe,
   day,
