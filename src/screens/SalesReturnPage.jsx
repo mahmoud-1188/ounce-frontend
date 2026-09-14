@@ -56,11 +56,13 @@ function SalesReturnPage({
   const already = (i) =>
     (returns || []).some((r) => r.saleId === sale?.id && (r.lineIndexes || []).includes(i));
 
-  const submit = () => {
+  const submit = async () => {
     const req = { saleId: sale.id, lineIndexes: picked, reasonId, refundTarget: target, note };
     const v = validateReturnRequest(req, { sales, returns, items, openDay, stocktakeLock });
     if (!v.ok) { setErr(v.errors); return; }
-    const res = onProcess(req);
+    // ⚠ onProcess صار async (يستدعي الباك إند فعليًا) — راجع
+    // processSalesReturn في GoldInventoryApp.jsx.
+    const res = await onProcess(req);
     if (res?.ok) {
       setHit(null); setPicked([]); setNote(""); setErr([]);
     } else {

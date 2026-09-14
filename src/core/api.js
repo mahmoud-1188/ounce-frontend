@@ -149,6 +149,7 @@ const scrap = {
   approve: (reqId, payload) => apiFetch(`/scrap/${reqId}/approve`, { method: "POST", body: payload }),
   receive: (reqId, payload) => apiFetch(`/scrap/${reqId}/receive`, { method: "POST", body: payload }),
   depositToVault: (payload) => apiFetch("/scrap/deposit-to-vault", { method: "POST", body: payload }),
+  convertToItem: (id, payload) => apiFetch(`/scrap/${id}/convert-to-item`, { method: "POST", body: payload }),
 };
 
 // ── الخزنة ──
@@ -160,6 +161,7 @@ const safe = {
   cash: (payload) => apiFetch("/safe/cash", { method: "POST", body: payload }),
   gold: (payload) => apiFetch("/safe/gold", { method: "POST", body: payload }),
   audit: (payload) => apiFetch("/safe/audit", { method: "POST", body: payload }),
+  closeScrapDay: (payload) => apiFetch("/safe/close-scrap-day", { method: "POST", body: payload }),
 };
 
 // ── يوم العمل والعهدة اليومية ──
@@ -193,6 +195,22 @@ const expensesApi = {
   deleteName: (id) => apiFetch(`/expense-names/${id}`, { method: "DELETE" }),
 };
 
+// ── التسكير (تسوية مستحقات الموردين) ──
+// كانت محفوظة محليًا بالكامل بلا أي ربط حقيقي بمورد في قاعدة البيانات
+// (راجع migration 011) — الآن كل تسكير وسداد مكتب يُسجَّل فعليًا ويُخصم
+// من دين المورد الحقيقي (supplier_ledger).
+const taskirApi = {
+  list: () => apiFetch("/taskirat"),
+  add: (payload) => apiFetch("/taskirat", { method: "POST", body: payload }),
+  offices: {
+    list: () => apiFetch("/taskirat/offices"),
+    create: (name, phone) => apiFetch("/taskirat/offices", { method: "POST", body: { name, phone } }),
+  },
+  officeTx: (officeId) => apiFetch(`/taskir-offices/${officeId}/tx`),
+  settleOffice: (officeId, payload) =>
+    apiFetch(`/taskir-offices/${officeId}/settle`, { method: "POST", body: payload }),
+};
+
 // ── إخراج بضاعة من النظام ──
 
 function issueOut(payload) {
@@ -210,6 +228,26 @@ const usersApi = {
   // نفس اتفاقية null/[] الموثَّقة في migration 002 وpermissions.js.
   setPermissions: (id, allowedPages) => apiFetch(`/users/${id}/permissions`, { method: "PATCH", body: { allowedPages } }),
   remove: (id) => apiFetch(`/users/${id}`, { method: "DELETE" }),
+};
+
+// ── الحجوزات، الإصلاحات، والمرتجعات ──
+// كانت الثلاثة محفوظة محليًا فقط بلا أي endpoint — راجع migration 013.
+const reservationsApi = {
+  list: () => apiFetch("/reservations"),
+  add: (payload) => apiFetch("/reservations", { method: "POST", body: payload }),
+  cancel: (id, refund) => apiFetch(`/reservations/${id}/cancel`, { method: "POST", body: { refund: !!refund } }),
+};
+
+const repairsApi = {
+  add: (payload) => apiFetch("/repairs", { method: "POST", body: payload }),
+};
+
+const returnsApi = {
+  create: (saleId, payload) => apiFetch(`/sales/${saleId}/return`, { method: "POST", body: payload }),
+  // POST /sales/:id/return-full — النسخة الكاملة (شاشة "استرجاع مبيعات"
+  // المخصَّصة): ضريبة فعلية حقيقية + عكس تكلفة البضاعة المباعة + تمييز
+  // تالف/متاح لإعادة التخزين. راجع misc.routes.js.
+  createFull: (saleId, payload) => apiFetch(`/sales/${saleId}/return-full`, { method: "POST", body: payload }),
 };
 
 export {
@@ -230,6 +268,10 @@ export {
   custody,
   settingsApi,
   expensesApi,
+  taskirApi,
   issueOut,
   usersApi,
+  reservationsApi,
+  repairsApi,
+  returnsApi,
 };
