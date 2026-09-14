@@ -197,6 +197,10 @@ export default function GoldInventoryApp() {
   const [morePage, setMorePage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
+  // ⚠ true حتى ينتهي التحقق من توكن محفوظ عند الإقلاع (راجع الأثر بعد
+  // handleLogout) — يمنع "وميض" شاشة الدخول قبل أن نعرف إن كانت هناك
+  // جلسة صالحة أصلًا.
+  const [sessionChecking, setSessionChecking] = useState(true);
   // ⚠ من له صفحةٌ واحدة يُفتح عليها مباشرة — لا شريط ولا اختيار.
   const landingFor = (r) => {
     const def = ROLES[r] || {};
@@ -3777,6 +3781,42 @@ export default function GoldInventoryApp() {
     setMorePage(null);
     setTab("sales");
   };
+
+  // ⚠ إصلاح حقيقي: التوكن كان يُحفظ فعليًا (sessionStorage ثم localStorage)
+  // لكن لا شيء في التطبيق كان يتحقق منه عند أي تحميل جديد للصفحة —
+  // currentUser هو React state فقط ويبدأ null دائمًا، فكل refresh كان
+  // يُظهر شاشة الدخول من جديد رغم أن الجلسة (12 ساعة) لم تنتهِ فعليًا.
+  // هذا الأثر يعمل مرة واحدة عند إقلاع التطبيق: يتحقق من توكن محفوظ عبر
+  // GET /auth/me، ولو صالحًا يُكمل بالضبط نفس تسلسل handleLogin (تحميل
+  // bootstrap ثم تفعيل الجلسة) بلا طلب PIN من جديد.
+  useEffect(() => {
+    if (!api.getAuthToken()) {
+      setSessionChecking(false);
+      return;
+    }
+    (async () => {
+      try {
+        const { user } = await api.fetchCurrentUser();
+        setLoading(true);
+        try {
+          await loadBootstrap();
+        } finally {
+          setLoading(false);
+        }
+        setCurrentUser(user);
+        const land = landingFor(user.role);
+        setMorePage(land.more);
+        setTab(land.tab);
+      } catch (e) {
+        // توكن غائب/منتهٍ/غير صالح — نمسحه ونعرض شاشة الدخول العادية،
+        // لا نُفشل صامتًا بجلسة نصف-محمَّلة.
+        api.logout();
+      } finally {
+        setSessionChecking(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // ⚠ حُوِّلت للباك إند بالكامل: كانت onSave(nextUsers) تستبدل مصفوفة
   // المستخدمين كاملةً محليًا (تصميم "استبدل الكل" لشاشة تعرض فعلًا زرًا
   // مستقلًا لكل فعل: إضافة/حذف/تسمية/تبديل AI/صلاحيات). الباك إند له نقطة
@@ -6058,7 +6098,11 @@ export default function GoldInventoryApp() {
     setMorePage(null);
   };
 
-  if (loading) {
+  // ⚠ sessionChecking هنا أيضًا: بلاها كانت شاشة الدخول (PriceLoginScreen)
+  // تومض للحظة قبل أن يُعرف إن كان هناك توكن محفوظ صالح أصلًا — "ريفرش
+  // يعمل تسجيل خروج" كان يبدو صحيحًا بصريًا حتى بعد أن تصير الجلسة تُستعاد
+  // فعليًا في الخلفية.
+  if (loading || sessionChecking) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--bg)" }}>
         <Loader2 className="animate-spin" size={28} color="var(--accentText)" />
