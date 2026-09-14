@@ -7,6 +7,7 @@ import { GRAMS_PER_OUNCE, PURITY, WEIGHT_UNITS, fine24, fmt, fmtW, fromHalalas, 
 import { BANK_COLUMN_HINTS, DEFAULT_CARD_FEES, DEFAULT_MARGINS, USD_TO_SAR_PEG } from "../core/money-rules.js";
 import { NAV_BUNDLES, NAV_MAX_PER_ROW } from "../core/navigation.js";
 import { FUNDING_SOURCES, GOLD_OUT_DESTINATIONS, ONLINE_STATUS } from "../core/workflow.js";
+import { goldPriceApi } from "../core/api.js";
 import { accountByCode } from "./accountByCode.js";
 import { journalBalanced } from "./journalBalanced.js";
 import { key } from "./key.js";
@@ -1077,42 +1078,17 @@ const fmtWeight = (grams, unitId = "g") => {
   return `${fmt(fromGram(grams, unitId), u.decimals)} ${u.short}`;
 };
 
+// ⚠ إصلاح أمني/وظيفي حقيقي: كانت هذي الدالة تنادي
+// https://api.anthropic.com/v1/messages مباشرة من المتصفح بلا أي مفتاح
+// API (x-api-key) — هذا يُرفض دائمًا بـ401 من Anthropic (سبب ظهور صفر في
+// شاشة سعر الذهب على الدوام)، وحتى لو أُضيف مفتاح فسيكون مكشوفًا لأي
+// زائر لأنه في كود العميل. الآن تُنادى GET /api/gold-price (الخادم فقط
+// يتصل بمصدر السعر الخارجي — gold-api.com — ويحوّل الناتج لريال سعودي).
 async function fetchGoldPriceSAR() {
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-6",
-      max_tokens: 1000,
-      messages: [
-        {
-          role: "user",
-          content:
-            "Search the web for the current live gold price today in Saudi Arabia, specifically the price per gram of 24 karat gold in Saudi Riyal (SAR). Respond with ONLY a raw JSON object, no markdown, no code fences, no extra text: {\"price_per_gram_sar\": <number>, \"price_per_ounce_usd\": <number or null>, \"as_of\": \"<short date/time string from the source>\"}",
-        },
-      ],
-      tools: [{ type: "web_search_20250305", name: "web_search" }],
-    }),
-  });
-  if (!response.ok) throw new Error("network");
-  const data = await response.json();
-  const text = (data.content || [])
-    .filter((b) => b.type === "text")
-    .map((b) => b.text)
-    .join("\n");
-  const cleaned = text.replace(/```json|```/g, "").trim();
-  const match = cleaned.match(/\{[\s\S]*\}/);
-  const parsed = JSON.parse(match ? match[0] : cleaned);
-  let perGramSar = Number(parsed.price_per_gram_sar);
-  if (!Number.isFinite(perGramSar) || perGramSar <= 0) {
-    const perOunceUsd = Number(parsed.price_per_ounce_usd);
-    if (Number.isFinite(perOunceUsd) && perOunceUsd > 0) {
-      perGramSar = (perOunceUsd / GRAMS_PER_OUNCE) * USD_TO_SAR_PEG;
-    } else {
-      throw new Error("parse");
-    }
-  }
-  return { perGram: perGramSar, asOf: parsed.as_of || "" };
+  const res = await goldPriceApi.fetch();
+  const perGramSar = Number(res.perGram);
+  if (!Number.isFinite(perGramSar) || perGramSar <= 0) throw new Error("invalid_price");
+  return { perGram: perGramSar, asOf: res.asOf || "" };
 }
 
 // Sends a snapshot of the shop's current figures to Claude and asks for a

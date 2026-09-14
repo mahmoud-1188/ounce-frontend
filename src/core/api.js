@@ -250,6 +250,15 @@ const returnsApi = {
   createFull: (saleId, payload) => apiFetch(`/sales/${saleId}/return-full`, { method: "POST", body: payload }),
 };
 
+// ── سعر الذهب العالمي ──
+// ⚠ إصلاح حقيقي: كانت fetchGoldPriceSAR في helpers.js تنادي Anthropic API
+// مباشرة من المتصفح بلا مفتاح إطلاقًا — لا يعمل أصلًا (401)، وحتى لو أُضيف
+// مفتاح فسيكون مكشوفًا للجميع. السعر الآن يُجلب من الخادم (GET
+// /gold-price — يتصل هو بـgold-api.com بأمان ويحوّل لريال سعودي).
+const goldPriceApi = {
+  fetch: () => apiFetch("/gold-price"),
+};
+
 export {
   ApiError,
   getAuthToken,
@@ -274,4 +283,5 @@ export {
   reservationsApi,
   repairsApi,
   returnsApi,
+  goldPriceApi,
 };
