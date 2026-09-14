@@ -86,7 +86,7 @@ function PrinterSettingsPage({ config, onSave, sampleItem, currency, price24, on
             // ESC @ لتصفير الطابعة، ثم نص، ثم تغذية وقطع
             const bytes = [
               0x1b, 0x40,
-              ...enc.encode("\n  ONCE / أونصة\n  تجربة طباعة\n\n"),
+              ...enc.encode("\n  Oqiyyah / أوقية\n  تجربة طباعة\n\n"),
               0x0a, 0x0a,
               ...(cfg.autoCut ? [0x1d, 0x56, 0x00] : []),
             ];
