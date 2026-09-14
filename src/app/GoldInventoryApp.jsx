@@ -1,15 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Banknote, FileText, Handshake, Loader2, Lock, LogOut, Menu, Mic, Package, PackageMinus, Plus, Printer, Receipt, RotateCcw, Scale, Search, ShoppingCart, Truck, Wrench, X } from "lucide-react";
 import { POSTING_RULES } from "../core/chart.js";
-import { APP_MODES, CATEGORY_STATE, DEFAULT_APP_MODE, DEFAULT_CATEGORIES, DEFAULT_INTEGRATION, DEFAULT_OPENING_BALANCE, DEFAULT_PRINTER, DEFAULT_SETTINGS, DEFAULT_STORE, DEFAULT_USERS, EXPENSE_CATEGORIES, ISSUE_REASONS, MIGRATION_FLAG, PARTNER_REQUIRED, PUBLISH_CAP, ROLES, TRUST_MOVES } from "../core/constants.js";
+import { APP_MODES, CATEGORY_STATE, DEFAULT_APP_MODE, DEFAULT_CATEGORIES, DEFAULT_INTEGRATION, DEFAULT_OPENING_BALANCE, DEFAULT_PRINTER, DEFAULT_SETTINGS, DEFAULT_STORE, DEFAULT_USERS, EXPENSE_CATEGORIES, ISSUE_REASONS, MIGRATION_FLAG, PARTNER_REQUIRED, PUBLISH_CAP, RFID_DEFAULTS, ROLES, TRUST_MOVES } from "../core/constants.js";
 import { DEFAULT_COMMISSION } from "../core/erp.js";
-import { AUDIT_KEY, AUDIT_LOG_KEY, BANK_TX_KEY, BRANCH_IDENTITY_KEY, BUSINESS_DAYS_KEY, CASH_KEY, CATEGORIES_KEY, COMMISSIONS_KEY, CUSTOMERS_KEY, CUSTOM_GROUPS_KEY, DAILY_CUSTODY_KEY, ENTRY_SESSIONS_KEY, EXPENSES_KEY, EXPENSE_NAMES_KEY, EXT_INVOICES_KEY, FISCAL_CLOSURES_KEY, GOLD_LEDGER_KEY, HQ_PERMISSIONS_KEY, INTEGRATION_KEY, ITEMS_KEY, JOURNAL_KEY, LOTS_KEY, MENU_ORDER_KEY, NAV_LAYOUT_KEY, OPENING_BALANCE_KEY, PARTNERS_KEY, PARTNER_TX_KEY, PRICE_KEY, PRINTER_KEY, RECEIPTS_KEY, REPAIRS_KEY, RESERVATIONS_KEY, RETURNS_KEY, SAFE_AUDITS_KEY, SAFE_GOLD_KEY, SAFE_KEY, SALES_KEY, SCRAP_CUSTODY_KEY, SCRAP_KEY, SCRAP_REQUESTS_KEY, SCRAP_SURPLUS_KEY, SETTINGS_KEY, SHORTCUTS_KEY, STOCKTAKE_LOCK_KEY, STORE_KEY, STORE_ORDERS_KEY, SUPPLIERS_KEY, TASKIR_KEY, TASKIR_OFFICES_KEY, TASKIR_OFFICE_TX_KEY, TRUST_ACCOUNTS_KEY, TRUST_GOLD_KEY, TRUST_LEDGER_KEY, USERS_KEY, WEIGHT_ADJ_KEY } from "../core/keys.js";
+import { AUDIT_KEY, AUDIT_LOG_KEY, BANK_TX_KEY, BRANCH_IDENTITY_KEY, BUSINESS_DAYS_KEY, CASH_KEY, CATEGORIES_KEY, COMMISSIONS_KEY, CUSTOMERS_KEY, CUSTOM_GROUPS_KEY, DAILY_CUSTODY_KEY, ENTRY_SESSIONS_KEY, EXPENSES_KEY, EXPENSE_NAMES_KEY, EXT_INVOICES_KEY, FISCAL_CLOSURES_KEY, GOLD_LEDGER_KEY, HQ_PERMISSIONS_KEY, INTEGRATION_KEY, ITEMS_KEY, JOURNAL_KEY, LOTS_KEY, MENU_ORDER_KEY, NAV_LAYOUT_KEY, OPENING_BALANCE_KEY, PARTNERS_KEY, PARTNER_TX_KEY, PRICE_KEY, PRINTER_KEY, RECEIPTS_KEY, REPAIRS_KEY, RESERVATIONS_KEY, RETURNS_KEY, RFID_KEY, SAFE_AUDITS_KEY, SAFE_GOLD_KEY, SAFE_KEY, SALES_KEY, SCRAP_CUSTODY_KEY, SCRAP_KEY, SCRAP_REQUESTS_KEY, SCRAP_SURPLUS_KEY, SETTINGS_KEY, SHORTCUTS_KEY, STOCKTAKE_LOCK_KEY, STORE_KEY, STORE_ORDERS_KEY, SUPPLIERS_KEY, TASKIR_KEY, TASKIR_OFFICES_KEY, TASKIR_OFFICE_TX_KEY, TRUST_ACCOUNTS_KEY, TRUST_GOLD_KEY, TRUST_LEDGER_KEY, USERS_KEY, WEIGHT_ADJ_KEY } from "../core/keys.js";
 import { PURITY, fine24, fmt, fmtMoney, fmtW, fromHalalas, halalas, pricePerGram, roundMoney2, roundW, sumMoney, weightTimesPrice } from "../core/money.js";
 import { CARD_NETWORKS } from "../core/money-rules.js";
 import { DEFAULT_NAV_LAYOUT, MAIN_TAB_IDS, NAV_REGISTRY, TAB_KIND_IDS } from "../core/navigation.js";
 import { installStorageGuard, layoutIds, loadAllStores, normalizeOpeningBalance, normalizeRoleLayout, validateStore } from "../core/stores.js";
 import * as api from "../core/api.js";
-import { normalizeBootstrap, normalizeCashTxRow, normalizeSafeGoldTx, normalizeSafeAudits, normalizeBusinessDays, normalizeDailyCustody, normalizeTaskirEntries, normalizeTaskirOfficeTx } from "../core/normalize.js";
+import { normalizeBootstrap, normalizeCashTxRow, normalizeSafeGoldTx, normalizeSafeAudits, normalizeBusinessDays, normalizeDailyCustody, normalizeTaskirEntries, normalizeTaskirOfficeTx, normalizeFixedAssets, normalizeDepreciationSchedule } from "../core/normalize.js";
 // ⚠ الحجوزات/الإصلاحات/المرتجعات: normalize.js يُطبِّع القيم فعليًا (راجع
 // normalizeReservations/normalizeRepairs/normalizeReturns/normalizeReceipts)
 // لكن استدعاءها هنا يمر عبر n.reservations/n.repairs/... من normalizeBootstrap
@@ -88,6 +88,31 @@ const API_ERROR_MESSAGES = {
   invalid_source: "مصدر السداد غير صالح",
   name_required: "اسم المورد مطلوب",
   supplier_name_exists: "يوجد مورد بهذا الاسم",
+  unit_id_required: "لم تُحدَّد القطعة",
+  epc_required: "رمز البطاقة مطلوب",
+  invalid_epc_format: "رمز البطاقة غير صالح",
+  unit_not_found: "القطعة غير موجودة",
+  epc_already_bound: "هذه البطاقة مربوطة بقطعة أخرى",
+  invalid_class: "فئة الأصل غير صالحة",
+  invalid_years: "عدد سنوات العمر غير صالح",
+  invalid_salvage_pct: "نسبة الخردة غير صالحة",
+  purchased_at_required: "تاريخ الشراء مطلوب",
+  invalid_cost: "التكلفة غير صالحة",
+  invalid_period: "الشهر غير صالح",
+  already_disposed: "هذا الأصل مُستبعَد بالفعل",
+  date_required: "التاريخ مطلوب",
+  invalid_leave_type: "نوع الإجازة غير صالح",
+  dates_required: "تاريخا البداية والنهاية مطلوبان",
+  invalid_date_range: "تاريخ النهاية قبل البداية",
+  not_found_or_decided: "الطلب غير موجود أو صدر فيه قرار سلفًا",
+  invalid_decision: "القرار غير صالح",
+  already_accrued: "رواتب هذا الشهر محتسبة سلفًا",
+  no_staff: "لا موظفين برواتب",
+  nothing_to_pay: "لا صافي يُصرف",
+  already_paid: "صُرف سلفًا",
+  nothing_due: "لا مستحقّ",
+  already_left: "الموظف منتهي الخدمة بالفعل",
+  not_found: "غير موجود",
 };
 
 function apiErrorMessage(err, fallback) {
@@ -156,6 +181,13 @@ import { OpeningComparePage } from "../screens/OpeningComparePage.jsx";
 import { PartnersPage } from "../screens/PartnersPage.jsx";
 import { PriceTab } from "../screens/PriceTab.jsx";
 import { PrinterSettingsPage } from "../screens/PrinterSettingsPage.jsx";
+import { RfidReaderPage } from "../screens/RfidReaderPage.jsx";
+import { FixedAssetsPage } from "../screens/FixedAssetsPage.jsx";
+import { PayrollPage } from "../screens/PayrollPage.jsx";
+import { AttendanceHrPage } from "../screens/AttendanceHrPage.jsx";
+import { HqReportPage } from "../screens/HqReportPage.jsx";
+import { PriceFixPage } from "../screens/PriceFixPage.jsx";
+import { RfidSettingsCard } from "../ui/RfidSettingsCard.jsx";
 import { PrintingPage } from "../screens/PrintingPage.jsx";
 import { PurchasesPage } from "../screens/PurchasesPage.jsx";
 import { RepairsPage } from "../screens/RepairsPage.jsx";
@@ -188,6 +220,7 @@ import { FloatingDock } from "../ui/FloatingDock.jsx";
 import { MoreMenu } from "../ui/MoreMenu.jsx";
 import { NavBtn } from "../ui/NavBtn.js";
 import { PriceLoginScreen } from "../ui/PriceLoginScreen.jsx";
+import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 import { Toast } from "../ui/Toast.jsx";
 
 export default function GoldInventoryApp() {
@@ -244,6 +277,7 @@ export default function GoldInventoryApp() {
   const [businessDays, setBusinessDays] = useState([]);
   const [stocktakeLock, setStocktakeLock] = useState(null);
   const [printerCfg, setPrinterCfg] = useState(DEFAULT_PRINTER);
+  const [rfidCfg, setRfidCfg] = useState(RFID_DEFAULTS);
   const [menuOrder, setMenuOrder] = useState(null);
   const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
   const [scrapRequests, setScrapRequests] = useState([]);
@@ -255,6 +289,9 @@ export default function GoldInventoryApp() {
   const [auditLog, setAuditLog] = useState([]);
   const [fixedAssets, setFixedAssets] = useState([]);
   const [depreciations, setDepreciations] = useState([]);
+  // ⚠ migration 017: هل فرع هذا المستخدم مُعلَّم HQ؟ يُقرأ من bootstrap
+  // (n.isHq) — لا واجهة تُغيّره من هنا، عملية تشغيلية على القاعدة فقط.
+  const [isHq, setIsHq] = useState(false);
   const [costCenters, setCostCenters] = useState([]);
   const [budgets, setBudgets] = useState([]);
   const [periodCloses, setPeriodCloses] = useState([]);
@@ -549,7 +586,7 @@ export default function GoldInventoryApp() {
           storeOrders: setStoreOrders, shortcuts: setShortcuts,
           customGroups: setCustomGroups, stocktakeLock: setStocktakeLock,
           branchIdentity: setBranchIdentity, hqPermissions: setHqPermissions,
-          appSettings: setAppSettings, printerCfg: setPrinterCfg,
+          appSettings: setAppSettings, printerCfg: setPrinterCfg, rfidCfg: setRfidCfg,
           integration: setIntegration, storeLink: setStoreLink,
           categories: setCategories, menuOrder: setMenuOrder, navLayout: setNavLayout,
           openingBalance: setOpeningBalance,
@@ -829,7 +866,10 @@ export default function GoldInventoryApp() {
   };
   const persistRepairs = (next) => persist(REPAIRS_KEY, next, setRepairs);
   const persistScrapSurplus = (next) => persist(SCRAP_SURPLUS_KEY, next, setScrapSurplusLog);
-  const persistCommissions = (next) => persist(COMMISSIONS_KEY, next, setCommissions);
+  // ⚠ persistCommissions (COMMISSIONS_KEY محليًا) أُزيلت: قاعدة عمولة
+  // البائع صارت بيانًا مُرحَّلًا للخادم (migration 016) — راجع
+  // handleSaveCommission الذي يكتب عبر api.payrollApi.saveCommission
+  // ثم يحدّث نفس commissions المحلية من استجابة الخادم مباشرة.
   const persistDailyCustody = (next) => persist(DAILY_CUSTODY_KEY, next, setDailyCustody);
   const persistEntrySessions = (next) => persist(ENTRY_SESSIONS_KEY, next, setEntrySessions);
   const persistWeightAdjustments = (next) => persist(WEIGHT_ADJ_KEY, next, setWeightAdjustments);
@@ -1298,9 +1338,23 @@ export default function GoldInventoryApp() {
       return null;
     }
   };
-  const handleSaveCommission = (sellerId, rule) => {
-    persistCommissions({ ...commissions, [sellerId]: rule });
-    flashToast("تم حفظ إعداد العمولة");
+  // ⚠ صار نداء شبكة حقيقي (migration 016) — قاعدة عمولة البائع بيانات
+  // عمل حقيقية يجب أن تظهر لكل مستخدم بعد أي تحديث، لا إعداد جهاز محلي.
+  // commissions تبقى بنفس شكل {sellerId: rule} محليًا (تستهلكه
+  // SellerReportsPage.jsx مباشرة) — فقط مصدر الكتابة تغيّر.
+  const handleSaveCommission = async (sellerId, rule) => {
+    try {
+      const res = await api.payrollApi.saveCommission(sellerId, rule);
+      setCommissions((prev) => ({
+        ...prev,
+        [sellerId]: { basis: res.rule.basis, rate: Number(res.rule.rate), target: Number(res.rule.target), perInvoice: Number(res.rule.per_invoice) },
+      }));
+      flashToast("تم حفظ إعداد العمولة");
+      return true;
+    } catch (err) {
+      flashToast(apiErrorMessage(err, "تعذّر حفظ إعداد العمولة"));
+      return false;
+    }
   };
   const persistNavLayout = (next) => persist(NAV_LAYOUT_KEY, next, setNavLayout);
   // الترتيب يُحفظ مع كل تغيير بلا زر ولا تأكيد، ويُستعاد عند كل فتح.
@@ -1338,7 +1392,7 @@ export default function GoldInventoryApp() {
     SAFE_GOLD_KEY, SETTINGS_KEY, REPAIRS_KEY, SCRAP_SURPLUS_KEY, COMMISSIONS_KEY,
     DAILY_CUSTODY_KEY, ENTRY_SESSIONS_KEY, WEIGHT_ADJ_KEY, EXPENSE_NAMES_KEY,
     CUSTOMERS_KEY, TRUST_GOLD_KEY, RETURNS_KEY, RECEIPTS_KEY, SAFE_AUDITS_KEY,
-    RESERVATIONS_KEY, BUSINESS_DAYS_KEY, STOCKTAKE_LOCK_KEY, PRINTER_KEY, MENU_ORDER_KEY, CATEGORIES_KEY, SCRAP_REQUESTS_KEY, GOLD_LEDGER_KEY, SHORTCUTS_KEY, BANK_TX_KEY, CUSTOM_GROUPS_KEY, INTEGRATION_KEY, EXT_INVOICES_KEY, STORE_KEY, STORE_ORDERS_KEY, NAV_LAYOUT_KEY, OPENING_BALANCE_KEY,
+    RESERVATIONS_KEY, BUSINESS_DAYS_KEY, STOCKTAKE_LOCK_KEY, PRINTER_KEY, RFID_KEY, MENU_ORDER_KEY, CATEGORIES_KEY, SCRAP_REQUESTS_KEY, GOLD_LEDGER_KEY, SHORTCUTS_KEY, BANK_TX_KEY, CUSTOM_GROUPS_KEY, INTEGRATION_KEY, EXT_INVOICES_KEY, STORE_KEY, STORE_ORDERS_KEY, NAV_LAYOUT_KEY, OPENING_BALANCE_KEY,
     FISCAL_CLOSURES_KEY, BRANCH_IDENTITY_KEY,
   ];
 
@@ -2022,6 +2076,13 @@ export default function GoldInventoryApp() {
       more = more.filter((id) => override.allowedMore?.includes(id));
     }
 
+    // ⚠ migration 017: hqReports مسموح صلاحيةً (allowed_more/ROLES) لأي
+    // مدير، لكن الخادم يرفضها فعليًا (403 not_hq_branch) لغير فرع HQ —
+    // نخفيها هنا من القائمة أصلًا لغير ذلك الفرع بدل إظهار زر يفشل دومًا.
+    if (!isHq) {
+      more = more.filter((id) => id !== "hqReports");
+    }
+
     return { ...base, allowedTabs: [...tabs, "more"], allowedMore: more };
   };
 
@@ -2439,6 +2500,106 @@ export default function GoldInventoryApp() {
   const handleSavePrinter = (next) => {
     persist(PRINTER_KEY, next, setPrinterCfg);
     flashToast("حُفظت إعدادات الطابعة");
+  };
+
+  // ⚠ محلي بحتٌ مثل الطابعة تمامًا: كل متصفح/جهاز يقترن بقارئه الفعلي
+  // بنفسه (deviceId من bluetooth.requestDevice لا ينتقل بين الأجهزة)،
+  // فلا معنى لمزامنة "جهاز مقترن" أو طاقة الإرسال عبر السيرفر — الفرق
+  // عن appSettings (الضريبة/الرسوم) أن تلك تُفرض فعليًا على كل عملية
+  // بيع من الباك إند، وهذه إعداد تشغيل جهاز لا قاعدة عمل.
+  const handleSaveRfid = (next) => {
+    persist(RFID_KEY, next, setRfidCfg);
+    flashToast("حُفظت إعدادات القارئ");
+  };
+
+  // ⚠ الربط نفسه (item_units.epc) بيانات مخزون حقيقية مشتركة بين كل
+  // المستخدمين — بعكس رفيدCfg. لهذا يُكتب على السيرفر (api.rfid.bind)
+  // لا محليًا فقط، فيظهر لأي مستخدم آخر بعد أي تحديث/دخول جديد.
+  const handleBindEpc = async (unitId, epc) => {
+    try {
+      const res = await api.rfid.bind(unitId, epc);
+      persistItems(items.map((it) => ({
+        ...it,
+        units: (it.units || []).map((u) =>
+          u.id === unitId ? { ...u, epc: res.unit.epc, epcBoundAt: res.unit.epc_bound_at } : u
+        ),
+      })));
+      flashToast(`رُبطت البطاقة بـ${res.unit.code}`);
+      return res.unit;
+    } catch (err) {
+      flashToast(apiErrorMessage(err, "تعذّر ربط البطاقة"));
+      return null;
+    }
+  };
+
+  const handleUnbindEpc = async (unitId) => {
+    try {
+      const res = await api.rfid.unbind(unitId);
+      persistItems(items.map((it) => ({
+        ...it,
+        units: (it.units || []).map((u) =>
+          u.id === unitId ? { ...u, epc: null, epcBoundAt: null } : u
+        ),
+      })));
+      flashToast(`فُكّت البطاقة عن ${res.unit.code}`);
+      return true;
+    } catch (err) {
+      flashToast(apiErrorMessage(err, "تعذّر فكّ البطاقة"));
+      return null;
+    }
+  };
+
+  // ── الأصول الثابتة والإهلاك (migration 015) ──
+  //
+  // fixedAssets/depreciations هما نفس الحالة المحلية المُحمَّلة الآن من
+  // الباك إند الفعلي (loadBootstrap) — كل الثلاثة تُحدَّث بنمط optimistic
+  // من استجابة كل نداء مباشرةً، بلا إعادة تحميل bootstrap كاملةً، تمامًا
+  // كـhandleAddExpense/handleBindEpc.
+
+  const handleAddFixedAsset = async (payload) => {
+    try {
+      const res = await api.fixedAssetsApi.create(payload);
+      const asset = normalizeFixedAssets([res.asset])[0];
+      setFixedAssets((prev) => [asset, ...prev]);
+      flashToast(`سُجِّل الأصل — ${asset.ref}`);
+      return true;
+    } catch (err) {
+      flashToast(apiErrorMessage(err, "تعذّر تسجيل الأصل"));
+      return false;
+    }
+  };
+
+  const handleRunDepreciation = async (period) => {
+    try {
+      const res = await api.fixedAssetsApi.runDepreciation(period);
+      if (!res.details?.length) {
+        flashToast("لا إهلاك مستحقّ لهذا الشهر");
+        return true;
+      }
+      const rows = res.details.map((d) => ({
+        id: `${d.assetId}-${period}`, asset_id: d.assetId, period: `${period}-01`,
+        amount: d.amount, posted: true, journal_entry_id: res.entry?.id || null,
+      }));
+      setDepreciations((prev) => [...prev, ...normalizeDepreciationSchedule(rows)]);
+      flashToast(`سُجِّل إهلاك ${period} — ${res.details.length} أصل`);
+      return true;
+    } catch (err) {
+      flashToast(apiErrorMessage(err, "تعذّر تسجيل الإهلاك"));
+      return false;
+    }
+  };
+
+  const handleDisposeFixedAsset = async ({ assetId, ...payload }) => {
+    try {
+      const res = await api.fixedAssetsApi.dispose(assetId, payload);
+      const updated = normalizeFixedAssets([res.asset])[0];
+      setFixedAssets((prev) => prev.map((a) => (a.id === assetId ? updated : a)));
+      flashToast(`اُستُبعِد الأصل — ${updated.name}`);
+      return true;
+    } catch (err) {
+      flashToast(apiErrorMessage(err, "تعذّر استبعاد الأصل"));
+      return false;
+    }
   };
 
   // ⚠ صار نداء شبكة حقيقي — القفل يُفرض فعليًا في sales.routes.js/
@@ -3676,9 +3837,12 @@ export default function GoldInventoryApp() {
    * الشاشات بعدها محلي 100% بلا أي طلب شبكة إضافي (بطلبك الصريح).
    *
    * ⚠ نطاق متعمَّد: يغطي فقط ما حُوِّل فعليًا للباك إند (راجع تعليق
-   * normalizeBootstrap في core/normalize.js). كل شيء آخر (رواتب، أصول
-   * ثابتة، الكسر بتفاصيله...) يبقى على حالته المحلية القديمة حتى تُحوَّل
-   * في دفعات لاحقة.
+   * normalizeBootstrap في core/normalize.js). كل شيء آخر (رواتب، الكسر
+   * بتفاصيله...) يبقى على حالته المحلية القديمة حتى تُحوَّل في دفعات
+   * لاحقة. الأصول الثابتة/الإهلاك (migration 015) صارت من هذا التحميل
+   * أيضًا الآن — setFixedAssets/setDepreciations كانا موجودين أصلًا
+   * (سلكٌ ميت من مخزون STORE_REGISTRY المحلي القديم لم يُستخدَم قط)،
+   * فأُعيد استخدامهما هنا بدل تكرارهما.
    */
   const loadBootstrap = async () => {
     const boot = await api.fetchBootstrap();
@@ -3710,6 +3874,9 @@ export default function GoldInventoryApp() {
     setRepairs(n.repairs);
     setReturns(n.returns);
     setReceipts(n.receipts);
+    setFixedAssets(n.fixedAssets);
+    setDepreciations(n.depreciationSchedule);
+    setIsHq(n.isHq);
     if (n.appSettings) {
       // ⚠ دمج لا استبدال: appSettings يحمل أيضًا تفضيلات محلية بحتة
       // (الثيم، طباعة، requirePin...) لا وجود لها في الباك إند بعد —
@@ -7074,6 +7241,75 @@ export default function GoldInventoryApp() {
             currency={priceData.currency}
             price24={priceData.current}
             onBack={() => setMorePage(null)}
+          />
+        )}
+        {morePage === "rfidReader" && (
+          // ⚠ onApplyCount غير مُمرَّر بعد: شاشة الجرد الحالية
+          // (StocktakeSubPage) نموذجها إدخال يدوي لكل صنف
+          // (onUpdateEntry(bucket, itemId, field, val)) لا استيراد دفعة
+          // قراءات — ربط "اعتمد هذه القراءة جردًا" بها عمل منفصل يحتاج
+          // نقل m.found/m.missing إلى generalEntries/sectionalEntries،
+          // لم يُطلب بعد. الشاشة تعمل بالكامل بدونه: اتصال، مسح حي/دفعي،
+          // بحث عن قطعة، وربط بطاقة غير معروفة (حقيقي — يكتب على الخادم).
+          <RfidReaderPage
+            items={activeItems}
+            rfidCfg={rfidCfg}
+            canManage={role !== "employee"}
+            onBindEpc={handleBindEpc}
+            onBack={() => setMorePage(null)}
+          />
+        )}
+        {morePage === "rfidSettings" && (
+          <div>
+            <SubPageHeader title="إعدادات القارئ" onBack={() => setMorePage(null)} />
+            <div className="px-4 pt-3">
+              <RfidSettingsCard settings={rfidCfg} onSave={handleSaveRfid} />
+            </div>
+          </div>
+        )}
+        {morePage === "fixedAssets" && (
+          <FixedAssetsPage
+            assets={fixedAssets}
+            depreciations={depreciations}
+            currency={priceData.currency}
+            canManage={role === "manager"}
+            onAdd={handleAddFixedAsset}
+            onRunDepreciation={handleRunDepreciation}
+            onDispose={handleDisposeFixedAsset}
+            onBack={() => setMorePage(null)}
+          />
+        )}
+        {morePage === "payroll" && (
+          <PayrollPage
+            currency={priceData.currency}
+            safeBalance={safeBalance}
+            canManage={role === "manager"}
+            onBack={() => setMorePage(null)}
+            flashToast={flashToast}
+          />
+        )}
+        {morePage === "attendanceHr" && (
+          <AttendanceHrPage
+            users={users}
+            canManage={role !== "employee"}
+            onBack={() => setMorePage(null)}
+            flashToast={flashToast}
+          />
+        )}
+        {morePage === "hqReports" && (
+          <HqReportPage
+            currency={priceData.currency}
+            onBack={() => setMorePage(null)}
+            flashToast={flashToast}
+          />
+        )}
+        {morePage === "priceFix" && (
+          <PriceFixPage
+            priceData={priceData}
+            openDay={openDay}
+            canManage={role === "manager"}
+            onBack={() => setMorePage(null)}
+            flashToast={flashToast}
           />
         )}
         {morePage === "scrapCustody" && (

@@ -160,6 +160,16 @@ function createSupplier(payload) {
   return apiFetch("/suppliers", { method: "POST", body: payload });
 }
 
+// ── قارئ RFID: ربط/فكّ بطاقة بوحدة (item_units.epc) ──
+//
+// القراءة الفعلية للبطاقة (بلوتوث NHR-10 أو قارئ HID) تجري بالكامل في
+// المتصفح — هذان النداءان فقط يكتبان نتيجة الربط في قاعدة البيانات كي
+// تظهر لكل مستخدم بعد تحديث/دخول جديد، لا في متصفح من ربطها فقط.
+const rfid = {
+  bind: (unitId, epc) => apiFetch("/rfid/bind", { method: "POST", body: { unitId, epc } }),
+  unbind: (unitId) => apiFetch("/rfid/unbind", { method: "POST", body: { unitId } }),
+};
+
 // ── الكسر ──
 
 const scrap = {
@@ -283,6 +293,55 @@ const goldPriceApi = {
   fetch: () => apiFetch("/gold-price"),
 };
 
+// ── الأصول الثابتة والإهلاك ──
+
+const fixedAssetsApi = {
+  fetchClasses: () => apiFetch("/asset-classes"),
+  fetch: () => apiFetch("/fixed-assets"),
+  create: (payload) => apiFetch("/fixed-assets", { method: "POST", body: payload }),
+  runDepreciation: (period) =>
+    apiFetch("/fixed-assets/depreciation/run", { method: "POST", body: { period } }),
+  dispose: (assetId, payload) =>
+    apiFetch(`/fixed-assets/${assetId}/dispose`, { method: "POST", body: payload }),
+};
+
+// ── الرواتب والموارد البشرية ──
+
+const payrollApi = {
+  fetchStaff: () => apiFetch("/hr/staff"),
+  saveHr: (userId, payload) => apiFetch(`/hr/staff/${userId}`, { method: "PATCH", body: payload }),
+  saveCommission: (userId, rule) => apiFetch(`/commissions/${userId}`, { method: "PUT", body: rule }),
+  deleteCommission: (userId) => apiFetch(`/commissions/${userId}`, { method: "DELETE" }),
+  fetchAttendance: (month) => apiFetch(`/attendance${month ? `?month=${month}` : ""}`),
+  markAttendance: (payload) => apiFetch("/attendance", { method: "POST", body: payload }),
+  fetchLeaveRequests: () => apiFetch("/leave-requests"),
+  requestLeave: (payload) => apiFetch("/leave-requests", { method: "POST", body: payload }),
+  decideLeave: (id, decision) => apiFetch(`/leave-requests/${id}/decide`, { method: "POST", body: { decision } }),
+  preview: (period) => apiFetch(`/payroll/preview?period=${period}`),
+  fetchRuns: () => apiFetch("/payroll/runs"),
+  accrue: (period) => apiFetch("/payroll/runs", { method: "POST", body: { period } }),
+  pay: (runId, employeeId, fundingSource) =>
+    apiFetch(`/payroll/runs/${runId}/pay/${employeeId}`, { method: "POST", body: { fundingSource } }),
+  payGosi: (runId, fundingSource) =>
+    apiFetch(`/payroll/runs/${runId}/pay-gosi`, { method: "POST", body: { fundingSource } }),
+  payEos: (payload) => apiFetch("/payroll/eos", { method: "POST", body: payload }),
+};
+
+// ── تقرير الإدارة/متعدد الفروع (migration 017) ──
+//
+// endpoint واحد فقط — التجميع كله يجري في الخادم (withoutBranch)، فلا
+// حاجة الفرونت إند لأكثر من طلب واحد بفترة اختيارية.
+const hqApi = {
+  fetchReport: (period) => apiFetch(`/hq/report${period ? `?period=${period}` : ""}`),
+};
+
+// ── التثبيت — ذهب ↔ نقد (migration 018) ──
+
+const priceFixApi = {
+  fetch: () => apiFetch("/price-fix"),
+  create: (payload) => apiFetch("/price-fix", { method: "POST", body: payload }),
+};
+
 export {
   ApiError,
   getAuthToken,
@@ -297,6 +356,7 @@ export {
   createPartialSale,
   createPurchase,
   createSupplier,
+  rfid,
   scrap,
   safe,
   day,
@@ -310,4 +370,8 @@ export {
   repairsApi,
   returnsApi,
   goldPriceApi,
+  fixedAssetsApi,
+  payrollApi,
+  hqApi,
+  priceFixApi,
 };
