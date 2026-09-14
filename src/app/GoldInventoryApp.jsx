@@ -9,7 +9,11 @@ import { CARD_NETWORKS } from "../core/money-rules.js";
 import { DEFAULT_NAV_LAYOUT, MAIN_TAB_IDS, NAV_REGISTRY, TAB_KIND_IDS } from "../core/navigation.js";
 import { installStorageGuard, layoutIds, loadAllStores, normalizeOpeningBalance, normalizeRoleLayout, validateStore } from "../core/stores.js";
 import * as api from "../core/api.js";
-import { normalizeBootstrap, normalizeCashTxRow, normalizeSafeGoldTx, normalizeSafeAudits, normalizeBusinessDays, normalizeDailyCustody } from "../core/normalize.js";
+import { normalizeBootstrap, normalizeCashTxRow, normalizeSafeGoldTx, normalizeSafeAudits, normalizeBusinessDays, normalizeDailyCustody, normalizeTaskirEntries, normalizeTaskirOfficeTx } from "../core/normalize.js";
+// ⚠ الحجوزات/الإصلاحات/المرتجعات: normalize.js يُطبِّع القيم فعليًا (راجع
+// normalizeReservations/normalizeRepairs/normalizeReturns/normalizeReceipts)
+// لكن استدعاءها هنا يمر عبر n.reservations/n.repairs/... من normalizeBootstrap
+// نفسها — لا حاجة لاستيراد إضافي، فقط تأكيد أنها مضمّنة أعلاه.
 
 // ⚠ راجع .env.example: قيد مؤقت (فرع واحد ثابت) حتى تُبنى شاشة اختيار
 // فرع حقيقية — شاشة الدخول تحتاج معرفة الفرع قبل تسجيل الدخول نفسه.
@@ -74,6 +78,14 @@ const API_ERROR_MESSAGES = {
   invalid_funding_source: "مصدر الدفع غير صالح",
   employee_required: "اختيار الموظف مطلوب لهذا التصنيف",
   employee_not_found: "الموظف غير موجود",
+  supplier_required: "اختيار المورد مطلوب",
+  invalid_karat_or_weight: "العيار أو الوزن غير صالح",
+  invalid_gold_source: "مصدر الذهب غير صالح",
+  office_required: "اختيار مكتب التسكير مطلوب",
+  invalid_price_per_gram: "سعر الجرام غير صالح",
+  insufficient_scrap_stock: "لا يوجد كسر كافٍ بالمخزون لهذا العيار",
+  invalid_mode: "طريقة السداد غير صالحة",
+  invalid_source: "مصدر السداد غير صالح",
 };
 
 function apiErrorMessage(err, fallback) {
@@ -871,59 +883,60 @@ export default function GoldInventoryApp() {
   // ── الحجز والعربون ──
   // العميل يدفع عربونًا ويستلم لاحقًا. تسجيله كبيع كامل خطأ: البضاعة ما
   // زالت عندك والمبلغ ليس إيرادًا بعد — هو التزام عليك حتى التسليم.
-  const handleAddReservation = (entry) => {
-    const deposit = Number(entry.deposit) || 0;
-    const total = Number(entry.total) || 0;
-    const rec = {
-      id: Date.now().toString() + "rsv",
-      ref: nextRef("reservation", reservations),
-      ...dayStamp(),
-      date: new Date().toISOString(),
-      customerId: entry.customerId,
-      customerName: customers.find((c) => c.id === entry.customerId)?.name || "",
-      itemId: entry.itemId || null,
-      description: entry.description || "",
-      total,
-      deposit,
-      remaining: total - deposit,
-      status: "open",
-      method: entry.method === "network" ? "network" : "cash",
-      createdBy: currentUser?.name || "",
-    };
-    persist(RESERVATIONS_KEY, [rec, ...reservations], setReservations);
-    if (deposit > 0) {
-      addToSource(
-        rec.method === "network" ? "daily_network" : "daily_cash",
-        deposit,
-        `عربون حجز — ${rec.customerName}`.trim(),
-        "reservation",
-        rec.id,
-        "customer_deposit"
-      );
+  //
+  // ⚠ حُوِّلت للباك إند: POST /reservations يكتب فعليًا reservations +
+  // cash_tx (إن وُجد عربون) + قيد يومية (2210 عربون عميل) على الخادم، ويمنع
+  // فعليًا بيع القطعة المحجوزة (items.reserved_for — migration 013) — لا
+  // تعليم محلي فقط كان يختفي بعد إعادة التحميل ولا يمنع شيئًا فعليًا.
+  const handleAddReservation = async (entry) => {
+    try {
+      const res = await api.reservationsApi.add({
+        customerId: entry.customerId,
+        itemId: entry.itemId || null,
+        description: entry.description || null,
+        total: Number(entry.total) || 0,
+        deposit: Number(entry.deposit) || 0,
+        method: entry.method === "network" ? "network" : "cash",
+      });
+      const r = res.reservation;
+      const rec = {
+        id: r.id, ref: r.ref, customerId: r.customer_id, customerName: r.customerName || "",
+        itemId: r.item_id, description: r.description || "", total: Number(r.total) || 0,
+        deposit: Number(r.deposit) || 0, remaining: Number(r.remaining) || 0,
+        status: r.status, method: r.method, date: r.created_at, createdBy: currentUser?.name || "",
+      };
+      setReservations((prev) => [rec, ...prev]);
+      // عربون الحجز دائمًا من صندوق اليومي (daily_cash/daily_network) في
+      // هذا المسار تحديدًا — لا يُطلب من الخزنة، فلا حاجة لفحص pool هنا.
+      if (res.cashTx) setCashTx((prev) => [normalizeCashTxRow(res.cashTx), ...prev]);
+      if (entry.itemId) {
+        setItems((prev) => prev.map((it) => (it.id === entry.itemId ? { ...it, reservedFor: rec.id } : it)));
+      }
+      flashToast(`سُجّل الحجز ${rec.ref}`);
+      return rec;
+    } catch (err) {
+      flashToast(apiErrorMessage(err, "تعذّر تسجيل الحجز"));
+      return null;
     }
-    // القطعة تُحجز فلا تُباع لغيره
-    if (entry.itemId) {
-      persistItems(items.map((it) => (it.id === entry.itemId ? { ...it, reservedFor: rec.id } : it)));
-    }
-    flashToast(`سُجّل الحجز ${rec.ref}`);
   };
 
-  const handleCancelReservation = (id, refund) => {
+  // ⚠ حُوِّلت للباك إند: POST /reservations/:id/cancel — نفس تحفّظ
+  // handleAddReservation أعلاه (المبلغ المُرجَع يُحسب من الحجز نفسه على
+  // الخادم، لا رقم مُرسَل من العميل).
+  const handleCancelReservation = async (id, refund) => {
     const r = reservations.find((x) => x.id === id);
-    if (!r) return;
-    persist(RESERVATIONS_KEY, reservations.map((x) => (x.id === id ? { ...x, status: "cancelled", cancelledAt: new Date().toISOString() } : x)), setReservations);
-    if (refund && r.deposit > 0) {
-      deductFromSource(
-        r.method === "network" ? "daily_network" : "daily_cash",
-        r.deposit,
-        `إرجاع عربون — ${r.customerName}`.trim(),
-        "reservation",
-        r.id,
-        "customer_deposit_refund"
-      );
+    if (!r) return null;
+    try {
+      const res = await api.reservationsApi.cancel(id, refund);
+      setReservations((prev) => prev.map((x) => (x.id === id ? { ...x, status: "cancelled", cancelledAt: new Date().toISOString(), refunded: !!refund } : x)));
+      if (res.cashTx) setCashTx((prev) => [normalizeCashTxRow(res.cashTx), ...prev]);
+      if (r.itemId) setItems((prev) => prev.map((it) => (it.id === r.itemId ? { ...it, reservedFor: null } : it)));
+      flashToast(refund ? "أُلغي الحجز وأُرجع العربون" : "أُلغي الحجز — العربون محتجز");
+      return res;
+    } catch (err) {
+      flashToast(apiErrorMessage(err, "تعذّر إلغاء الحجز"));
+      return null;
     }
-    if (r.itemId) persistItems(items.map((it) => (it.id === r.itemId ? { ...it, reservedFor: null } : it)));
-    flashToast(refund ? "أُلغي الحجز وأُرجع العربون" : "أُلغي الحجز — العربون محتجز");
   };
 
   const handleCollectReceivable = (customerId, saleId, amount, method) => {
@@ -1098,215 +1111,156 @@ export default function GoldInventoryApp() {
   //
   // وما دامت الكتابة محلية بلا معاملة قاعدة بيانات، نُحاكيها: نُجهّز
   // اللقطات كاملة، ونتراجع عمّا كُتب إن فشل ما بعده.
-  const processSalesReturn = (req) => {
-    const ctx = {
-      sales, returns, items, openDay,
-      stocktakeLock: stocktakeLock?.locked || stocktakeLock,
-    };
+  // ⚠ حُوِّلت للباك إند بالكامل: POST /sales/:id/return-full يخدم شاشة
+  // "استرجاع مبيعات" المخصَّصة تحديدًا (خلافًا لـhandleReturnSale الأبسط
+  // أعلاه). يحسب معدّل ضريبة فعليًا من الفاتورة، يعكس تكلفة البضاعة
+  // المباعة فعليًا (كانت دومًا صفرًا محليًا — l.unitCost/costSnapshot لم
+  // يُكتبا في أي مكان بالكود، فثغرة صامتة قديمة في المرجع)، ويمنع إرجاع
+  // نفس السطر مرتين بالاستعلام من returns الحقيقية بدل مصفوفة محلية.
+  //
+  // ⚠ الدالة صارت async — SalesReturnPage.jsx يستخدم await عند النداء.
+  const processSalesReturn = async (req) => {
+    try {
+      const res = await api.returnsApi.createFull(req.saleId, {
+        lineIndexes: req.lineIndexes,
+        reasonId: req.reasonId,
+        refundTarget: req.refundTarget,
+        note: req.note || null,
+      });
+      const r = res.return;
+      const sale = sales.find((x) => x.id === req.saleId);
+      const record = {
+        id: r.id, ref: r.ref, saleId: r.sale_id, saleRef: sale?.ref || null,
+        date: r.created_at,
+        lineIndexes: r.line_indexes || [],
+        lines: r.lines || [],
+        fullReturn: !!r.full_return,
+        restockAs: r.restock,
+        refundTarget: r.refund_source,
+        net: res.amounts.net, tax: res.amounts.tax, refund: res.amounts.gross, cost: res.amounts.cost,
+        note: r.reason || "",
+        customerId: r.customer_id || null,
+        customerName: r.customer_name || "",
+        createdBy: currentUser?.name || "",
+      };
+      setReturns((prev) => [record, ...prev]);
 
-    // ① التحقق
-    const v = validateReturnRequest(req, ctx);
-    if (!v.ok) {
-      flashToast(v.errors[0]);
-      return { ok: false, errors: v.errors };
-    }
-    const { sale, reason, target } = v;
-
-    // ② الحساب
-    const amounts = computeReturnAmounts(sale, req.lineIndexes, appSettings.taxRate || 0);
-    if (halalas(amounts.gross) <= 0) {
-      flashToast("قيمة المرتجع صفر — راجع الأسطر");
-      return { ok: false, errors: ["قيمة صفر"] };
-    }
-
-    const now = new Date().toISOString();
-    const actor = currentUser?.name || "";
-    const ref = nextRef("ret", returns);
-
-    // ③ بناء كل التغييرات قبل كتابة أيّ منها
-    const je = buildReturnJournal({
-      amounts, target, ref, saleRef: sale.ref, actor, date: now,
-    });
-    if (!je.balanced) {
-      // ⚠ لا يُكتب شيء: قيد غير متوازن يُفسد الدفتر أكثر من مرتجعٍ لم يُسجَّل
-      console.error("[أونصة] قيد مرتجع غير متوازن", je.totals);
-      flashToast("قيد غير متوازن — لم يُسجَّل المرتجع");
-      return { ok: false, errors: ["قيد غير متوازن"] };
-    }
-
-    const record = {
-      id: Date.now().toString() + "rt",
-      ref, saleId: sale.id, saleRef: sale.ref,
-      date: now,
-      lineIndexes: [...req.lineIndexes],
-      reasonId: reason.id, reasonLabel: reason.label,
-      restockAs: reason.restock,
-      refundTarget: target.id, refundLabel: target.label,
-      net: amounts.net, tax: amounts.tax, refund: amounts.gross, cost: amounts.cost,
-      fine: amounts.fine, byKarat: amounts.byKarat,
-      journalRef: je.entry.ref,
-      note: req.note || "",
-      customerId: sale.customerId || null,
-      customerName: sale.customerName || "",
-      createdBy: actor, createdById: currentUser?.id || null,
-      ...dayStamp(),
-    };
-
-    // حالة القطع: متاحة أو تالفة بحسب السبب
-    const codes = new Set(
-      amounts.lines.map((l) => l.unitCode || l.code).filter(Boolean)
-    );
-    const nextItems = items.map((it) => {
-      const units = it.units || [];
-      if (!units.some((u) => codes.has(u.code))) return it;
-      return {
-        ...it,
-        units: units.map((u) =>
-          codes.has(u.code)
-            ? {
+      // تحديث تفاؤلي للوحدات — الخادم حدّث item_units فعليًا (تالفة
+      // تصير issued=true فلا تُعرض ثانية، متاحة تعود sold=false فقط).
+      const restockedIds = new Set();
+      for (const l of record.lines) {
+        // نحتاج N وحدة مباعة من نفس الصنف — بلا ربط id محفوظ هنا، نأخذ
+        // بالترتيب تمامًا كما يفعل الخادم (سيُستبدل بدقة كاملة عند
+        // إعادة تحميل bootstrap القادمة).
+        let need = Number(l.quantity) || 0;
+        setItems((prev) => prev.map((it) => {
+          if (it.id !== l.item_id || need <= 0) return it;
+          const units = (it.units || []).map((u) => {
+            if (need > 0 && u.sold && !restockedIds.has(u.code)) {
+              need -= 1;
+              restockedIds.add(u.code);
+              return {
                 ...u,
                 sold: false,
-                status: reason.restock,
-                returnedAt: now,
-                returnedRef: ref,
-                // ⚠ التالف لا يعود للعرض: يبقى في المخزون محسوبًا
-                // لكنه غير قابل للبيع حتى يُفحص.
-                sellable: reason.restock === "available",
-              }
-            : u
-        ),
-      };
-    });
-
-    // ④ الكتابة — بلقطات للتراجع
-    const snap = { items, returns, journal: journal, cashTx, safeTx, sales };
-    const rollback = (why) => {
-      console.error("[أونصة] تراجع عن المرتجع:", why);
-      persist(ITEMS_KEY, snap.items, setItems);
-      persist(RETURNS_KEY, snap.returns, setReturns);
-      persist(JOURNAL_KEY, snap.journal, setJournal);
-      persist(CASH_KEY, snap.cashTx, setCashTx);
-      persist(SAFE_KEY, snap.safeTx, setSafeTx);
-      flashToast(`تعذّر تسجيل المرتجع — ${why}`);
-    };
-
-    try {
-      persist(ITEMS_KEY, nextItems, setItems);
-      persist(RETURNS_KEY, [record, ...returns], setReturns);
-      persist(JOURNAL_KEY, [je.entry, ...journal], setJournal);
-      audit("refund", { entity: "return", entityId: record.id, entityRef: ref,
-        after: { refund: amounts.gross, reason: reason.label, target: target.label },
-        note: `فاتورة ${sale.ref}` });
-
-      // ⑤ حركة النقد — الآجل يُخصم من الدين لا يخرج نقدًا
-      if (target.id === "credit") {
-        persist(RECEIPTS_KEY, [{
-          id: Date.now().toString() + "rc",
-          ref: nextRef("receipt", receipts),
-          date: now, saleId: sale.id, customerId: sale.customerId || null,
-          amount: -amounts.gross,
-          method: "return_credit",
-          note: `خصم مرتجع ${ref}`,
-          createdBy: actor, ...dayStamp(),
-        }, ...receipts], setReceipts);
-      } else {
-        deductFromSource(
-          target.id === "network" ? "safe_network" : target.id,
-          amounts.gross, `مرتجع ${ref} — ${sale.ref}`, "sale_return", sale.id, "sales_return"
-        );
+                status: record.restockAs,
+                returnedAt: record.date,
+                returnedRef: record.ref,
+                sellable: record.restockAs === "available",
+              };
+            }
+            return u;
+          });
+          return { ...it, units };
+        }));
       }
 
-      // ⑥ الدفتر الوزني — الذهب يعود
-      const wLines = Object.entries(amounts.byKarat)
-        .filter(([, w]) => Number(w) > 0)
-        .map(([k, w]) => ({ karat: Number(k), weight: Number(w), refId: record.id,
-                            note: `مرتجع ${ref}` }));
-      if (wLines.length) postWeight("sale_return", wLines);
+      if (res.receipt) {
+        setReceipts((prev) => [
+          { id: res.receipt.id, ref: res.receipt.ref, date: res.receipt.created_at,
+            customerId: res.receipt.customer_id, customerName: res.receipt.customer_name || "",
+            amount: Number(res.receipt.amount) || 0, method: res.receipt.method,
+            category: res.receipt.category, note: res.receipt.note || "", createdBy: currentUser?.name || "" },
+          ...prev,
+        ]);
+      } else if (res.cashTx) {
+        const entryTx = normalizeCashTxRow(res.cashTx);
+        if (res.cashTx.pool === "safe") setSafeTx((prev) => [entryTx, ...prev]);
+        else setCashTx((prev) => [entryTx, ...prev]);
+      }
 
       flashToast(
-        `مرتجع ${ref} · ${fmtMoney(amounts.gross)} · ` +
-        (reason.restock === "available" ? "عادت للعرض" : "تالفة — لا تُباع")
+        `مرتجع ${record.ref} · ${fmtMoney(record.refund)} · ` +
+        (record.restockAs === "available" ? "عادت للعرض" : "تالفة — لا تُباع")
       );
-      return { ok: true, ref, record, journal: je.entry, amounts };
-    } catch (e) {
-      rollback(String(e?.message || e).slice(0, 80));
-      return { ok: false, errors: [String(e?.message || e)] };
+      return { ok: true, ref: record.ref, record, amounts: res.amounts };
+    } catch (err) {
+      const msg = apiErrorMessage(err, "تعذّر تسجيل المرتجع");
+      flashToast(msg);
+      return { ok: false, errors: [msg] };
     }
   };
 
-  const handleReturnSale = (saleId, lineIndexes, refundSource, note) => {
+  // ⚠ حُوِّلت للباك إند بالكامل: POST /sales/:id/return يتحقق فعليًا من
+  // sale_lines على الخادم (لا مصفوفة محلية فقط)، يُعيد وحدات item_units
+  // الحقيقية لغير مباعة، يُرحّل دفتر الوزن (سطر posting_rules.sale_return
+  // كان مزروعًا أصلًا بلا أي endpoint يستهلكه)، ويكتب إما receipts (آجل)
+  // أو cash_tx+قيد يومية فعليين (نقد/شبكة) — لا حفظ محلي بحت كان يختفي
+  // بعد إعادة التحميل تمامًا كسبب البلاغ الأصلي عن الخزنة.
+  //
+  // ⚠ فهارس الأسطر (lineIndexes) الآن تطابق فعليًا نفس الترتيب على
+  // الخادم (migration 013 أضافت sale_lines.line_no — قبلها لم يكن ترتيب
+  // القراءة مضمونًا بلا ORDER BY، فقد يشير الفهرس لسطر مختلف فعليًا).
+  const handleReturnSale = async (saleId, lineIndexes, refundSource, note) => {
     const sale = sales.find((x) => x.id === saleId);
-    if (!sale) return;
-    const idxs = lineIndexes && lineIndexes.length ? lineIndexes : sale.lines.map((_, i) => i);
-    const returnedLines = idxs.map((i) => sale.lines[i]).filter(Boolean);
-    if (returnedLines.length === 0) return;
+    if (!sale) return null;
+    try {
+      const res = await api.returnsApi.create(saleId, { lineIndexes, refundSource, note: note || null });
+      const r = res.return;
+      const rec = {
+        id: r.id, ref: r.ref, date: r.created_at, saleId, saleRef: sale.ref || null,
+        customerId: r.customer_id, customerName: r.customer_name || "",
+        lines: r.lines || [], lineIndexes: r.line_indexes || [],
+        fullReturn: !!r.full_return, refund: Number(r.amount) || 0,
+        refundSource: r.refund_source, note: r.reason || "", createdBy: currentUser?.name || "",
+      };
+      setReturns((prev) => [rec, ...prev]);
 
-    const refund = returnedLines.reduce((a, l) => a + l.unitPrice * l.quantity, 0);
-    const now = new Date().toISOString();
+      // أعِد الوحدات للمخزون محليًا (الخادم فعليًا حدّث item_units، وهنا
+      // تحديث تفاؤلي مطابق بلا إعادة تحميل bootstrap كاملة).
+      setItems((prev) => prev.map((it) => {
+        const line = rec.lines.find((l) => l.item_id === it.id);
+        if (!line) return it;
+        let toRestore = Number(line.quantity);
+        const units = it.units.map((u) => {
+          if (toRestore > 0 && u.sold) {
+            toRestore -= 1;
+            return { ...u, sold: false };
+          }
+          return u;
+        });
+        return { ...it, units };
+      }));
 
-    // أعِد الوحدات للمخزون
-    const nextItems = items.map((it) => {
-      const line = returnedLines.find((l) => l.itemId === it.id);
-      if (!line) return it;
-      let toRestore = line.quantity;
-      const units = it.units.map((u) => {
-        if (toRestore > 0 && u.sold) {
-          toRestore -= 1;
-          return { ...u, sold: false, soldAt: null, saleId: null };
-        }
-        return u;
-      });
-      return { ...it, units };
-    });
-    persistItems(nextItems);
+      if (res.receipt) {
+        setReceipts((prev) => [
+          { id: res.receipt.id, ref: res.receipt.ref, date: res.receipt.created_at,
+            customerId: res.receipt.customer_id, customerName: res.receipt.customer_name || "",
+            amount: Number(res.receipt.amount) || 0, method: res.receipt.method,
+            category: res.receipt.category, note: res.receipt.note || "", createdBy: currentUser?.name || "" },
+          ...prev,
+        ]);
+      } else if (res.cashTx) {
+        const entryTx = normalizeCashTxRow(res.cashTx);
+        if (res.cashTx.pool === "safe") setSafeTx((prev) => [entryTx, ...prev]);
+        else setCashTx((prev) => [entryTx, ...prev]);
+      }
 
-    const rec = {
-      id: Date.now().toString() + "rt",
-      ref: nextRef("ret", returns),
-      date: now,
-      saleId,
-      saleRef: sale.ref || null,
-      customerId: sale.customerId || null,
-      customerName: sale.customerName || "",
-      lines: returnedLines,
-      // ⚠ الفهارس تُحفظ: بدونها لا نعرف أي أسطر أُرجعت، فيُرجَع السطر
-      // مرتين ويخرج المبلغ مرتين.
-      lineIndexes: idxs,
-      fullReturn: idxs.length === sale.lines.length,
-      refund,
-      refundSource,
-      note: note || "",
-      createdBy: currentUser?.name || "",
-    };
-    persist(RETURNS_KEY, [rec, ...returns], setReturns);
-
-    // قيد وزني: الذهب يعود للمخزون
-    postWeight("sale_return", returnedLines.map((l) => ({
-      karat: l.karatSnapshot,
-      weight: (Number(l.weightSnapshot) || 0) * (Number(l.quantity) || 1),
-      refId: rec.id, note: `مرتجع ${sale.ref || ""}`.trim(),
-    })));
-
-    // ⚠ الخصم من دين العميل ليس خروج نقد: الفاتورة كانت آجلة فلم يدفع
-    // شيئًا. ردّ نقد لم يُقبض يعني خسارة مضاعفة.
-    if (refundSource === "credit") {
-      const nextR = [
-        {
-          id: Date.now().toString() + "rc", ref: nextRef("receipt", receipts),
-          date: now, customerId: sale.customerId, customerName: sale.customerName || "",
-          amount: -refund, method: "adjust", saleId,
-          note: `خصم مرتجع ${sale.ref || ""}`.trim(),
-          category: "sales_return", createdBy: currentUser?.name || "", ...dayStamp(),
-        },
-        ...receipts,
-      ];
-      persist(RECEIPTS_KEY, nextR, setReceipts);
-    } else {
-      // عكس القيد: المبلغ يخرج من نفس نوع المصدر
-      deductFromSource(refundSource, refund, `مرتجع فاتورة ${sale.ref || ""}`.trim(), "return", rec.id, "sales_return");
+      flashToast(`تم الإرجاع — ${priceData.currency}${fmt(rec.refund, 0)}`);
+      return rec;
+    } catch (err) {
+      flashToast(apiErrorMessage(err, "تعذّر تنفيذ الإرجاع"));
+      return null;
     }
-    flashToast(`تم الإرجاع — ${priceData.currency}${fmt(refund, 0)}`);
-    return rec;
   };
   // ⚠ صارا نداءي شبكة حقيقيين — expense_names أصبح جدولًا حقيقيًا
   // (migration 010) بدل مصفوفة محلية فقط.
@@ -1531,7 +1485,6 @@ export default function GoldInventoryApp() {
           customerName: sale.customerName || "",
           description: `بدل بكسر — فاتورة ${sale.ref}`,
           paymentMethod: "trade_in",
-          status: "in_stock",
           stage: stonesEst2 > 0.0005 ? "pending_break" : "in_box",
           refined: stonesEst2 <= 0.0005,
           actualStonesWeight: null,
@@ -2270,72 +2223,53 @@ export default function GoldInventoryApp() {
   // ⚖ ذهبًا بذهب أو نقدًا بسعر اليوم — والاثنان يُنقصان الالتزام
   // بمعادلهما بعيار 24. النقد يُحوَّل بسعر اليوم لأن دَينك ذهبٌ لا ريال:
   // تثبيته بالريال يجعل ارتفاع السعر يُبرئك مما لم تُبرأ منه.
-  const handleSettleOffice = (officeId, form) => txn("handleSettleOffice", () => {
+  //
+  // ⚠ صار نداء شبكة حقيقي — /taskir-offices/:officeId/settle (migration
+  // 011) يكتب فعليًا taskir_office_tx + خروج الذهب من الخزنة (وضع gold)
+  // أو cash_tx + قيد يومية settle_office_cash (وضع cash)، بمعاملة واحدة
+  // على السيرفر، مقيَّد بصلاحية المدير (requireManager) لا الفرونت إند
+  // وحده.
+  const handleSettleOffice = async (officeId, form) => {
     const off = (taskirOffices || []).find((o) => o.id === officeId);
     if (!off) return null;
-    const now = new Date().toISOString();
-    const actor = currentUser?.name || "";
 
     if (form.mode === "gold") {
       const w = Number(form.weight) || 0;
       if (w <= 0) { flashToast("أدخل وزنًا"); return null; }
-      const fine = fine24(w, form.karat);
-      persistTaskirOfficeTx([
-        {
-          id: Date.now().toString() + "op",
-          ref: nextRef("officeSettle", taskirOfficeTx),
-          date: now, officeId, officeName: off.name,
-          type: "credit", kind: "gold",
-          karat: 24, weight: roundW(fine),
-          rawLines: [{ karat: form.karat, weight: w, fine }],
-          note: `سداد ذهبًا — ${fmtW(w)} جم عيار ${form.karat}`,
-          createdBy: actor, ...dayStamp(),
-        },
-        ...taskirOfficeTx,
-      ]);
-      // الذهب يخرج من الخزنة
-      persistSafeGold([
-        {
-          id: Date.now().toString() + "og",
-          ref: nextRef("goldOut", safeGoldTx),
-          date: now, type: "out", kind: "raw",
-          karat: form.karat, weight: w,
-          destination: "office", destinationLabel: "سداد مكتب تسكير",
-          officeId, note: `سداد ${off.name}`,
-          createdBy: actor, ...dayStamp(),
-        },
-        ...safeGoldTx,
-      ]);
-      postWeight("settle_office_gold", [{
-        karat: form.karat, weight: w, refId: officeId, note: `سداد ${off.name}`,
-      }]);
-      flashToast(`سُدّد ${fmtW(fine)} جم24 لـ${off.name}`);
-      return true;
+      try {
+        await api.taskirApi.settleOffice(officeId, { mode: "gold", karat: form.karat, weight: w });
+        const officeTxRes = await api.taskirApi.officeTx(officeId);
+        setTaskirOfficeTx((prev) => [
+          ...normalizeTaskirOfficeTx(officeTxRes.officeTx || []),
+          ...prev.filter((t) => t.officeId !== officeId),
+        ]);
+        flashToast(`سُدّد ${fmtW(fine24(w, form.karat))} جم24 لـ${off.name}`);
+        return true;
+      } catch (err) {
+        flashToast(apiErrorMessage(err, "تعذّر سداد المكتب"));
+        return null;
+      }
     }
 
     const amt = Number(form.amount) || 0;
     const p24 = Number(priceData.current) || 0;
     if (amt <= 0 || p24 <= 0) { flashToast("أدخل مبلغًا وسعرًا صالحًا"); return null; }
-    const fineEq = roundW(amt / p24);
-    persistTaskirOfficeTx([
-      {
-        id: Date.now().toString() + "oc",
-        ref: nextRef("officeSettle", taskirOfficeTx),
-        date: now, officeId, officeName: off.name,
-        type: "credit", kind: "cash",
-        karat: 24, weight: fineEq, amount: roundMoney2(amt),
-        priceAtSettle: p24,
-        note: `سداد نقدًا ${fmtMoney(amt)} — يعادل ${fmtW(fineEq)} جم24 بسعر ${fmtMoney(p24)}`,
-        createdBy: actor, ...dayStamp(),
-      },
-      ...taskirOfficeTx,
-    ]);
-    deductFromSource(form.source || "safe_cash", amt,
-      `سداد مكتب ${off.name}`, "office_settle", officeId, "taskir_settlement");
-    flashToast(`سُدّد ${fmtMoney(amt)} — يعادل ${fmtW(fineEq)} جم24`);
-    return true;
-  
-  });
+    try {
+      await api.taskirApi.settleOffice(officeId, {
+        mode: "cash", amount: amt, source: form.source || "safe_cash", priceAtSettle: p24,
+      });
+      const officeTxRes = await api.taskirApi.officeTx(officeId);
+      setTaskirOfficeTx((prev) => [
+        ...normalizeTaskirOfficeTx(officeTxRes.officeTx || []),
+        ...prev.filter((t) => t.officeId !== officeId),
+      ]);
+      flashToast(`سُدّد ${fmtMoney(amt)} — يعادل ${fmtW(roundW(amt / p24))} جم24`);
+      return true;
+    } catch (err) {
+      flashToast(apiErrorMessage(err, "تعذّر سداد المكتب"));
+      return null;
+    }
+  };
 
   const handleSettleSupplier = (entry) => txn("handleSettleSupplier", () => {
     const sup = suppliers.find((x) => x.id === entry.supplierId);
@@ -3657,49 +3591,76 @@ export default function GoldInventoryApp() {
   
   });
 
-  const handleAddRepair = (entry) => {
+  // ⚠ حُوِّلت للباك إند: POST /repairs يكتب فعليًا repairs + cash_tx (إن
+  // وُجد مكسب) + قيد يومية (4130 إيراد إصلاح) على الخادم — لا حفظ محلي
+  // بحت كان يختفي بعد إعادة التحميل (سبب البلاغ الأصلي عن الخزنة، بنفس
+  // الشكل بالضبط).
+  const handleAddRepair = async (entry) => {
     const profitAmt = Number(entry.profit) || 0;
-    const record = {
-      id: Date.now().toString(),
-      ref: nextRef("repair", repairs),
-      date: new Date().toISOString(),
-      customerName: entry.customerName || "",
-      description: entry.description || "",
-      cost: Number(entry.cost) || 0,
-      profit: profitAmt,
-      profitGrams: priceData.current > 0 ? profitAmt / pricePerGram(24, priceData.current) : 0,
-      fundingSource: entry.fundingSource,
-      notes: entry.notes || "",
-      createdBy: currentUser?.name || "",
-    };
-    persistRepairs([record, ...repairs]);
-    if (record.profit > 0) {
-      addToSource(entry.fundingSource, record.profit, `مكسب إصلاح${record.customerName ? " - " + record.customerName : ""}`, "repair", record.id, "repair_income");
+    try {
+      const res = await api.repairsApi.add({
+        customerName: entry.customerName || null,
+        description: entry.description || null,
+        cost: Number(entry.cost) || 0,
+        profit: profitAmt,
+        fundingSource: entry.fundingSource,
+        notes: entry.notes || null,
+      });
+      const r = res.repair;
+      const record = {
+        id: r.id, ref: r.ref, date: r.created_at,
+        customerName: r.customer_name || "", description: r.description || "",
+        cost: Number(r.cost) || 0, profit: Number(r.profit) || 0,
+        profitGrams: priceData.current > 0 ? Number(r.profit) / pricePerGram(24, priceData.current) : 0,
+        fundingSource: r.funding_source, notes: r.notes || "",
+        createdBy: currentUser?.name || "",
+      };
+      setRepairs((prev) => [record, ...prev]);
+      // ⚠ المصدر قد يكون الخزنة (safe) أو اليومي (daily) — pool من السطر
+      // الخام نفسه، لا افتراض ثابت، وإلا حُدِّثت الحالة الخطأ.
+      if (res.cashTx) {
+        const entryTx = normalizeCashTxRow(res.cashTx);
+        if (res.cashTx.pool === "safe") setSafeTx((prev) => [entryTx, ...prev]);
+        else setCashTx((prev) => [entryTx, ...prev]);
+      }
+      flashToast("تم تسجيل الإصلاح");
+      return record;
+    } catch (err) {
+      flashToast(apiErrorMessage(err, "تعذّر تسجيل الإصلاح"));
+      return null;
     }
-    flashToast("تم تسجيل الإصلاح");
   };
 
   // -------- handlers: scrap stones settlement (تصفية هامش الفصوص) --------
-  const handleRefineScrap = (entryId, actualStonesWeight) => {
-    const actor = currentUser?.name || "";
+  // ⚠ حُوِّلت للباك إند: POST /scrap/:id/break-stones يثبّت الوزن الصافي
+  // فعليًا على الخادم (weight_final/karat_final) ويُرحّل الفرق (إن وُجد)
+  // لدفتر الوزن (1230) وخزنة الكسر مباشرة — لا حساب/حفظ محلي بعد الآن.
+  const handleRefineScrap = async (entryId, actualStonesWeight) => {
     const entry = scrapEntries.find((s) => s.id === entryId);
-    if (!entry) return;
-    const estimate = entry.stonesMarginEstimate || 0;
-    const surplus = Math.max(0, estimate - Number(actualStonesWeight));
-    const updated = scrapEntries.map((s) =>
-      s.id === entryId
-        ? { ...s, refined: true, actualStonesWeight: Number(actualStonesWeight), weight: s.weight + surplus, total: (s.weight + surplus) * s.pricePerGram }
-        : s
-    );
-    persistScrap(updated);
-    if (surplus > 0.0001) {
-      persistScrapSurplus([
-        { id: Date.now().toString(), date: new Date().toISOString(), scrapEntryId: entryId, description: entry.description, weight: surplus , createdBy: currentUser?.name || "", createdById: currentUser?.id || null},
-        ...scrapSurplusLog,
-      ]);
-      flashToast(`تمت التصفية — فائض ذهب ${fmtW(surplus)} جم أُضيف لرصيد الكسر`);
-    } else {
-      flashToast("تمت التصفية — لا يوجد فائض");
+    if (!entry) return null;
+    try {
+      const res = await api.scrap.breakStones(entryId, { actualNetWeight: Number(actualStonesWeight) });
+      const sr = res.scrapItem;
+      setScrapEntries((prev) => prev.map((s) =>
+        s.id === entryId
+          ? { ...s, refined: true, stage: "in_safe", actualStonesWeight: Number(actualStonesWeight),
+              weight: sr.weightFinal, breakVariance: sr.variance }
+          : s
+      ));
+      if (sr.variance > 0.0001) {
+        setScrapSurplusLog((prev) => [
+          { id: sr.id || entryId, date: new Date().toISOString(), scrapEntryId: entryId,
+            description: entry.description, weight: sr.variance, createdBy: currentUser?.name || "" },
+          ...prev,
+        ]);
+        flashToast(`تمت التصفية — فائض ذهب ${fmtW(sr.variance)} جم أُضيف لرصيد الكسر`);
+      } else {
+        flashToast("تمت التصفية");
+      }
+      return res;
+    } catch (err) {
+      flashToast(apiErrorMessage(err, "تعذّرت التصفية"));
+      return null;
     }
   };
 
@@ -3729,6 +3690,9 @@ export default function GoldInventoryApp() {
     setDailyCustody(n.dailyCustody);
     setExpenses(n.expenses);
     setExpenseNames(n.expenseNames);
+    setTaskirEntries(n.taskirEntries);
+    setTaskirOffices(n.taskirOffices);
+    setTaskirOfficeTx(n.taskirOfficeTx);
     setCustomers(n.customers);
     setSuppliers(n.suppliers);
     setLots(n.lots);
@@ -3736,6 +3700,10 @@ export default function GoldInventoryApp() {
     setCategories(n.categories);
     setRuntimeCategories(n.categories);
     setStocktakeLock(n.stocktakeLock);
+    setReservations(n.reservations);
+    setRepairs(n.repairs);
+    setReturns(n.returns);
+    setReceipts(n.receipts);
     if (n.appSettings) {
       // ⚠ دمج لا استبدال: appSettings يحمل أيضًا تفضيلات محلية بحتة
       // (الثيم، طباعة، requirePin...) لا وجود لها في الباك إند بعد —
@@ -4142,7 +4110,11 @@ export default function GoldInventoryApp() {
     return byOffice;
   }, [taskirOfficeTx]);
   const scrapTotals = useMemo(() => {
-    const inStock = scrapEntries.filter((s) => s.status === "in_stock");
+    // ⚠ `status === "in_stock"` كان حقلًا محليًا لا تُنتجه normalizeScrapItems
+    // إطلاقًا — فهذا الإحصاء كان يعرض صفرًا دائمًا لأي كسر مُحمَّل من
+    // الخادم (لا يظهر إلا للقطعة المضافة للتو بالجلسة قبل أي إعادة تحميل).
+    // المكافئ الحقيقي: أي مرحلة قبل "used" (لم تُستهلك بعد بتحويل أو غيره).
+    const inStock = scrapEntries.filter((s) => stageOf(s) !== "used");
     const inStockValue = inStock.reduce((a, s) => a + s.total, 0);
     // Prefer actual physical weight × purity for known karats (accurate regardless of
     // purchase price history); fall back to cost-basis ÷ today's price only for entries
@@ -5071,57 +5043,64 @@ export default function GoldInventoryApp() {
     }
   };
   // Closes today's scrap box (عهدة الكسر اليومي) into the safe: any unspent cash
-  // in the custody moves to the safe's cash, and any scrap gold still sitting in
-  // today's working stock is banked into the safe's scrap (كسر) gold reserve —
-  // both additive to whatever is already stored there from previous days.
-  const handleCloseScrapDay = () => txn("handleCloseScrapDay", () => {
-    const actor = currentUser?.name || "";
-    const now = new Date().toISOString();
-    const cashMoves = [
-      { method: "cash", amount: scrapCustodyBalance.cash },
-      { method: "network", amount: scrapCustodyBalance.network },
-    ].filter((m) => m.amount > 0.0001);
-    const inStockWeight = scrapEntries.filter((s) => s.status === "in_stock").reduce((a, s) => a + s.weight, 0);
-
-    if (cashMoves.length === 0 && inStockWeight <= 0.0001) {
-      flashToast("لا يوجد رصيد أو كسر باليومي لتوريده");
-      return;
+  // in the custody moves to the safe's cash, and any scrap gold that has cleared
+  // review (stage='approved') is banked into the safe's scrap (كسر) gold reserve.
+  //
+  // ⚠ حُوِّلت للباك إند بالكامل — كانت هذي آخر عملية تكتب محليًا فقط
+  // (persistScrapCustody/persistSafe/persistScrap عبر window.storage)، فتختفي
+  // فعليًا عند إعادة تحميل bootstrap من الخادم. هذا سبب البلاغ الأصلي عن
+  // «الإضافة للخزنة لا تُحفظ بعد إعادة تحميل الصفحة».
+  //
+  // شقّان حقيقيان لا واحد: POST /safe/close-scrap-day يورّد رصيد العهدة
+  // (يُحسب من cash_tx على الخادم نفسه، لا رقم من العميل)، وapi.scrap.
+  // depositToVault (موجودة أصلًا ومربوطة) تودع كل قطعة كسر بمرحلة
+  // 'approved' فعليًا — لا "in_stock" وهمية لم تكن تطابق أي مرحلة حقيقية
+  // في scrap_items.stage أصلًا.
+  const handleCloseScrapDay = async () => {
+    if (!ROLES[role]?.canManageDay) {
+      flashToast("إقفال صندوق الكسر بيد المدير — راجعه");
+      return null;
     }
-    if (cashMoves.length > 0) {
-      const custodyOut = cashMoves.map((m) => ({
-        id: Date.now().toString() + "csd" + m.method,
-      ref: nextCashRef(m.method, [...cashTx, ...safeTx, ...scrapCustodyTx]),
-        date: now,
-        type: "settlement",
-        method: m.method,
-        amount: m.amount,
-        note: "توريد نهاية اليوم للخزنة", createdBy: actor,
-        category: "transfer_to_safe",
-      }));
-      const safeIn = cashMoves.map((m) => ({
-        id: Date.now().toString() + "csds" + m.method,
-        date: now,
-        type: "in",
-        method: m.method,
-        amount: m.amount,
-        note: "توريد من صندوق الكسر اليومي",
-        source: "scrap_day_close",
-        category: "transfer_from_custody",
-      }));
-      persistScrapCustody([...custodyOut, ...scrapCustodyTx]);
-      persistSafe([...safeIn, ...safeTx]);
+    const hasCash = scrapCustodyBalance.cash > 0.0001 || scrapCustodyBalance.network > 0.0001;
+    const hasApprovedGold = scrapEntries.some((s) => stageOf(s) === "approved");
+    if (!hasCash && !hasApprovedGold) {
+      flashToast("لا يوجد رصيد أو كسر جاهز للتوريد");
+      return null;
     }
-    if (inStockWeight > 0.0001) {
-      persistScrap(scrapEntries.map((s) => (s.status === "in_stock" ? { ...s, status: "in_safe" } : s)));
-      persistSafeGoldTx([
-        { id: Date.now().toString() + "csg",
-      ref: nextCashRef("cash", [...cashTx, ...safeTx, ...scrapCustodyTx]), date: now, type: "in", kind: "raw", weight: inStockWeight, note: "توريد كسر نهاية اليوم" , createdBy: currentUser?.name || "", createdById: currentUser?.id || null},
-        ...safeGoldTx,
-      ]);
+    try {
+      let movedCash = false;
+      let movedGold = 0;
+      if (hasCash) {
+        const res = await api.safe.closeScrapDay();
+        for (const m of res.moves) {
+          setScrapCustodyTx((prev) => [normalizeCashTxRow(m.custodyTx), ...prev]);
+          setSafeTx((prev) => [normalizeCashTxRow(m.safeTx), ...prev]);
+        }
+        movedCash = res.moves.length > 0;
+      }
+      if (hasApprovedGold) {
+        const res = await api.scrap.depositToVault();
+        if (res.count) {
+          const now = new Date().toISOString();
+          const actor = currentUser?.name || "";
+          setScrapEntries((prev) => prev.map((e) =>
+            stageOf(e) === "approved"
+              ? { ...e, stage: "in_safe", status: "in_safe", vault: "scrap", depositedAt: now, depositedBy: actor }
+              : e));
+          movedGold = res.deposited.reduce((a, d) => a + (Number(d.weight) || 0), 0);
+        }
+      }
+      if (!movedCash && !movedGold) {
+        flashToast("لا يوجد رصيد أو كسر جاهز للتوريد");
+        return null;
+      }
+      flashToast("تم إقفال صندوق الكسر اليومي وتوريده للخزنة");
+      return { movedGold };
+    } catch (err) {
+      flashToast(apiErrorMessage(err, "تعذّر إقفال صندوق الكسر"));
+      return null;
     }
-    flashToast("تم إقفال صندوق الكسر اليومي وتوريده للخزنة");
-  
-  });
+  };
   // ---------------------------------------------------------------
   // Daily till custody (عهدة الصندوق اليومي).
   // A float is handed from the safe to whoever runs the register, and at the
@@ -5300,123 +5279,70 @@ export default function GoldInventoryApp() {
     else if (src.startsWith("daily_")) persistCash([entry, ...cashTx]);
   };
 
-  // Logs a purchase of raw gold FROM a taskir office (a specialist bullion dealer)
-  // — used specifically to fund a "purchased" gold-source settlement when there's
-  // no scrap on hand to give the supplier. Paid cash or bank transfer; this is a
-  // one-off purchase record, not a prepaid balance with the office.
-  const logTaskirOfficePurchase = (officeId, weight, amount, method, taskirId) => {
-    persistTaskirOfficeTx([
-      { id: Date.now().toString() + "of", date: new Date().toISOString(), officeId, weight, amount, method, taskirId , createdBy: currentUser?.name || "", createdById: currentUser?.id || null},
-      ...taskirOfficeTx,
-    ]);
-  };
-
-  const handleAddTaskir = (entry) => {
-    const goldCost = entry.goldSource === "purchased" ? entry.weight * entry.pricePerGram : 0;
-    const totalCashPaid = goldCost + (Number(entry.workmanshipAmount) || 0);
-    const record = {
-      id: Date.now().toString(),
-      ref: nextRef("taskir", taskirEntries),
-      date: new Date().toISOString(),
-      createdBy: currentUser?.name || "",
-      createdById: currentUser?.id || null,
-      ...dayStamp(),
-      supplierId: entry.supplierId,
-      karat: entry.karat,
-      weight: entry.weight,
-      pricePerGram: entry.pricePerGram || 0,
-      goldSource: entry.goldSource,
-      goldCost,
-      officeId: entry.goldSource === "purchased" ? entry.officeId : null,
-      workmanshipAmount: Number(entry.workmanshipAmount) || 0,
-      fundingSource: entry.fundingSource,
-      totalCashPaid,
-      notes: entry.notes || "",
-      invoiceName: entry.invoiceFile?.name || null,
-      invoiceIsImage: entry.invoiceFile?.isImage || false,
-      invoiceAttachId: null,
-    };
-    if (entry.invoiceFile) {
-      saveAttachment(entry.invoiceFile)
-        .then((attachId) => persistTaskir([{ ...record, invoiceAttachId: attachId }, ...taskirEntries]))
-        .catch((e) => {
-          console.error("attachment save failed", e);
-          flashToast("تعذّر حفظ المستند المرفق");
-          persistTaskir([record, ...taskirEntries]);
-        });
-    } else {
-      persistTaskir([record, ...taskirEntries]);
-    }
-
-    // Settling with scrap gold actually depletes the physical scrap stock — consume
-    // it FIFO (oldest purchases first) so weightInStock stays accurate. Best-effort:
-    // if stock is insufficient, consume whatever is available rather than blocking.
-    let scrapShortfall = 0;
-    if (entry.goldSource === "scrap") {
-      let remaining = entry.weight;
-      const sorted = [...scrapEntries]
-        .map((s, idx) => ({ ...s, _idx: idx }))
-        .filter((s) => s.status === "in_stock")
-        .sort((a, b) => new Date(a.date) - new Date(b.date));
-      const consumedIds = new Map();
-      for (const s of sorted) {
-        if (remaining <= 0) break;
-        const take = Math.min(s.weight, remaining);
-        consumedIds.set(s.id, take);
-        remaining -= take;
-      }
-      scrapShortfall = remaining;
-      if (consumedIds.size > 0) {
-        const updatedScrap = scrapEntries.map((s) => {
-          const take = consumedIds.get(s.id);
-          if (!take) return s;
-          const newWeight = s.weight - take;
-          const newTotal = s.pricePerGram > 0 ? newWeight * s.pricePerGram : 0;
-          if (newWeight <= 0.0001) return { ...s, weight: 0, total: 0, status: "used_for_taskir" };
-          return { ...s, weight: newWeight, total: newTotal };
-        });
-        persistScrap(updatedScrap);
-      }
-    }
-
-    // Gold bought fresh from a taskir office (raw-gold dealer) — log the purchase
-    // against that office for reporting, paid cash or bank transfer.
-    if (entry.goldSource === "purchased" && entry.officeId && goldCost > 0) {
-      const method = entry.fundingSource === "daily_network" ? "network" : entry.fundingSource === "daily_transfer" ? "transfer" : "cash";
-      logTaskirOfficePurchase(entry.officeId, entry.weight, goldCost, method, record.id);
-    }
-
-    deductFromSource(
-      entry.fundingSource,
-      totalCashPaid,
-      `تسوية مورد${entry.goldSource === "purchased" ? " - شراء ذهب" : " - مصنعية"}`,
-      "taskir",
-      record.id,
-      "gold_purchase_bullion"
-    );
-    if (scrapShortfall > 0.0001) {
-      flashToast(`تم التسجيل — لا يوجد كسر كافٍ بالمخزون (نقص ${fmtW(scrapShortfall)} جم)`);
-    } else {
-      flashToast("تم تسجيل التسكير");
-    }
-  };
-  const handleAddTaskirOffice = (name, phone, address) => {
-    if (nameExists(taskirOffices, name)) {
-      flashToast("يوجد مكتب بهذا الاسم");
+  // ⚠ صار نداء شبكة حقيقي — /taskirat (migration 011) يكتب فعليًا
+  // taskir_entries + دفتر الوزن + استهلاك الكسر (أو التزام المكتب) +
+  // تخفيض دين المورد الحقيقي (supplier_ledger) + قيد الأجور، في معاملة
+  // واحدة على السيرفر. أُزيل البناء المحلي بالكامل (كان لا يربط التسكير
+  // بمورد حقيقي إطلاقًا — راجع تعليق migration 011) والاستهلاك المحلي
+  // "الأفضل جهدًا" لمخزون الكسر (استُبدل بتحقق كفاية صارم على السيرفر،
+  // يرفض الطلب بـinsufficient_scrap_stock بدل الاستهلاك الجزئي الصامت).
+  const handleAddTaskir = async (entry) => {
+    if (!entry.supplierId) {
+      flashToast("اختر المورد أولًا");
       return null;
     }
-    const office = {
-      id: Date.now().toString() + "o",
-      ref: nextRef("office", taskirOffices),
-      name: name.trim(),
-      phone: phone || "",
-      address: (address || "").trim(),
-      createdAt: new Date().toISOString(),
-      createdBy: currentUser?.name || "",
-    };
-    persistTaskirOffices([office, ...taskirOffices]);
-    flashToast(`تمت إضافة المكتب ${office.ref}`);
-    return office;
+    try {
+      const res = await api.taskirApi.add({
+        supplierId: entry.supplierId,
+        karat: entry.karat,
+        weight: entry.weight,
+        goldSource: entry.goldSource,
+        pricePerGram: entry.goldSource === "purchased" ? entry.pricePerGram : null,
+        officeId: entry.goldSource === "purchased" ? entry.officeId : null,
+        workmanshipAmount: Number(entry.workmanshipAmount) || 0,
+        fundingSource: entry.fundingSource,
+        notes: entry.notes || "",
+      });
+      // إعادة تحميل قائمة التسكيرات وحركات مكاتب التسكير من السيرفر —
+      // أبسط وأضمن من محاولة دمج الاستجابة المختصرة محليًا بشكل يطابق
+      // شكل GET بالضبط (خصوصًا supplier_name/office_name المُلحَقين
+      // هناك بـJOIN لا تملكهما استجابة POST المختصرة).
+      const [entriesRes, officeTxRes] = await Promise.all([
+        api.taskirApi.list(),
+        entry.goldSource === "purchased" && entry.officeId
+          ? api.taskirApi.officeTx(entry.officeId)
+          : Promise.resolve(null),
+      ]);
+      setTaskirEntries(normalizeTaskirEntries(entriesRes.taskirEntries || []));
+      if (officeTxRes) {
+        setTaskirOfficeTx((prev) => {
+          const others = prev.filter((t) => t.officeId !== entry.officeId);
+          return [...normalizeTaskirOfficeTx(officeTxRes.officeTx || []), ...others];
+        });
+      }
+      flashToast("تم تسجيل التسكير");
+      return res.taskirEntry;
+    } catch (err) {
+      flashToast(apiErrorMessage(err, "تعذّر تسجيل التسكير"));
+      return null;
+    }
+  };
+
+  const handleAddTaskirOffice = async (name, phone) => {
+    try {
+      const res = await api.taskirApi.offices.create(name.trim(), phone || "");
+      const office = {
+        id: res.office.id, ref: res.office.ref, name: res.office.name,
+        phone: res.office.phone || "", createdAt: res.office.created_at,
+        createdBy: currentUser?.name || "",
+      };
+      setTaskirOffices((prev) => [office, ...prev]);
+      flashToast(`تمت إضافة المكتب ${office.ref}`);
+      return office;
+    } catch (err) {
+      flashToast(apiErrorMessage(err, "تعذّر إضافة المكتب"));
+      return null;
+    }
   };
 
   // -------- handlers: expenses --------
@@ -5581,7 +5507,6 @@ export default function GoldInventoryApp() {
           description: entry.description || null,
           date: new Date().toISOString(),
           stage: item.stage,
-          status: item.stage === "pending_break" ? "in_stock" : "in_stock",
           createdBy: currentUser?.name || "",
         },
         ...prev,
@@ -5654,94 +5579,50 @@ export default function GoldInventoryApp() {
     }
   };
 
-  const handleConvertScrap = (entry) => txn("handleConvertScrap", () => {
+  // ⚠ حُوِّلت للباك إند: POST /scrap/:id/convert-to-item يتحقق فعليًا من
+  // stage='in_safe' على الخادم (409 scrap_item_not_ready) بدل الفحوصات
+  // المحلية المتفائلة هنا، ويكتب items+item_units حقيقيين — أول مسار
+  // يكتب فيهما في المشروع كله (لم يكن هناك أي endpoint لإنشاء items قبل
+  // هذا، لا هنا ولا في المشتريات). هذا كان آخر جزء من دورة الكسر لا يزال
+  // محليًا بالكامل (window.storage) — سبب اختفاء التحويل بعد إعادة التحميل.
+  const handleConvertScrap = async (entry) => {
     if (!can("convertScrap")) return null;
-    const actor = currentUser?.name || "";
-
-    // ── ① الصلاحية ──
-    //
-    // ⚠ إدخال الكسر للمخزون قرارُ طرفٍ ثالث لا البائع الذي استلمه.
-    //
-    // من يستلم ويُقيّم ويُدخل هو نفسه لا يُراجعه أحد: يستلم بوزنٍ
-    // ويُدخل بآخر، والفرق يذهب حيث لا يُسأل عنه.
-    if (role !== "manager" && role !== "assistant") {
-      flashToast("إدخال الكسر للمخزون يحتاج صلاحية المدير");
+    try {
+      const res = await api.scrap.convertToItem(entry.id, {
+        categoryId: entry.categoryId || null,
+      });
+      const it = res.item;
+      const newItem = {
+        id: it.id,
+        ref: it.ref,
+        categoryId: it.categoryId,
+        karat: it.karat,
+        weight: it.weight,
+        stonesWeight: 0,
+        costPerGram: Number(entry.pricePerGram) || 0,
+        workmanship: 0,
+        lotWorkmanshipShare: 0,
+        lotId: null,
+        photoDataUrl: null,
+        units: it.units,
+        dateAdded: it.dateAdded,
+        fromScrap: true,
+        scrapId: it.scrapId,
+        scrapRef: it.scrapRef,
+        createdBy: currentUser?.name || "",
+      };
+      setItems((prev) => [newItem, ...prev]);
+      setScrapEntries((prev) => prev.map((x) =>
+        x.id === entry.id
+          ? { ...x, status: "converted", consumed: true, stage: "used", convertedTo: newItem.id }
+          : x));
+      flashToast(`أُدخلت للمخزون · ${fmtW(it.weight)} جم عيار ${it.karat}`);
+      return newItem;
+    } catch (err) {
+      flashToast(apiErrorMessage(err, "تعذّر إدخال القطعة للمخزون"));
       return null;
     }
-
-    // ── ② التكسير قبل الإدخال ──
-    //
-    // ⚠ ما له فصوص لا يدخل المخزون بتقديره: التقدير تخمينٌ بالنظر،
-    // وإدخاله يعني وزنًا في الدفتر لم يُوزن على ميزان.
-    if ((entry.stage || "") === "pending_break") {
-      flashToast("القطعة تنتظر التكسير — كسّرها وأدخل الوزن الصافي أولًا");
-      return null;
-    }
-
-    // ── ③ التصفية قبل الإدخال ──
-    //
-    // ⚠ ما لم يبلغ الخزنة لم يُفحص. إدخاله للعرض يعني بيع ذهبٍ لم
-    // يُتحقّق من عياره.
-    const settled = entry.stage === "in_safe" || entry.refined === true;
-    if (!settled) {
-      flashToast("لم تُصفَّ القطعة بعد — أرسلها للفحص واعتمدها أولًا");
-      return null;
-    }
-
-    if (entry.status === "converted" || entry.consumed) {
-      flashToast("أُدخلت للمخزون سلفًا");
-      return null;
-    }
-
-    const karat = entry.karat === "unknown" ? 21 : Number(entry.karat);
-    const weight = roundW(entry.weight);
-    if (!(weight > 0)) {
-      flashToast("وزن صفر — راجع القطعة");
-      return null;
-    }
-
-    const newItem = {
-      id: Date.now().toString() + "cs",
-      ref: nextRef("item", items),
-      // ⚠ `categoryId` لا `category`: النموذج يقرأ الأول، والثاني
-      // يجعل القطعة بلا تصنيف فتسقط من كل تقرير مصنَّف.
-      categoryId: entry.categoryId || "other",
-      karat,
-      weight,
-      stonesWeight: 0,
-      costPerGram: Number(entry.pricePerGram) || 0,
-      workmanship: 0,
-      lotWorkmanshipShare: 0,
-      lotId: null,
-      photoDataUrl: null,
-      units: [{ code: generateUnitCode(), printed: false, sold: false }],
-      dateAdded: new Date().toISOString(),
-      fromScrap: true,
-      scrapId: entry.id,
-      scrapRef: entry.ref || null,
-      createdBy: actor,
-      ...dayStamp(),
-    };
-
-    persistItems([newItem, ...items]);
-    // ⚠ يُوسم مستهلكًا لا «محوَّلًا» فقط.
-    //
-    // الوسم وحده لا يكفي: ملخّص المخزون كان يعدّ كل كسر مهما كانت
-    // حالته، فالقطعة تُحسب كسرًا **ومشغولًا معًا** — تسعة جرامات
-    // تظهر ثمانية عشر.
-    persistScrap(scrapEntries.map((x) =>
-      x.id === entry.id
-        ? { ...x, status: "converted", consumed: true, stage: "used",
-            convertedTo: newItem.id, convertedAt: new Date().toISOString(),
-            convertedBy: actor }
-        : x));
-    audit("update", { entity: "scrap", entityId: entry.id, entityRef: entry.ref,
-      before: { stage: entry.stage }, after: { stage: "used", itemId: newItem.id },
-      note: "إدخال كسر للمخزون" });
-    flashToast(`أُدخلت للمخزون · ${fmtW(weight)} جم عيار ${karat}`);
-    return newItem;
-  
-  });
+  };
   /// إرسال الكسر للفحص.
   ///
   /// ⚠ كان يكتب `status: "sent_to_refinery"` — حالةٌ من نظامٍ قديم
@@ -5818,11 +5699,13 @@ export default function GoldInventoryApp() {
     }
   };
 
-  const handleSendRefinery = (entry) => txn("handleSendRefinery", () => {
+  // ⚠ حُوِّلت للباك إند: POST /scrap/send يتحقق فعليًا من stage='in_box'
+  // على الخادم (409 no_eligible_items) وينشئ scrap_requests حقيقيًا —
+  // بدل تعليم محلي (`status: "sent"`) كان يختفي بعد إعادة التحميل ولا
+  // يظهر في أي طلب تقييم فعلي.
+  const handleSendRefinery = async (entry) => {
     if (!can("sendScrap")) return null;
     const st = stageOf(entry);
-    // ⚠ ما له فصوص يُكسَّر قبل أن يُرسل: الفاحص يزن ما وصله، فإن
-    // وصله بفصوصه سجّل وزنًا ليس ذهبًا كله.
     if (st === "pending_break") {
       flashToast("كسّر القطعة وثبّت وزنها قبل الإرسال");
       return null;
@@ -5831,17 +5714,21 @@ export default function GoldInventoryApp() {
       flashToast(`القطعة ${SCRAP_STAGES[st]?.label || st} — لا تُرسل الآن`);
       return null;
     }
-    const now = new Date().toISOString();
-    persistScrap(scrapEntries.map((x) =>
-      x.id === entry.id
-        ? { ...x, stage: "sent", status: "sent", sentAt: now,
-            sentBy: currentUser?.name || "" }
-        : x));
-    audit("update", { entity: "scrap", entityId: entry.id, entityRef: entry.ref,
-      before: { stage: st }, after: { stage: "sent" }, note: "إرسال للفحص" });
-    flashToast(`أُرسلت للفحص · ${fmtW(entry.weight)} جم عيار ${entry.karat}`);
-    return true;
-  });
+    try {
+      const res = await api.scrap.send({ scrapItemIds: [entry.id] });
+      const now = new Date().toISOString();
+      setScrapEntries((prev) => prev.map((x) =>
+        x.id === entry.id
+          ? { ...x, stage: "sent", status: "sent", sentAt: now,
+              sentBy: currentUser?.name || "", requestId: res.request.id, requestRef: res.request.ref }
+          : x));
+      flashToast(`أُرسلت للفحص · ${fmtW(entry.weight)} جم عيار ${entry.karat}`);
+      return res;
+    } catch (err) {
+      flashToast(apiErrorMessage(err, "تعذّر الإرسال للفحص"));
+      return null;
+    }
+  };
 
   // -------- handlers: stocktake --------
   const handleSaveAudit = (entries, applyReconcile) => {

@@ -26,9 +26,9 @@ function AddTaskirForm({ suppliers, offices, priceData, onAddOffice, onCancel, o
 
   const allOffices = [...localOffices, ...offices];
 
-  const handleCreateOffice = () => {
+  const handleCreateOffice = async () => {
     if (!newOfficeName.trim()) return;
-    const office = onAddOffice(newOfficeName, newOfficePhone);
+    const office = await onAddOffice(newOfficeName, newOfficePhone);
     if (office) {
       setLocalOffices((prev) => [office, ...prev]);
       setOfficeId(office.id);

@@ -44,6 +44,9 @@ function normalizeItems(itemRows, itemUnitRows) {
     dateAdded: it.date_added,
     businessDayId: it.business_day_id,
     createdBy: it.created_by,
+    // ⚠ migration 013 — لم يكن هناك عمود لهذا قبلها؛ الحجز كان يُعلَّم
+    // محليًا فقط (reservedFor) فلا يمنع أي شيء فعليًا بعد إعادة التحميل.
+    reservedFor: it.reserved_for || null,
     units: unitsByItem.get(it.id) || [],
   }));
 }
@@ -215,6 +218,40 @@ function normalizeExpenses(rows, usersFull) {
 
 function normalizeExpenseNames(rows) {
   return rows.map((n) => ({ id: n.id, name: n.name, category: n.category || "other" }));
+}
+
+/** taskir_entries (DB) → taskirEntries[] بشكل المرجع القديم (camelCase). */
+function normalizeTaskirEntries(rows) {
+  return rows.map((t) => ({
+    id: t.id, ref: t.ref, date: t.created_at,
+    supplierId: t.supplier_id, karat: t.karat, weight: toWeight(t.weight),
+    pricePerGram: t.price_per_gram == null ? 0 : Number(t.price_per_gram),
+    goldSource: t.gold_source, goldCost: toMoney(t.gold_cost),
+    officeId: t.office_id, workmanshipAmount: toMoney(t.workmanship_amount),
+    fundingSource: t.funding_source, totalCashPaid: toMoney(t.total_cash_paid),
+    notes: t.notes || "", invoiceAttachId: t.invoice_attach_id || null,
+    createdBy: null, createdById: t.created_by, businessDayId: t.business_day_id,
+    supplierName: t.supplier_name || null, officeName: t.office_name || null,
+  }));
+}
+
+function normalizeTaskirOffices(rows) {
+  return rows.map((o) => ({
+    id: o.id, ref: o.ref, name: o.name, phone: o.phone || "",
+    createdAt: o.created_at, createdBy: null,
+  }));
+}
+
+/** taskir_office_tx (DB, direction 'in'|'out') → taskirOfficeTx[] بشكل
+ * المرجع القديم (type 'debit'|'credit' — راجع تعليق migration 004). */
+function normalizeTaskirOfficeTx(rows) {
+  return rows.map((t) => ({
+    id: t.id, ref: t.ref || null, date: t.created_at,
+    officeId: t.office_id, officeName: null,
+    type: t.direction === "in" ? "debit" : "credit", kind: t.kind || "gold",
+    karat: t.karat, weight: toWeight(t.weight), amount: toMoney(t.amount),
+    note: t.note || "", createdBy: null, businessDayId: t.business_day_id,
+  }));
 }
 
 function normalizeCategories(rows) {
@@ -419,6 +456,78 @@ function normalizeUsers(rows) {
   }));
 }
 
+// ── الحجوزات، الإصلاحات، والمرتجعات (migration 013) ──
+
+function normalizeReservations(rows) {
+  return rows.map((r) => ({
+    id: r.id,
+    ref: r.ref,
+    customerId: r.customer_id,
+    customerName: r.customer_name || "",
+    itemId: r.item_id,
+    total: toMoney(r.total),
+    deposit: toMoney(r.deposit),
+    remaining: r.remaining == null ? null : toMoney(r.remaining),
+    description: r.description || "",
+    status: r.status,
+    method: r.method,
+    date: r.created_at,
+    cancelledAt: r.cancelled_at,
+    refunded: !!r.refunded,
+    createdBy: r.created_by,
+  }));
+}
+
+function normalizeRepairs(rows) {
+  return rows.map((r) => ({
+    id: r.id,
+    ref: r.ref,
+    customerName: r.customer_name || "",
+    description: r.description || "",
+    cost: toMoney(r.cost),
+    profit: toMoney(r.profit),
+    fundingSource: r.funding_source,
+    notes: r.notes || "",
+    date: r.created_at,
+    createdBy: r.created_by,
+  }));
+}
+
+function normalizeReturns(rows) {
+  return rows.map((r) => ({
+    id: r.id,
+    ref: r.ref,
+    saleId: r.sale_id,
+    customerId: r.customer_id,
+    customerName: r.customer_name || "",
+    refund: toMoney(r.amount),
+    weight: toWeight(r.weight),
+    note: r.reason || "",
+    lineIndexes: r.line_indexes || [],
+    lines: r.lines || [],
+    fullReturn: !!r.full_return,
+    refundSource: r.refund_source,
+    date: r.created_at,
+    createdBy: r.created_by,
+  }));
+}
+
+function normalizeReceipts(rows) {
+  return rows.map((r) => ({
+    id: r.id,
+    ref: r.ref,
+    customerId: r.customer_id,
+    customerName: r.customer_name || "",
+    saleId: r.sale_id,
+    amount: toMoney(r.amount),
+    method: r.method,
+    category: r.category,
+    note: r.note || "",
+    date: r.created_at,
+    createdBy: r.created_by,
+  }));
+}
+
 /**
  * نقطة الدخول الرئيسية — تُستدعى مرة واحدة بعد الدخول بنتيجة
  * fetchBootstrap()، وتُرجع كائنًا جاهزًا للتوزيع مباشرة على setters
@@ -470,6 +579,13 @@ function normalizeBootstrap(boot) {
       : null,
     expenses: normalizeExpenses(boot.expenses || [], usersFullById),
     expenseNames: normalizeExpenseNames(boot.expenseNames || []),
+    taskirEntries: normalizeTaskirEntries(boot.taskirEntries || []),
+    taskirOffices: normalizeTaskirOffices(boot.taskirOffices || []),
+    taskirOfficeTx: normalizeTaskirOfficeTx(boot.taskirOfficeTx || []),
+    reservations: normalizeReservations(boot.reservations || []),
+    repairs: normalizeRepairs(boot.repairs || []),
+    returns: normalizeReturns(boot.returns || []),
+    receipts: normalizeReceipts(boot.receipts || []),
   };
 }
 
@@ -492,4 +608,11 @@ export {
   normalizeUsers,
   normalizeExpenses,
   normalizeExpenseNames,
+  normalizeTaskirEntries,
+  normalizeTaskirOffices,
+  normalizeTaskirOfficeTx,
+  normalizeReservations,
+  normalizeRepairs,
+  normalizeReturns,
+  normalizeReceipts,
 };
