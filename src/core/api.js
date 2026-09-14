@@ -117,6 +117,17 @@ function logout() {
   clearAuthToken();
 }
 
+/**
+ * GET /auth/me — يتحقق من توكن محفوظ (localStorage) عند إقلاع التطبيق
+ * ويرجّع بيانات المستخدم بنفس شكل login بالضبط، لاستعادة الجلسة تلقائيًا
+ * بلا طلب PIN من جديد بعد أي refresh. يرمي ApiError(401) إن كان التوكن
+ * غائبًا أو منتهيًا — المستدعي (GoldInventoryApp.jsx) يعامل ذلك كـ"لا
+ * جلسة محفوظة صالحة" ويعرض شاشة الدخول العادية.
+ */
+function fetchCurrentUser() {
+  return apiFetch("/auth/me");
+}
+
 // ── التحميل الشامل بعد الدخول ──
 
 /** GET /bootstrap — كل بيانات الفرع دفعة واحدة. */
@@ -271,6 +282,7 @@ export {
   fetchBranchUsers,
   login,
   logout,
+  fetchCurrentUser,
   fetchBootstrap,
   createSale,
   createPartialSale,
