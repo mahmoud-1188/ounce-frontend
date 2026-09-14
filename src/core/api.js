@@ -18,22 +18,26 @@ const TOKEN_STORAGE_KEY = "ounce_auth_token_v1";
 
 // ── إدارة الجلسة (JWT) ──
 //
-// خلافًا للمرجع (حيث `currentUser` كان يُفقَد عند أي refresh لأنه كان في
-// الذاكرة فقط)، هنا نحتفظ بالتوكن في sessionStorage — الجلسة تنجو من
-// تحديث الصفحة (لا تتطلب دخولًا جديدًا في كل مرة)، وتُمحى عند إغلاق التبويب
-// (لا "تذكرني" دائم — هذا تطبيق نقطة بيع في محل، لا حساب شخصي).
+// ⚠ إصلاح حقيقي: كان التوكن مخزَّنًا في sessionStorage — بعض المتصفحات
+// (خصوصًا وضع التصفح الخاص، أو إعدادات خصوصية معيّنة، أو حتى refresh عادي
+// في بعض الحالات) تمسحه فتُخرِج المستخدم فورًا رغم أن توكنه لم ينته
+// صلاحيته بعد (12 ساعة — راجع JWT_EXPIRES_IN في auth/jwt.js). الآن
+// نستخدم localStorage: الجلسة تبقى فعليًا حتى بعد إغلاق المتصفح بالكامل
+// وإعادة فتحه، لمدة صلاحية التوكن نفسها (12 ساعة) — لا "تذكرني" أبدي غير
+// محدود، فالتوكن نفسه ينتهي ويطلب دخولًا جديدًا بعدها تلقائيًا (401 في
+// apiFetch أدناه).
 let authToken = null;
 try {
-  authToken = sessionStorage.getItem(TOKEN_STORAGE_KEY) || null;
+  authToken = localStorage.getItem(TOKEN_STORAGE_KEY) || null;
 } catch {
-  // sessionStorage غير متاح (وضع خصوصية صارم) — الجلسة تبقى في الذاكرة فقط.
+  // localStorage غير متاح (وضع خصوصية صارم) — الجلسة تبقى في الذاكرة فقط.
 }
 
 function setAuthToken(token) {
   authToken = token;
   try {
-    if (token) sessionStorage.setItem(TOKEN_STORAGE_KEY, token);
-    else sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+    if (token) localStorage.setItem(TOKEN_STORAGE_KEY, token);
+    else localStorage.removeItem(TOKEN_STORAGE_KEY);
   } catch {
     // تجاهل — الجلسة تبقى شغّالة في الذاكرة حتى لو فشل الحفظ.
   }
