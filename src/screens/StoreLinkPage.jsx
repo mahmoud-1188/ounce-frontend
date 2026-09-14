@@ -50,7 +50,7 @@ function StoreLinkPage({ config, orders, items, onSave, onTest, onBack }) {
                 </button>
               </div>
               <Field label="اسم المتجر">
-                <input style={inputStyle} value={cfg.storeName} onChange={(e) => set("storeName", e.target.value)} placeholder="مثال: متجر أونصة" />
+                <input style={inputStyle} value={cfg.storeName} onChange={(e) => set("storeName", e.target.value)} placeholder="مثال: متجر أوقية" />
               </Field>
               <Field label="مفتاح الربط">
                 <input style={inputStyle} value={cfg.apiKey} onChange={(e) => set("apiKey", e.target.value)} dir="ltr" />

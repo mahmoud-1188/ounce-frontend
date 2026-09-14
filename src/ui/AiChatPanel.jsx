@@ -94,7 +94,7 @@ function AiChatPanel({ role, contextText, onClose, seed = "", index = [], facts 
     <div className="fixed inset-0 z-50 flex flex-col" style={{ background: "var(--bg)" }}>
       <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: "1px solid var(--edge)" }}>
         <span style={{ color: "var(--accent)", fontFamily: "'Cairo', sans-serif" }} className="text-base font-bold flex items-center gap-2">
-          أونصة
+          أوقية
         </span>
         <div className="flex items-center gap-2">
           {voice.ttsSupported && (

@@ -41,7 +41,7 @@ function AiActionSheet({ onAsk, onOpenChat, onGoTo, hasDay, onClose,
             <AiLogoBadge width={38} />
             <div className="flex-1">
               <p style={{ color: "var(--accent)", fontFamily: "'Cairo', sans-serif", margin: 0 }} className="text-sm font-bold">
-                مساعد أونصة
+                مساعد أوقية
               </p>
               <p style={{ color: "var(--text3)", margin: 0 }} className="text-[11px]">
                 اسأل عن حساباتك بالعربية

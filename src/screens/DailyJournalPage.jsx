@@ -639,7 +639,7 @@ ${balTable}
 
 <div class="foot">
   <span>إسم وتوقيع المستلم: <span class="dots"></span></span>
-  <span>طُبعت ${esc(new Date().toLocaleString("en-GB"))} · أونصة</span>
+  <span>طُبعت ${esc(new Date().toLocaleString("en-GB"))} · أوقية</span>
 </div>
 
 <script>window.onload=function(){setTimeout(function(){window.print()},400)}<\/script>
@@ -781,7 +781,7 @@ ${tbl(["البيان", "الذهب (جم24)", `النقد (${currency})`], [
 <div class="note">⚖ دفتران مستقلان — الوزن بالجرام والنقد بالعملة، لا يُجمعان.</div>
 
 <div class="sign"><div>أعدّها</div><div>راجعها</div><div>اعتمدها</div></div>
-<div class="foot"><span>${esc(branchName || "")} — يومية ${esc(J.day)}</span><span>أونصة</span></div>
+<div class="foot"><span>${esc(branchName || "")} — يومية ${esc(J.day)}</span><span>أوقية</span></div>
 <script>window.onload=function(){setTimeout(function(){window.print()},350)}<\/script>
 </body></html>`;
 
@@ -798,7 +798,7 @@ ${tbl(["البيان", "الذهب (جم24)", `النقد (${currency})`], [
     const wb = XLSX.utils.book_new();
     const mk = (J, title) => {
       const rows = [
-        [`ملخص الحركة اليومية — ${branchName || "أونصة"}`],
+        [`ملخص الحركة اليومية — ${branchName || "أوقية"}`],
         [`التاريخ: ${J.day}`, `اليوم: ${dayName(J.day)}`, `هجري: ${hijriOf(J.day)}`, J.bd?.ref ? `يومية رقم: ${J.bd.ref}` : ""],
         [],
         [`وارد (${currency})`, `منصرف (${currency})`, "البيان", "الحساب"],

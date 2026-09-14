@@ -73,7 +73,7 @@ function AiAssistantPage({ auditCtx, reportSnapshot, currency, onBack }) {
 
   return (
     <div>
-      <SubPageHeader title="أونصة — المساعد الذكي" onBack={onBack} />
+      <SubPageHeader title="أوقية — المساعد الذكي" onBack={onBack} />
       <div className="px-4 pt-3">
         <div className="grid grid-cols-2 gap-2 mb-4">
           <button

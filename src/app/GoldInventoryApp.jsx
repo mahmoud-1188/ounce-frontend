@@ -1885,7 +1885,7 @@ export default function GoldInventoryApp() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `نسخة_أونصة${password ? "_مشفّرة" : ""}_${new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-")}.json`;
+      a.download = `نسخة_أوقية${password ? "_مشفّرة" : ""}_${new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-")}.json`;
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 4000);
       flashToast(`نُزّلت النسخة${password ? " مشفّرة" : ""} — ${Object.keys(data).length} مخزن`);
@@ -2759,7 +2759,7 @@ export default function GoldInventoryApp() {
   const shareTrustReceipt = (holder, row, bal) => {
     const C = priceData.currency;
     const parts = [
-      `*${branchIdentity?.name || "أونصة"}*`,
+      `*${branchIdentity?.name || "أوقية"}*`,
       `سند ${row.moveLabel}`,
       `المرجع: ${row.ref}`,
       `التاريخ: ${new Date(row.date).toLocaleString("en-GB")}`,
@@ -7377,7 +7377,7 @@ export default function GoldInventoryApp() {
         const acts = [];
         if (aiAllowedFor(role, currentUser))
           acts.push({
-            id: "ai", label: "مساعد أونصة",
+            id: "ai", label: "مساعد أوقية",
             node: <AiLogoBadge width={30} />,
             onPress: () => setShowAiSheet(true),
           });
