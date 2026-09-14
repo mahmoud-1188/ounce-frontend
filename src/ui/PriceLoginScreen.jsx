@@ -142,11 +142,25 @@ function PriceLoginScreen({ priceData, autoUpdating, autoError, lastAutoFetch, o
         </div>
 
         <div className="flex justify-center mt-8">
+          {/* ⚠ إصلاح واجهة حقيقي: كان هذا الزر مربعًا شفافًا بلا نص (بلا
+              حتى لون ظاهر مختلف عن الخلفية) — عمليًا غير مرئي لأي مستخدم
+              لا يعرف مسبقًا مكانه بالضبط. الآن زر واضح بنص "تسجيل الدخول". */}
           <button
             onClick={() => setShowPinPad(true)}
-            aria-label="دخول"
-            style={{ width: 44, height: 44, borderRadius: 10, background: "var(--bg)", border: "1px solid var(--line)" }}
-          />
+            aria-label="تسجيل الدخول"
+            className="flex items-center gap-2 font-bold"
+            style={{
+              padding: "12px 28px",
+              borderRadius: 12,
+              background: "linear-gradient(135deg,var(--gradFrom),var(--gradTo))",
+              color: "var(--panel)",
+              fontFamily: "'Cairo', sans-serif",
+              fontSize: 15,
+              boxShadow: "0 4px 14px rgba(0,0,0,0.15)",
+            }}
+          >
+            تسجيل الدخول
+          </button>
         </div>
       </div>
 
