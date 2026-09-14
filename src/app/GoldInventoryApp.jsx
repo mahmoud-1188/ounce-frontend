@@ -86,6 +86,8 @@ const API_ERROR_MESSAGES = {
   insufficient_scrap_stock: "لا يوجد كسر كافٍ بالمخزون لهذا العيار",
   invalid_mode: "طريقة السداد غير صالحة",
   invalid_source: "مصدر السداد غير صالح",
+  name_required: "اسم المورد مطلوب",
+  supplier_name_exists: "يوجد مورد بهذا الاسم",
 };
 
 function apiErrorMessage(err, fallback) {
@@ -5895,27 +5897,38 @@ export default function GoldInventoryApp() {
   };
 
 
-  const handleAddSupplier = (name, phone, isOfficial) => txn("handleAddSupplier", () => {
-    // منع التكرار على مستوى النظام: مورد باسم مكرر يعني كشفَي حساب لجهة
-    // واحدة، فتُقسَّم مديونيته بينهما ولا يظهر رصيده الحقيقي.
+  /**
+   * ⚠ إصلاح حقيقي: كانت هذه الدالة تكتب المورد محليًا فقط
+   * (persistSuppliers → window.storage) بمعرّف مُولَّد بالتاريخ
+   * (Date.now()) بلا أي استدعاء للباك إند. النتيجة: المورد يظهر فورًا
+   * في الشاشة، لكن أي شراء يُسجَّل عليه (createLotCore → POST
+   * /api/purchases) يُبنى بـsupplierId لا وجود له في جدول suppliers
+   * الحقيقي — والخادم فعليًا يرفضه (supplier_not_found) أو، إن نجح
+   * الشراء بمصادفة توقيت، فإن أول refresh/دخول جديد يستدعي
+   * loadBootstrap() الذي يستبدل suppliers بالكامل بما يرجعه الخادم
+   * فيختفي المورد المحلي ومعه أي شيء بُني عليه. الآن تُرسَل الإضافة
+   * فعليًا للخادم (POST /api/suppliers) والمورد المحفوظ محليًا هو نفس
+   * الكائن الذي يرجعه — بمعرّف حقيقي من قاعدة البيانات.
+   */
+  const handleAddSupplier = async (name, phone, isOfficial) => {
+    // منع التكرار على مستوى الواجهة أولًا (تجربة أسرع)؛ الخادم يتحقق
+    // منه ثانيةً على مستوى الفرع (race بين جلستين متزامنتين).
     if (nameExists(suppliers, name)) {
       flashToast("يوجد مورد بهذا الاسم");
       return null;
     }
-    const sup = {
-      id: Date.now().toString() + "s",
-      ref: nextRef("supplier", suppliers),
-      name: name.trim(),
-      phone: phone || "",
-      isOfficial: !!isOfficial,
-      createdAt: new Date().toISOString(),
-      createdBy: currentUser?.name || "",
-    };
+    let res;
+    try {
+      res = await api.createSupplier({ name: name.trim(), phone: phone || "", isOfficial: !!isOfficial });
+    } catch (e) {
+      flashToast(apiErrorMessage(e, "تعذّر إضافة المورد"));
+      return null;
+    }
+    const sup = res.supplier;
     persistSuppliers([sup, ...suppliers]);
     flashToast(`تمت إضافة المورد ${sup.ref}`);
     return sup;
-  
-  });
+  };
 
   /**
    * ⚠ تحويل حقيقي: كانت createLotCore تحسب كل شيء محليًا وتتفرّع على
@@ -5985,7 +5998,13 @@ export default function GoldInventoryApp() {
       feesPaidNow: paymentMethod === "deferred" ? !!draft.payFeesNow : true,
       invoicePending: !draft.invoiceFile,
     }));
-    setLots([...built, ...lots]);
+    // ⚠ إصلاح حقيقي: كانت setLots تُحدِّث الحالة في الذاكرة فقط بلا أي
+    // كتابة لـwindow.storage — الشراء نفسه محفوظ فعليًا على الخادم
+    // (api.createPurchase أعلاه نجح)، لكن العرض المحلي هنا لم يكن
+    // يستقر إلا بعد loadBootstrap التالي. persistLots (كبقية المعالجات
+    // الناجحة في هذا الملف) يحفظها محليًا فورًا أيضًا لثبات العرض بين
+    // لحظة الحفظ ولحظة أي إعادة تحميل لاحقة.
+    persistLots([...built, ...lots]);
 
     const label = `شراء من مورد ${suppliers.find((x) => x.id === supplierId)?.name || ""}`.trim();
     if (paymentMethod === "safe_cash" || paymentMethod === "safe_network") {
@@ -6408,10 +6427,10 @@ export default function GoldInventoryApp() {
           <div className="fixed inset-0 z-50 flex items-center justify-center px-8" style={{ background: "var(--veil)" }}>
             <Card style={{ padding: 20, width: "100%", maxWidth: 300 }}>
               <p style={{ color: "var(--text)", fontFamily: "'Cairo', sans-serif" }} className="text-sm font-bold mb-1 text-center">
-                تسجيل الخروج؟
+                تأكيد تسجيل الخروج
               </p>
               <p style={{ color: "var(--text2)" }} className="text-xs mb-4 text-center">
-                راح ترجع لشاشة الأسعار وتحتاج تدخل رقمك السري مرة ثانية
+                سيتم إنهاء الجلسة الحالية والعودة إلى شاشة الدخول، وستحتاج إلى إدخال الرقم السري مرة أخرى لمتابعة الاستخدام
               </p>
               <div className="grid grid-cols-2 gap-2">
                 <button

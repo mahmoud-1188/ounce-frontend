@@ -260,8 +260,51 @@ function normalizeCategories(rows) {
   }));
 }
 
+/**
+ * ⚠ إصلاح حقيقي خطير: كانت هذه الدالة تُبقي 5 حقول فقط (id/ref/
+ * supplierId/date/createdBy) وتُسقط الباقي بالكامل — karat/weight/
+ * costPerGram/workmanshipTotal/totalCost/status وغيرها. كل شاشات
+ * المشتريات (SuppliersSubPage.jsx تحديدًا، عبر accountFor) تقرأ هذه
+ * الحقول مباشرة من كل lot؛ سقوطها يعني أن كل دفعة تظهر بلا عيار ولا
+ * وزن ولا تكلفة بعد أي refresh (loadBootstrap يستبدل lots بالكامل) —
+ * وهو بالضبط ما أبلغ عنه المستخدم: "بعد إضافة مورد وعملية شراء
+ * وتحديث الصفحة كل شيء اختفى". طريقة الدفع/المكتب/حالة الفاتورة تأتي
+ * من صفّ purchases المرتبط (bootstrap.routes.js يربطها الآن بـLEFT
+ * JOIN) لأنها تعيش على رأس الشراء لا على كل سطر lot بداخله.
+ */
 function normalizeLots(rows) {
-  return rows.map((l) => ({ id: l.id, ref: l.ref, supplierId: l.supplier_id, date: l.date, createdBy: l.created_by }));
+  return rows.map((l) => ({
+    id: l.id,
+    ref: l.ref,
+    purchaseId: l.purchase_id,
+    supplierId: l.supplier_id,
+    date: l.date,
+    karat: l.karat,
+    weight: toWeight(l.weight),
+    costPerGram: l.cost_per_gram == null ? 0 : Number(l.cost_per_gram),
+    goldCost: toMoney(l.gold_cost),
+    workmanshipTotal: toMoney(l.workmanship_total),
+    totalCost: toMoney(l.total_cost),
+    status: l.status || "open",
+    enteredWeight: l.entered_weight == null ? null : toWeight(l.entered_weight),
+    wastageWeight: toWeight(l.wastage_weight),
+    surplusWeight: toWeight(l.surplus_weight),
+    closedBy: l.closed_by || null,
+    closedAt: l.closed_at || null,
+    createdBy: l.created_by,
+    // ⚠ من purchases عبر LEFT JOIN — راجع تعليق bootstrap.routes.js.
+    paymentMethod: l.payment_method || null,
+    officeId: l.office_id || null,
+    invoicePending: l.invoice_pending == null ? null : !!l.invoice_pending,
+    feesPaidNow: l.pay_fees_now == null ? null : !!l.pay_fees_now,
+    notes: l.purchase_notes || "",
+    // ⚠ لم يُبنَ بعد سيرفريًا (راجع تعليق createLotCore في
+    // GoldInventoryApp.jsx) — تبقى null فلا يُظهر الفرونت إند فاتورة
+    // مرفقة وهميًا؛ شارة "بانتظار الفاتورة" تعتمد على invoicePending
+    // أعلاه بدلًا من ذلك.
+    invoiceAttachId: null,
+    invoiceFile: null,
+  }));
 }
 
 /**
