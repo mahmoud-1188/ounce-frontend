@@ -1279,7 +1279,13 @@ async function fetchAiChatReply(conversation, contextText) {
       contextText,
   };
   const ack = { role: "assistant", content: "تمام، جاهز أساعدك بالتطبيق أو ببياناتك. تفضل." };
-  const data = await aiApi.chat([intro, ack, ...conversation], 800);
+  // ⚠ تنظيف الرسائل قبل الإرسال: عناصر conversation قادمة من AiChatPanel
+  // وقد تحمل خصائص إضافية مثل local/suggestions (تُستخدم للعرض في الواجهة
+  // فقط) — Anthropic API يرفض أي حقل غير role/content بخطأ 400
+  // ("Extra inputs are not permitted")، فأي رسالة برد محلي سابق ضمن نفس
+  // المحادثة كانت تُسقط كل الطلب بعدها.
+  const cleanConversation = conversation.map(({ role, content }) => ({ role, content }));
+  const data = await aiApi.chat([intro, ack, ...cleanConversation], 800);
   const text = (data.content || [])
     .filter((b) => b.type === "text")
     .map((b) => b.text)
