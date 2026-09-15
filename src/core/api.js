@@ -346,6 +346,21 @@ const goldPriceApi = {
   fetch: () => apiFetch("/gold-price"),
 };
 
+// ── وكيل الذكاء الاصطناعي (Claude) ──
+//
+// ⚠ إصلاح أمني/وظيفي حقيقي: كل دوال helpers.js الخمس (fetchAiChatReply،
+// fetchAiBusinessInsights، fetchAiAuditNarrative، fetchAiReportSpec،
+// askReportAi) كانت تنادي https://api.anthropic.com/v1/messages مباشرة من
+// المتصفح بلا مفتاح API إطلاقًا — يُرفض دائمًا بـ401 من Anthropic (نفس
+// عطل سعر الذهب بالضبط قبل إصلاحه)، وحتى لو أُضيف مفتاح في كود العميل
+// فسيكون مكشوفًا لأي زائر. الآن كل هذه الدوال تنادي هذا الـendpoint
+// الواحد (POST /ai/chat)، والخادم فقط يحمل المفتاح الحقيقي ويعيد التوجيه
+// لـAnthropic بعد التحقق من صلاحية can_use_ai للمستخدم الحالي.
+const aiApi = {
+  chat: (messages, maxTokens, model) =>
+    apiFetch("/ai/chat", { method: "POST", body: { messages, max_tokens: maxTokens, model } }),
+};
+
 // ── الأصول الثابتة والإهلاك ──
 
 const fixedAssetsApi = {
@@ -426,6 +441,7 @@ export {
   repairsApi,
   returnsApi,
   goldPriceApi,
+  aiApi,
   fixedAssetsApi,
   payrollApi,
   hqApi,

@@ -7,7 +7,7 @@ import { GRAMS_PER_OUNCE, PURITY, WEIGHT_UNITS, fine24, fmt, fmtW, fromHalalas, 
 import { BANK_COLUMN_HINTS, DEFAULT_CARD_FEES, DEFAULT_MARGINS, USD_TO_SAR_PEG } from "../core/money-rules.js";
 import { NAV_BUNDLES, NAV_MAX_PER_ROW } from "../core/navigation.js";
 import { FUNDING_SOURCES, GOLD_OUT_DESTINATIONS, ONLINE_STATUS } from "../core/workflow.js";
-import { goldPriceApi } from "../core/api.js";
+import { aiApi, goldPriceApi } from "../core/api.js";
 import { accountByCode } from "./accountByCode.js";
 import { journalBalanced } from "./journalBalanced.js";
 import { key } from "./key.js";
@@ -1096,24 +1096,17 @@ async function fetchGoldPriceSAR() {
 // purely reasoning over the numbers already in the app.
 
 async function fetchAiBusinessInsights(summary) {
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-6",
-      max_tokens: 900,
-      messages: [
-        {
-          role: "user",
-          content:
-            "أنت مستشار مالي لمحل ذهب. بناءً على الأرقام التالية، اكتب تحليلًا موجزًا بالعربية (٤-٦ جمل قصيرة، بدون مقدمات) يغطي: أهم ملاحظة إيجابية، أهم نقطة تحتاج انتباه، واقتراح عملي واحد قابل للتنفيذ. لا تستخدم عناوين أو نقاط مرقّمة، فقرة واحدة سلسة.\n\nالأرقام:\n" +
-            summary,
-        },
-      ],
-    }),
-  });
-  if (!response.ok) throw new Error("network");
-  const data = await response.json();
+  const data = await aiApi.chat(
+    [
+      {
+        role: "user",
+        content:
+          "أنت مستشار مالي لمحل ذهب. بناءً على الأرقام التالية، اكتب تحليلًا موجزًا بالعربية (٤-٦ جمل قصيرة، بدون مقدمات) يغطي: أهم ملاحظة إيجابية، أهم نقطة تحتاج انتباه، واقتراح عملي واحد قابل للتنفيذ. لا تستخدم عناوين أو نقاط مرقّمة، فقرة واحدة سلسة.\n\nالأرقام:\n" +
+          summary,
+      },
+    ],
+    900
+  );
   const text = (data.content || [])
     .filter((b) => b.type === "text")
     .map((b) => b.text)
@@ -1222,24 +1215,17 @@ function runAuditChecks(ctx) {
 }
 
 async function fetchAiAuditNarrative(findingsSummary) {
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-6",
-      max_tokens: 900,
-      messages: [
-        {
-          role: "user",
-          content:
-            "أنت مدقق حسابات لمحل ذهب. تلقيت قائمة ملاحظات تم استخراجها آليًا (وليس منك) من فحص دقيق للبيانات. رتّبها حسب الأهمية واشرحها بالعربية بإيجاز شديد، جملة أو جملتين لكل ملاحظة، بلا مقدمات ولا خاتمة. إذا كانت القائمة فارغة، اكتب جملة واحدة تفيد بعدم وجود ملاحظات. لا تخترع أرقامًا أو ملاحظات غير موجودة بالقائمة.\n\nالملاحظات:\n" +
-            findingsSummary,
-        },
-      ],
-    }),
-  });
-  if (!response.ok) throw new Error("network");
-  const data = await response.json();
+  const data = await aiApi.chat(
+    [
+      {
+        role: "user",
+        content:
+          "أنت مدقق حسابات لمحل ذهب. تلقيت قائمة ملاحظات تم استخراجها آليًا (وليس منك) من فحص دقيق للبيانات. رتّبها حسب الأهمية واشرحها بالعربية بإيجاز شديد، جملة أو جملتين لكل ملاحظة، بلا مقدمات ولا خاتمة. إذا كانت القائمة فارغة، اكتب جملة واحدة تفيد بعدم وجود ملاحظات. لا تخترع أرقامًا أو ملاحظات غير موجودة بالقائمة.\n\nالملاحظات:\n" +
+          findingsSummary,
+      },
+    ],
+    900
+  );
   const text = (data.content || [])
     .filter((b) => b.type === "text")
     .map((b) => b.text)
@@ -1255,26 +1241,19 @@ async function fetchAiAuditNarrative(findingsSummary) {
 // touches money directly; it only organizes data we already computed.
 
 async function fetchAiReportSpec(userRequest, dataSnapshot) {
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-6",
-      max_tokens: 2000,
-      messages: [
-        {
-          role: "user",
-          content:
-            'أنت تُعِدّ تقريرًا جدوليًا من بيانات محل ذهب حسب طلب المستخدم. أعد فقط كائن JSON خام بدون أي نص إضافي أو علامات كود، بهذا الشكل بالضبط: {"title": "عنوان التقرير بالعربية", "columns": ["عمود1","عمود2",...], "rows": [["قيمة","قيمة",...], ...]}. استخدم فقط البيانات المرفقة أدناه، لا تخترع أرقامًا غير موجودة فيها. إذا كان الطلب غامضًا اجتهد لأقرب تفسير معقول.\n\nطلب المستخدم: ' +
-            userRequest +
-            "\n\nالبيانات المتاحة (JSON):\n" +
-            dataSnapshot,
-        },
-      ],
-    }),
-  });
-  if (!response.ok) throw new Error("network");
-  const data = await response.json();
+  const data = await aiApi.chat(
+    [
+      {
+        role: "user",
+        content:
+          'أنت تُعِدّ تقريرًا جدوليًا من بيانات محل ذهب حسب طلب المستخدم. أعد فقط كائن JSON خام بدون أي نص إضافي أو علامات كود، بهذا الشكل بالضبط: {"title": "عنوان التقرير بالعربية", "columns": ["عمود1","عمود2",...], "rows": [["قيمة","قيمة",...], ...]}. استخدم فقط البيانات المرفقة أدناه، لا تخترع أرقامًا غير موجودة فيها. إذا كان الطلب غامضًا اجتهد لأقرب تفسير معقول.\n\nطلب المستخدم: ' +
+          userRequest +
+          "\n\nالبيانات المتاحة (JSON):\n" +
+          dataSnapshot,
+      },
+    ],
+    2000
+  );
   const text = (data.content || [])
     .filter((b) => b.type === "text")
     .map((b) => b.text)
@@ -1300,17 +1279,7 @@ async function fetchAiChatReply(conversation, contextText) {
       contextText,
   };
   const ack = { role: "assistant", content: "تمام، جاهز أساعدك بالتطبيق أو ببياناتك. تفضل." };
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-6",
-      max_tokens: 800,
-      messages: [intro, ack, ...conversation],
-    }),
-  });
-  if (!response.ok) throw new Error("network");
-  const data = await response.json();
+  const data = await aiApi.chat([intro, ack, ...conversation], 800);
   const text = (data.content || [])
     .filter((b) => b.type === "text")
     .map((b) => b.text)
@@ -1657,13 +1626,7 @@ function detectTraceTopic(q) {
 /// — فالإجابة تُشير إلى سجل يمكن فتحه لا إلى تخمين.
 
 async function askReportAi(messages, maxTokens = 900) {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: maxTokens, messages }),
-  });
-  if (!res.ok) throw new Error("network");
-  const data = await res.json();
+  const data = await aiApi.chat(messages, maxTokens);
   const text = (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("\n").trim();
   if (!text) throw new Error("empty");
   return text;
