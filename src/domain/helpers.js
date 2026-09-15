@@ -1677,6 +1677,7 @@ function useVoice(locale = "ar-SA") {
   const speaking = speakingId != null;
   const [voiceError, setVoiceError] = useState("");
   const recognitionRef = useRef(null);
+  const speakStopRef = useRef(() => {});
 
   const SR = typeof window !== "undefined" ? window.SpeechRecognition || window.webkitSpeechRecognition : null;
   const sttSupported = !!SR;
@@ -1690,6 +1691,11 @@ function useVoice(locale = "ar-SA") {
         recognitionRef.current?.abort();
       } catch (e) {
         /* المتصفح أغلقه سلفًا */
+      }
+      try {
+        speakStopRef.current();
+      } catch (e) {
+        /* nothing to stop */
       }
       try {
         window.speechSynthesis?.cancel();
@@ -1765,26 +1771,51 @@ function useVoice(locale = "ar-SA") {
     try {
       window.speechSynthesis.cancel();
       // ⚠ تنظيف رموز Markdown قبل النطق: ردود الذكاء الاصطناعي قد تحوي
-      // **تعريض** أو *تمييل* أو `كود` أو # عناوين — بعض محركات النطق
-      // العربية (خصوصًا في Chrome) تتعثر بهذه الرموز فتنطق الأرقام فقط
-      // وتتجاهل الكلام العادي المحيط بها بدل تجاهل الرمز ببساطة.
-      const spoken = text
+      // **تعريض** أو *تمييل* أو `كود` أو # عناوين — رموز لا معنى لها صوتيًا.
+      const cleaned = text
         .replace(/\*\*(.*?)\*\*/g, "$1")
         .replace(/\*(.*?)\*/g, "$1")
         .replace(/`([^`]*)`/g, "$1")
         .replace(/^#{1,6}\s*/gm, "")
         .replace(/[*_`#]/g, "");
-      const u = new SpeechSynthesisUtterance(spoken);
-      u.lang = locale;
-      u.rate = 0.95; // أبطأ قليلًا: النطق الافتراضي للعربية سريع ويصعب متابعته
-      u.pitch = 1;
-      // اختر صوتًا عربيًا إن وُجد، وإلا اترك الافتراضي للمتصفح
+
+      // ⚠ جملة واحدة طويلة تُقرأ بالكامل عبر utterance واحدة تتعثر في
+      // Chrome (خلل Chromium معروف: speechSynthesis.speak يتوقف مبكرًا مع
+      // النصوص الطويلة، خصوصًا بأصوات غير إنجليزية) — لاحظنا أنه ينطق رقمًا
+      // واحدًا فقط من رد طويل ثم يصمت. الحل الموثّق: تقسيم النص لجمل قصيرة
+      // وتشغيلها كسلسلة utterances متتابعة (كل واحدة تُطلق التالية في onend)
+      // بدل utterance واحدة ضخمة.
+      const sentences = cleaned
+        .split(/(?<=[.!؟?\n])\s+/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (sentences.length === 0) return;
+
       const arVoice = window.speechSynthesis.getVoices().find((v) => (v.lang || "").toLowerCase().startsWith("ar"));
-      if (arVoice) u.voice = arVoice;
-      u.onend = () => setSpeakingId((cur) => (cur === id ? null : cur));
-      u.onerror = () => setSpeakingId((cur) => (cur === id ? null : cur));
+
+      let cancelled = false;
+      const speakNext = (idx) => {
+        if (cancelled || idx >= sentences.length) {
+          setSpeakingId((cur) => (cur === id ? null : cur));
+          return;
+        }
+        const u = new SpeechSynthesisUtterance(sentences[idx]);
+        u.lang = locale;
+        u.rate = 0.95; // أبطأ قليلًا: النطق الافتراضي للعربية سريع ويصعب متابعته
+        u.pitch = 1;
+        if (arVoice) u.voice = arVoice;
+        u.onend = () => speakNext(idx + 1);
+        u.onerror = () => speakNext(idx + 1);
+        window.speechSynthesis.speak(u);
+      };
+      // stopSpeaking أدناه ينادي cancel() فقط؛ نربط علمًا محليًا هنا بدل
+      // الاعتماد على speakingId (قد يتغيّر بضغط زر رسالة أخرى) لوقف السلسلة
+      // فعليًا بدل الاستمرار في جمل تالية بعد الإلغاء.
+      speakStopRef.current = () => {
+        cancelled = true;
+      };
       setSpeakingId(id);
-      window.speechSynthesis.speak(u);
+      speakNext(0);
     } catch (e) {
       console.error("tts failed", e);
       setSpeakingId(null);
@@ -1792,6 +1823,11 @@ function useVoice(locale = "ar-SA") {
   };
 
   const stopSpeaking = () => {
+    try {
+      speakStopRef.current();
+    } catch (e) {
+      /* nothing to stop */
+    }
     try {
       window.speechSynthesis?.cancel();
     } catch (e) {
