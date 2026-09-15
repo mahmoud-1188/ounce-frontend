@@ -115,6 +115,7 @@ async function login({ branchId, userId, pin }) {
 
 function logout() {
   clearAuthToken();
+  clearCachedBootstrap();
 }
 
 /**
@@ -133,6 +134,53 @@ function fetchCurrentUser() {
 /** GET /bootstrap — كل بيانات الفرع دفعة واحدة. */
 function fetchBootstrap() {
   return apiFetch("/bootstrap");
+}
+
+// ── تخزين مؤقّت للـ bootstrap (إحساس محلي عند إعادة الفتح) ──
+//
+// ⚠ بلا هذا: كل فتح للتطبيق (أو refresh) يعرض شاشة تحميل سوداء 3-5
+// ثوانٍ لحين رجوع /auth/me ثم /bootstrap — إحساسٌ بعيد كليًا عن
+// تطبيق محلي رغم أن التطبيق نفسه محمَّل فعليًا من أول جزء من الثانية.
+//
+// الحل: نخزّن آخر نسخة ناجحة من bootstrap في localStorage. عند
+// الفتح التالي تُعرض هذه النسخة فورًا (0 ثانية) بينما يجري طلب
+// الشبكة الحقيقي في الخلفية بصمت، فيُحدَّث كل شيء بهدوء دون شاشة
+// تحميل ثانية إن نجح، أو يبقى المستخدم على آخر نسخة صالحة إن فشل
+// (لا اتصال، خطأ خادم مؤقت...).
+//
+// ⚠ لا يُخزَّن أي شيء حسّاس هنا لم يكن أصلًا سيصل للمتصفح: نفس بيانات
+// bootstrap التي كانت ستُعرض للمستخدم فورًا بعد الرد، لا أكثر.
+const BOOTSTRAP_CACHE_KEY = "ounce_bootstrap_cache_v1";
+
+function getCachedBootstrap() {
+  try {
+    const raw = localStorage.getItem(BOOTSTRAP_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || !parsed.data) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function setCachedBootstrap(data) {
+  try {
+    localStorage.setItem(
+      BOOTSTRAP_CACHE_KEY,
+      JSON.stringify({ savedAt: Date.now(), data })
+    );
+  } catch {
+    // التخزين ممتلئ أو غير متاح — لا يوقف التطبيق، فقط لا تحسين هذه المرة.
+  }
+}
+
+function clearCachedBootstrap() {
+  try {
+    localStorage.removeItem(BOOTSTRAP_CACHE_KEY);
+  } catch {
+    // تجاهل
+  }
 }
 
 // ── المبيعات ──
@@ -352,6 +400,9 @@ export {
   logout,
   fetchCurrentUser,
   fetchBootstrap,
+  getCachedBootstrap,
+  setCachedBootstrap,
+  clearCachedBootstrap,
   createSale,
   createPartialSale,
   createPurchase,
