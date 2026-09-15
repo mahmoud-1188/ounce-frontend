@@ -81,7 +81,11 @@ function AiChatPanel({ role, contextText, onClose, seed = "", index = [], facts 
       const grounded = contextText + groundingFor(content);
       const reply = await fetchAiChatReply(nextMessages, grounded);
       setMessages([...nextMessages, { role: "assistant", content: reply }]);
-      if (autoSpeak) voice.speak(reply);
+      // ⚠ id = nextMessages.length: نفس الفهرس الذي سيحمله هذا الرد الجديد
+      // في مصفوفة الرسائل بعد الإضافة أعلاه — يطابق ما يقارنه زرّ "استماع"
+      // الخاص بهذه الرسالة (isThisSpeaking = voice.speakingId === i)، فلا
+      // يظهر زرّها "إيقاف" بالغلط ولا يُقاطَع نطقها بضغط زرّ رسالة أخرى.
+      if (autoSpeak) voice.speak(reply, nextMessages.length);
     } catch (e) {
       console.error("ai chat failed", e);
       setError("تعذر الرد الآن، حاول مرة أخرى");
@@ -189,16 +193,23 @@ function AiChatPanel({ role, contextText, onClose, seed = "", index = [], facts 
                   </p>
                 )}
 
-                {m.role === "assistant" && voice.ttsSupported && (
-                  <button
-                    onClick={() => (voice.speaking ? voice.stopSpeaking() : voice.speak(m.content))}
-                    className="flex items-center gap-1 mt-2 text-[11px]"
-                    style={{ color: "var(--accentText)" }}
-                  >
-                    {voice.speaking ? <VolumeX size={12} /> : <Volume2 size={12} />}
-                    {voice.speaking ? "إيقاف" : "استماع"}
-                  </button>
-                )}
+                {m.role === "assistant" && voice.ttsSupported && (() => {
+                  // ⚠ لكل رسالة زرّها الخاص: نقارن speakingId بمعرّف هذه
+                  // الرسالة (i) لا بـ speaking العام — قبل هذا كان كل زرّ
+                  // "استماع" في كل الرسائل يعرض نفس الحالة المشتركة، فالضغط
+                  // على زرّ رسالة يوقف قراءة رسالة أخرى جارية بدل بدء قراءته هو.
+                  const isThisSpeaking = voice.speakingId === i;
+                  return (
+                    <button
+                      onClick={() => (isThisSpeaking ? voice.stopSpeaking() : voice.speak(m.content, i))}
+                      className="flex items-center gap-1 mt-2 text-[11px]"
+                      style={{ color: "var(--accentText)" }}
+                    >
+                      {isThisSpeaking ? <VolumeX size={12} /> : <Volume2 size={12} />}
+                      {isThisSpeaking ? "إيقاف" : "استماع"}
+                    </button>
+                  );
+                })()}
               </div>
             </div>
           ))}

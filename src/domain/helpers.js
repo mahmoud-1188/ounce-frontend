@@ -1669,7 +1669,12 @@ function periodRange(period, from, to, openDayId) {
 
 function useVoice(locale = "ar-SA") {
   const [listening, setListening] = useState(false);
-  const [speaking, setSpeaking] = useState(false);
+  // ⚠ معرّف الرسالة الجارٍ نطقها حاليًا (لا boolean عام) — كان speaking
+  // مشتركًا بين كل زرّ "استماع" في كل الرسائل، فالضغط على زرّ رسالة وأخرى
+  // تُقرأ تلقائيًا (autoSpeak) كان يُطفئ تلك القراءة بدل بدء قراءة جديدة،
+  // ويُظهر كل الأزرار "إيقاف" معًا رغم أن رسالة واحدة فقط تتكلم فعلًا.
+  const [speakingId, setSpeakingId] = useState(null);
+  const speaking = speakingId != null;
   const [voiceError, setVoiceError] = useState("");
   const recognitionRef = useRef(null);
 
@@ -1702,7 +1707,7 @@ function useVoice(locale = "ar-SA") {
     setVoiceError("");
     try {
       window.speechSynthesis?.cancel(); // لا نستمع ونتحدث معًا
-      setSpeaking(false);
+      setSpeakingId(null);
 
       const rec = new SR();
       rec.lang = locale;
@@ -1752,7 +1757,10 @@ function useVoice(locale = "ar-SA") {
     setListening(false);
   };
 
-  const speak = (text) => {
+  // ⚠ id يميّز أي رسالة تُقرأ الآن؛ افتراضيًا نص الرسالة نفسه (فريد بما
+  // يكفي عمليًا بين رسائل محادثة واحدة). AiChatPanel يقارن speakingId
+  // بمعرّف رسالته هو فقط، فزرّ رسالة لا يتأثر بقراءة رسالة أخرى.
+  const speak = (text, id = text) => {
     if (!ttsSupported || !text) return;
     try {
       window.speechSynthesis.cancel();
@@ -1763,13 +1771,13 @@ function useVoice(locale = "ar-SA") {
       // اختر صوتًا عربيًا إن وُجد، وإلا اترك الافتراضي للمتصفح
       const arVoice = window.speechSynthesis.getVoices().find((v) => (v.lang || "").toLowerCase().startsWith("ar"));
       if (arVoice) u.voice = arVoice;
-      u.onend = () => setSpeaking(false);
-      u.onerror = () => setSpeaking(false);
-      setSpeaking(true);
+      u.onend = () => setSpeakingId((cur) => (cur === id ? null : cur));
+      u.onerror = () => setSpeakingId((cur) => (cur === id ? null : cur));
+      setSpeakingId(id);
       window.speechSynthesis.speak(u);
     } catch (e) {
       console.error("tts failed", e);
-      setSpeaking(false);
+      setSpeakingId(null);
     }
   };
 
@@ -1779,10 +1787,10 @@ function useVoice(locale = "ar-SA") {
     } catch (e) {
       /* لا شيء */
     }
-    setSpeaking(false);
+    setSpeakingId(null);
   };
 
-  return { listening, speaking, voiceError, sttSupported, ttsSupported, startListening, stopListening, speak, stopSpeaking };
+  return { listening, speaking, speakingId, voiceError, sttSupported, ttsSupported, startListening, stopListening, speak, stopSpeaking };
 }
 
 function onlineBlockReason(item, unitCode) {
