@@ -1764,7 +1764,17 @@ function useVoice(locale = "ar-SA") {
     if (!ttsSupported || !text) return;
     try {
       window.speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(text);
+      // ⚠ تنظيف رموز Markdown قبل النطق: ردود الذكاء الاصطناعي قد تحوي
+      // **تعريض** أو *تمييل* أو `كود` أو # عناوين — بعض محركات النطق
+      // العربية (خصوصًا في Chrome) تتعثر بهذه الرموز فتنطق الأرقام فقط
+      // وتتجاهل الكلام العادي المحيط بها بدل تجاهل الرمز ببساطة.
+      const spoken = text
+        .replace(/\*\*(.*?)\*\*/g, "$1")
+        .replace(/\*(.*?)\*/g, "$1")
+        .replace(/`([^`]*)`/g, "$1")
+        .replace(/^#{1,6}\s*/gm, "")
+        .replace(/[*_`#]/g, "");
+      const u = new SpeechSynthesisUtterance(spoken);
       u.lang = locale;
       u.rate = 0.95; // أبطأ قليلًا: النطق الافتراضي للعربية سريع ويصعب متابعته
       u.pitch = 1;
