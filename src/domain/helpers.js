@@ -1766,19 +1766,38 @@ function useVoice(locale = "ar-SA") {
   // ⚠ id يميّز أي رسالة تُقرأ الآن؛ افتراضيًا نص الرسالة نفسه (فريد بما
   // يكفي عمليًا بين رسائل محادثة واحدة). AiChatPanel يقارن speakingId
   // بمعرّف رسالته هو فقط، فزرّ رسالة لا يتأثر بقراءة رسالة أخرى.
-  const speak = (text, id = text) => {
+  // getVoices() قد ترجع قائمة فارغة (أو ناقصة) عند أول استدعاء - تحميل
+  // الأصوات في المتصفح (خصوصًا أصوات النظام SAPI المضافة حديثًا في
+  // ويندوز) يتم بشكل غير متزامن. لو لم نجد صوتًا عربيًا من أول محاولة
+  // ننتظر حدث voiceschanged (أو حتى 1.5 ثانية كحد أقصى احتياطًا لو لم
+  // يُطلَق الحدث إطلاقًا) قبل الحكم فعليًا بعدم وجود صوت عربي.
+  const getArabicVoiceAsync = () =>
+    new Promise((resolve) => {
+      const find = () =>
+        window.speechSynthesis.getVoices().find((v) => (v.lang || "").toLowerCase().startsWith("ar"));
+      const immediate = find();
+      if (immediate) {
+        resolve(immediate);
+        return;
+      }
+      let done = false;
+      const finish = (v) => {
+        if (done) return;
+        done = true;
+        window.speechSynthesis.removeEventListener("voiceschanged", onChange);
+        resolve(v || null);
+      };
+      const onChange = () => finish(find());
+      window.speechSynthesis.addEventListener("voiceschanged", onChange);
+      setTimeout(() => finish(find()), 1500);
+    });
+
+  const speak = async (text, id = text) => {
     if (!ttsSupported || !text) return;
     try {
       window.speechSynthesis.cancel();
 
-      // تشخيص مؤكَّد: لا يوجد أي صوت عربي (lang يبدأ بـ"ar") ضمن أصوات
-      // هذا الجهاز/المتصفح - تأكدنا عبر تسجيل مفصل أن getVoices() ترجع
-      // أصواتًا إنجليزية وأوروبية فقط. فالمتصفح كان يضطر للنطق بصوت
-      // إنجليزي افتراضي يتجاهل الحروف العربية تمامًا (صمت) وينطق فقط
-      // ما يفهمه - الأرقام اللاتينية مثل 1,700 لأنها أصلًا إنجليزية.
-      // لذا نفحص وجود صوت عربي فعلي قبل المحاولة، بدل نطق صامت مربك.
-      const allVoices = window.speechSynthesis.getVoices();
-      const arVoice = allVoices.find((v) => (v.lang || "").toLowerCase().startsWith("ar"));
+      const arVoice = await getArabicVoiceAsync();
       if (!arVoice) {
         setVoiceError("لا يوجد صوت عربي مثبَّت على هذا الجهاز/المتصفح - أضِف صوتًا عربيًا من إعدادات النظام لتفعيل القراءة الصوتية");
         setSpeakingId(null);
