@@ -3844,8 +3844,11 @@ export default function GoldInventoryApp() {
    * (سلكٌ ميت من مخزون STORE_REGISTRY المحلي القديم لم يُستخدَم قط)،
    * فأُعيد استخدامهما هنا بدل تكرارهما.
    */
-  const loadBootstrap = async () => {
-    const boot = await api.fetchBootstrap();
+  // الفرق بين applyBootstrap (تطبيق بيانات موجودة على الحالة فقط بلا شبكة)
+  // وloadBootstrap (جلب حقيقي من الشبكة + تطبيق + تحديث النسخة المخزّنة): هذا
+  // يسمح بعرض نسخة bootstrap مخزّنة محليًا فورًا عند إقلاع التطبيق
+  // (بلا انتظار شبكة)، ثم تحديثها بهدوء بعد رجوع الطلب الحقيقي.
+  const applyBootstrap = (boot) => {
     const n = normalizeBootstrap(boot);
     setItems(n.items);
     setSales(n.sales);
@@ -3883,6 +3886,13 @@ export default function GoldInventoryApp() {
       // استبدال الكائن كاملًا كان سيمحوها.
       setAppSettings((prev) => ({ ...prev, taxEnabled: n.appSettings.taxEnabled, taxRate: n.appSettings.taxRate, cardFees: n.appSettings.cardFees }));
     }
+  };
+
+  // جلب فعلي من الشبكة + تطبيق + تحديث النسخة المخزّنة محليًا.
+  const loadBootstrap = async () => {
+    const boot = await api.fetchBootstrap();
+    applyBootstrap(boot);
+    api.setCachedBootstrap(boot);
   };
 
   /// الدخول باختيار المستخدم مباشرة — حين تكون الحماية مطفأة.
@@ -3963,10 +3973,23 @@ export default function GoldInventoryApp() {
       setSessionChecking(false);
       return;
     }
+
+    // الإحساس المحلي: لو عندنا نسخة bootstrap مخزّنة من جلسة
+    // سابقة نعرضها فورًا (0 ثانية انتظار) بدل شاشة تحميل
+    // سوداء، ثم نتحقق من الجلسة في الخلفية ونحدّث البيانات
+    // بصمت إن نجح التحقق — لا شاشة تحميل ثانية إطلاقًا.
+    const cached = api.getCachedBootstrap();
+    let shownFromCache = false;
+    if (cached && cached.data) {
+      applyBootstrap(cached.data);
+      shownFromCache = true;
+      setLoading(false);
+    }
+
     (async () => {
       try {
         const { user } = await api.fetchCurrentUser();
-        setLoading(true);
+        if (!shownFromCache) setLoading(true);
         try {
           await loadBootstrap();
         } finally {
@@ -3977,8 +4000,16 @@ export default function GoldInventoryApp() {
         setMorePage(land.more);
         setTab(land.tab);
       } catch (e) {
-        // توكن غائب/منتهٍ/غير صالح — نمسحه ونعرض شاشة الدخول العادية،
-        // لا نُفشل صامتًا بجلسة نصف-محمَّلة.
+        // توكن غائب/منتهِ/غير صالح — نمسحه ونعرض شاشة الدخول
+        // العادية، لا نفشل صامتًا بجلسة نصف-محملة.
+        //
+        // إن كنا عرضنا نسخة مخزّنة بالفعل، فالتوكن لم يعد
+        // صالحًا الآن — نفرغ الشاشة ونعرض الدخول بدلًا من
+        // إبقاء المستخدم على بيانات جلسة انتهت.
+        if (shownFromCache) {
+          setCurrentUser(null);
+          setLoading(true);
+        }
         api.logout();
       } finally {
         setSessionChecking(false);
