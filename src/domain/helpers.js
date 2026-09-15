@@ -1770,8 +1770,23 @@ function useVoice(locale = "ar-SA") {
     if (!ttsSupported || !text) return;
     try {
       window.speechSynthesis.cancel();
-      // ⚠ تنظيف رموز Markdown قبل النطق: ردود الذكاء الاصطناعي قد تحوي
-      // **تعريض** أو *تمييل* أو `كود` أو # عناوين — رموز لا معنى لها صوتيًا.
+
+      // تشخيص مؤكَّد: لا يوجد أي صوت عربي (lang يبدأ بـ"ar") ضمن أصوات
+      // هذا الجهاز/المتصفح - تأكدنا عبر تسجيل مفصل أن getVoices() ترجع
+      // أصواتًا إنجليزية وأوروبية فقط. فالمتصفح كان يضطر للنطق بصوت
+      // إنجليزي افتراضي يتجاهل الحروف العربية تمامًا (صمت) وينطق فقط
+      // ما يفهمه - الأرقام اللاتينية مثل 1,700 لأنها أصلًا إنجليزية.
+      // لذا نفحص وجود صوت عربي فعلي قبل المحاولة، بدل نطق صامت مربك.
+      const allVoices = window.speechSynthesis.getVoices();
+      const arVoice = allVoices.find((v) => (v.lang || "").toLowerCase().startsWith("ar"));
+      if (!arVoice) {
+        setVoiceError("لا يوجد صوت عربي مثبَّت على هذا الجهاز/المتصفح - أضِف صوتًا عربيًا من إعدادات النظام لتفعيل القراءة الصوتية");
+        setSpeakingId(null);
+        return;
+      }
+
+      // تنظيف رموز Markdown قبل النطق: ردود الذكاء الاصطناعي قد تحوي
+      // **تعريض** أو *تمييل* أو `كود` أو # عناوين - رموز لا معنى لها صوتيًا.
       const cleaned = text
         .replace(/\*\*(.*?)\*\*/g, "$1")
         .replace(/\*(.*?)\*/g, "$1")
@@ -1779,49 +1794,29 @@ function useVoice(locale = "ar-SA") {
         .replace(/^#{1,6}\s*/gm, "")
         .replace(/[*_`#]/g, "");
 
-      // ⚠ جملة واحدة طويلة تُقرأ بالكامل عبر utterance واحدة تتعثر في
-      // Chrome (خلل Chromium معروف: speechSynthesis.speak يتوقف مبكرًا مع
-      // النصوص الطويلة، خصوصًا بأصوات غير إنجليزية) — لاحظنا أنه ينطق رقمًا
-      // واحدًا فقط من رد طويل ثم يصمت. الحل الموثّق: تقسيم النص لجمل قصيرة
-      // وتشغيلها كسلسلة utterances متتابعة (كل واحدة تُطلق التالية في onend)
-      // بدل utterance واحدة ضخمة.
+      // تقسيم النص لجمل قصيرة وتشغيلها كسلسلة utterances متتابعة
+      // (بدل جملة واحدة ضخمة).
       const sentences = cleaned
         .split(/(?<=[.!؟?\n])\s+/)
         .map((s) => s.trim())
         .filter(Boolean);
       if (sentences.length === 0) return;
 
-      const allVoices = window.speechSynthesis.getVoices();
-      const arVoice = allVoices.find((v) => (v.lang || "").toLowerCase().startsWith("ar"));
-      console.log("[TTS DEBUG] original text length:", text.length);
-      console.log("[TTS DEBUG] cleaned text:", JSON.stringify(cleaned));
-      console.log("[TTS DEBUG] sentences count:", sentences.length, sentences);
-      console.log("[TTS DEBUG] available voices:", allVoices.map((v) => v.name + " | " + v.lang));
-      console.log("[TTS DEBUG] chosen arVoice:", arVoice ? arVoice.name + " | " + arVoice.lang : "NONE (using browser default)");
-
       let cancelled = false;
       const speakNext = (idx) => {
-        console.log("[TTS DEBUG] speakNext called, idx=", idx, "cancelled=", cancelled, "total=", sentences.length);
         if (cancelled || idx >= sentences.length) {
-          console.log("[TTS DEBUG] stopping chain at idx=", idx);
           setSpeakingId((cur) => (cur === id ? null : cur));
           return;
         }
         const u = new SpeechSynthesisUtterance(sentences[idx]);
         u.lang = locale;
-        u.rate = 0.95; // أبطأ قليلًا: النطق الافتراضي للعربية سريع ويصعب متابعته
+        u.rate = 0.95; // أبطأ قليلًا
         u.pitch = 1;
-        if (arVoice) u.voice = arVoice;
-        u.onstart = () => console.log("[TTS DEBUG] onstart idx=", idx, "text=", JSON.stringify(sentences[idx]));
-        u.onend = () => { console.log("[TTS DEBUG] onend idx=", idx); speakNext(idx + 1); };
-        u.onerror = (ev) => { console.log("[TTS DEBUG] onerror idx=", idx, "error=", ev.error); speakNext(idx + 1); };
-        u.onboundary = (ev) => console.log("[TTS DEBUG] onboundary idx=", idx, "charIndex=", ev.charIndex, "name=", ev.name);
+        u.voice = arVoice;
+        u.onend = () => speakNext(idx + 1);
+        u.onerror = () => speakNext(idx + 1);
         window.speechSynthesis.speak(u);
-        console.log("[TTS DEBUG] speak() called for idx=", idx, "pending=", window.speechSynthesis.pending, "speaking=", window.speechSynthesis.speaking);
       };
-      // stopSpeaking أدناه ينادي cancel() فقط؛ نربط علمًا محليًا هنا بدل
-      // الاعتماد على speakingId (قد يتغيّر بضغط زر رسالة أخرى) لوقف السلسلة
-      // فعليًا بدل الاستمرار في جمل تالية بعد الإلغاء.
       speakStopRef.current = () => {
         cancelled = true;
       };
