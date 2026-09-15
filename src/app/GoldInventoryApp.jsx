@@ -7521,7 +7521,7 @@ export default function GoldInventoryApp() {
                 <div
                   style={{
                     width: 30, height: 20, borderRadius: 999,
-                    background: "var(--field)", border: "1px solid var(--line)",
+                    background: "var(--panel)", border: "1px solid var(--line)",
                     display: "grid", placeItems: "center",
                   }}
                 >
