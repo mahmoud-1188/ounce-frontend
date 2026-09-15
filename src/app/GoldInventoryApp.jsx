@@ -514,6 +514,13 @@ export default function GoldInventoryApp() {
   const guardReady = useRef(false);
   const failedTries = useRef(0);
   const lockUntil = useRef(0);
+  // ⚠ عدّاد "جيل الجلسة": كل عملية دخول/خروج/استعادة جلسة تزيد هذا
+  // الرقم قبل أن تبدأ عملها غير المتزامن (fetch). أي كود غير متزامن يتأخر
+  // (bootstrap بطيء، شبكة ضعيفة) يقارن الرقم الذي بدأ به بالرقم الحالي
+  // قبل تطبيق نتيجته على الحالة — فإن تغيّر (بمعنى: حصل logout أو دخول
+  // جديد في الأثناء) يتجاهل نتيجته بدل أن يكتب فوق الحالة الحالية بردٍّ
+  // متأخر من عملية سابقة انتهت فعليًا.
+  const sessionEpoch = useRef(0);
   if (!guardReady.current && typeof window !== "undefined") {
     guardReady.current = installStorageGuard();
   }
@@ -3936,6 +3943,10 @@ export default function GoldInventoryApp() {
       return false;
     }
     if (!userId) return false;
+    // ⚠ جيل الجلسة الحالي — لو حدث logout (أو دخول آخر) أثناء انتظارنا لـ
+    // bootstrap هنا (قد يأخذ 5-6 ثوانٍ من السيرفر)، نتجاهل الرد المتأخر بدل
+    // من كتابته فوق حالة الخروج/الدخول الجديد اللي حدثت في الأثناء.
+    const myEpoch = ++sessionEpoch.current;
     try {
       const { user } = await api.login({ branchId: DEFAULT_BRANCH_ID, userId, pin: enteredPin });
       failedTries.current = 0;
@@ -3947,8 +3958,11 @@ export default function GoldInventoryApp() {
       try {
         await loadBootstrap(user);
       } finally {
-        setLoading(false);
+        if (myEpoch === sessionEpoch.current) setLoading(false);
       }
+      // ⚠ لو حدث logout أثناء انتظار bootstrap فالجيل تغيّر وهذا الرد أصبح
+      // متأخرًا — لا نطبّقه إطلاقًا، وإلا رجعنا المستخدم للدخول بعد ضغطه logout بدون رقم سري.
+      if (myEpoch !== sessionEpoch.current) return true;
       setCurrentUser(user);
       // ⚠ `allowedTabs[0]` يكون undefined لمن لا تبويب له.
       //
@@ -3973,6 +3987,12 @@ export default function GoldInventoryApp() {
     }
   };
   const handleLogout = () => {
+    // ⚠ يزيد الجيل أولًا: أي عملية دخول/استعادة جلسة لا تزال قيد
+    // التنفيذ (fetch معلق) ستلاحظ عند انتهائها أن جيلها تغيّر، فتتجاهل
+    // نتيجتها بدل أن تكتب فوق الخروج الذي نفذّذه الآن برد متأخّر من loadBootstrap/
+    // fetchCurrentUser القديمة — هذا هو الإصلاح الحقيقي لمشكلة شاشة الدخول تظهر
+    // ثوانٍ ثم ترجع تلقائيًا للتطبيق بعد logout.
+    sessionEpoch.current += 1;
     api.logout();
     setCurrentUser(null);
     setMorePage(null);
@@ -3991,6 +4011,12 @@ export default function GoldInventoryApp() {
       setSessionChecking(false);
       return;
     }
+
+    // ⚠ جيل هذه المحاولة المحدد عند بداية تشغيلها. لو حدث logout (أو دخول
+    // يدويًا) أثناء انتظارنا لـ fetchCurrentUser/loadBootstrap أدناه، سيتغيّر
+    // sessionEpoch.current وهذا يجعل الرد المتأخّر هنا يتجاهل نفسه بدل
+    // أن يكتب فوق حالة أحدث (مثل لوجن جديد دخله المستخدم بيدويًا).
+    const myEpoch = sessionEpoch.current;
 
     // الإحساس المحلي: لو عندنا نسخة bootstrap + مستخدم مخزّنين من
     // جلسة سابقة نعرضهما فورًا (0 ثانية انتظار) — بيانات ودخول معًا،
@@ -4025,12 +4051,14 @@ export default function GoldInventoryApp() {
     (async () => {
       try {
         const { user } = await api.fetchCurrentUser();
+        if (myEpoch !== sessionEpoch.current) return;
         if (!shownFromCache) setLoading(true);
         try {
           await loadBootstrap(user);
         } finally {
-          setLoading(false);
+          if (myEpoch === sessionEpoch.current) setLoading(false);
         }
+        if (myEpoch !== sessionEpoch.current) return;
         setCurrentUser(user);
         const land = landingFor(user.role);
         setMorePage(land.more);
@@ -4040,10 +4068,11 @@ export default function GoldInventoryApp() {
         // غير صالح — 401/403 فقط يعني ذلك فعليًا. قبل هذا التمييز، أي
         // فشل مؤقت (انقطاع نت، خطأ 5xx عابر) كان يمسح الجلسة ويطرد
         // المستخدم لشاشة الدخول رغم أن توكنه لا يزال صالحًا.
+        if (myEpoch !== sessionEpoch.current) return;
         const isAuthFailure = e instanceof api.ApiError && (e.status === 401 || e.status === 403);
         if (isAuthFailure) {
           // توكن غائب/منتهِ/غير صالح فعليًا — نمسحه ونعرض شاشة الدخول
-          // العادية. إن كنا عرضنا نسخة مخزّنة بالفعل، نفرغ الشاشة.
+          // العادية. إن كنا عرضنا نسخة مخزّنة بالفعل، نفرّغ الشاشة.
           if (shownFromCache) {
             setCurrentUser(null);
             setLoading(true);
@@ -4051,10 +4080,10 @@ export default function GoldInventoryApp() {
           api.logout();
         }
         // غير ذلك (شبكة/خادم): التوكن يبقى كما هو ولا نلمس النسخة
-        // المعروضة من الكاش إن وجدت — محاولة لاحقة (refresh) تُعيد التحقق
+        // المعروضة من الكاش إن وجدت — محاولة لاحقة (refresh) تعيد التحقق
         // بالتوكن نفسه بدل طرد مستخدم لمشكلة شبكة عابرة.
       } finally {
-        setSessionChecking(false);
+        if (myEpoch === sessionEpoch.current) setSessionChecking(false);
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
