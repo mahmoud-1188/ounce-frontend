@@ -65,7 +65,15 @@ function MoreMenu({ onSelect, permitted, mainIds, onLogout, userName, roleLabel,
           className="flex items-center gap-2 mb-4"
           style={{ color: "var(--accentText)" }}
         >
-          <ChevronLeft size={18} />
+          <div
+            style={{
+              width: 30, height: 30, borderRadius: "50%",
+              background: "var(--panel)", border: "1px solid var(--line)",
+              display: "grid", placeItems: "center", flexShrink: 0,
+            }}
+          >
+            <ChevronLeft size={17} />
+          </div>
           <span className="text-sm font-bold" style={{ fontFamily: "'Cairo', sans-serif" }}>
             {active.label}
           </span>
