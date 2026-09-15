@@ -164,11 +164,11 @@ function getCachedBootstrap() {
   }
 }
 
-function setCachedBootstrap(data) {
+function setCachedBootstrap(data, user) {
   try {
     localStorage.setItem(
       BOOTSTRAP_CACHE_KEY,
-      JSON.stringify({ savedAt: Date.now(), data })
+      JSON.stringify({ savedAt: Date.now(), data, user: user || null })
     );
   } catch {
     // التخزين ممتلئ أو غير متاح — لا يوقف التطبيق، فقط لا تحسين هذه المرة.
