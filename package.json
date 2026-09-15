@@ -6,9 +6,9 @@
   "description": "أونصة — نظام محاسبة الذهب والمعادن الثمينة بنظام العددي والوزني المزدوج (فرونت إند، مبني اعتمادًا على ounce-source)",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && cp serve.json dist/serve.json",
     "preview": "vite preview",
-    "start": "serve -s dist -l $PORT --config serve.json"
+    "start": "serve -s dist -l $PORT"
   },
   "dependencies": {
     "lucide-react": "0.383.0",
