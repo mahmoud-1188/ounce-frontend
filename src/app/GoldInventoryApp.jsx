@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Banknote, FileText, Handshake, Loader2, Lock, LogOut, Menu, Mic, Package, PackageMinus, Plus, Printer, Receipt, RotateCcw, Scale, Search, ShoppingCart, Truck, Wrench, X } from "lucide-react";
+import { AlertTriangle, Banknote, ChevronUp, FileText, Handshake, Loader2, Lock, LogOut, Menu, Mic, Package, PackageMinus, Plus, Printer, Receipt, RotateCcw, Scale, Search, ShoppingCart, Truck, Wrench, X } from "lucide-react";
 import { POSTING_RULES } from "../core/chart.js";
 import { APP_MODES, CATEGORY_STATE, DEFAULT_APP_MODE, DEFAULT_CATEGORIES, DEFAULT_INTEGRATION, DEFAULT_OPENING_BALANCE, DEFAULT_PRINTER, DEFAULT_SETTINGS, DEFAULT_STORE, DEFAULT_USERS, EXPENSE_CATEGORIES, ISSUE_REASONS, MIGRATION_FLAG, PARTNER_REQUIRED, PUBLISH_CAP, RFID_DEFAULTS, ROLES, TRUST_MOVES } from "../core/constants.js";
 import { DEFAULT_COMMISSION } from "../core/erp.js";
@@ -7508,20 +7508,22 @@ export default function GoldInventoryApp() {
             }}
           >
             {hasRow2 && (
+              // ⚠ إصلاح واجهة حقيقي بعد طلبك: الخط الرفيع لم يكن يدل بوضوح
+              // على وجود قائمة ثانية قابلة للضغط — بعض المستخدمين ظنّوه
+              // زخرفةً لا زرًّا. سهمٌ يتقلّب اتجاهه (لأعلى وهي مطويّة، لأسفل
+              // وهي مفتوحة) أوضح دلالةً على "اضغط لترى المزيد" من خط مجرَّد.
               <button
                 onClick={() => setRow2Open((v) => (v ? 0 : 1))}
                 aria-label={row2Open ? "طيّ الصف الثاني" : "إظهار الصف الثاني"}
                 className="w-full flex items-center justify-center"
-                style={{ padding: "5px 0 3px" }}
+                style={{ padding: "4px 0 2px" }}
               >
-                <span
+                <ChevronUp
+                  size={18}
+                  color={row2Open ? "var(--accent)" : "var(--text3)"}
                   style={{
-                    width: row2Open ? 30 : 38,
-                    height: 4,
-                    borderRadius: 2,
-                    background: row2Open ? "var(--accent)" : "var(--edge)",
-                    display: "block",
-                    transition: "background .2s, width .2s",
+                    transform: row2Open ? "rotate(180deg)" : "rotate(0deg)",
+                    transition: "transform .2s, color .2s",
                   }}
                 />
               </button>
