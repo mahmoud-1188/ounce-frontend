@@ -609,13 +609,31 @@ export default function GoldInventoryApp() {
           }
         }
 
+        // ⚠ إصلاح جذري: هذه الأسماء مصدرها الآن الباك إند بالكامل (راجع
+        // applyBootstrap أعلاه) لا window.storage المحلي القديم. هذا الأثر كان
+        // يكتبها من localStorage فارغًا (لا بيانات محفوظة هناك منذ
+        // الانتقال للباك إند) فوق بيانات الباك إند الصحيحة بعد ثانيتين
+        // من فتح التطبيق — المخزون المحلي لم يعد يُستخدم لهذه البيانات إطلاقًا،
+        // فقراءته الفارغة كانت تمسح بيانات الباك إند بصمت في كل فتح.
+        const BACKEND_OWNED_FIELDS = new Set([
+          "items", "sales", "lots", "suppliers", "customers", "users",
+          "cashTx", "safeTx", "scrapCustodyTx", "scrapEntries", "scrapRequests",
+          "safeGoldTx", "expenses", "expenseNames", "taskirEntries",
+          "taskirOffices", "taskirOfficeTx", "repairs", "returns", "receipts",
+          "reservations", "safeAudits", "dailyCustody", "businessDays",
+          "fixedAssets", "depreciations", "categories", "stocktakeLock",
+        ]);
         Object.entries(data).forEach(([name, value]) => {
+          if (BACKEND_OWNED_FIELDS.has(name)) return;
           const fn = setters[name];
           if (fn) fn(value);
         });
 
         // معالجات خاصة لا تُؤتمت
-        if (data.categories) setRuntimeCategories(data.categories);
+        //
+        // ⚠ categories من الباك إند الآن (راجع BACKEND_OWNED_FIELDS أعلاه) —
+        // استدعاؤها هنا من data.categories (المخزون المحلي) كان يكتب DEFAULT_CATEGORIES
+        // فوق الفئات الحقيقية القادمة من applyBootstrap بعد ثوانٍ من فتح التطبيق.
         // الترتيب: نحفظ الترحيل مرة واحدة إن جرى
         if (data.navLayout && data.navLayout._navVersion === 2) {
           window.storage.set(NAV_LAYOUT_KEY, JSON.stringify(data.navLayout), false).catch(() => {});
