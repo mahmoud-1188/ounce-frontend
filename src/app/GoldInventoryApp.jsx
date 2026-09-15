@@ -7516,16 +7516,24 @@ export default function GoldInventoryApp() {
                 onClick={() => setRow2Open((v) => (v ? 0 : 1))}
                 aria-label={row2Open ? "طيّ الصف الثاني" : "إظهار الصف الثاني"}
                 className="w-full flex items-center justify-center"
-                style={{ padding: "4px 0 2px" }}
+                style={{ padding: "6px 0 4px" }}
               >
-                <ChevronUp
-                  size={18}
-                  color={row2Open ? "var(--accent)" : "var(--text3)"}
+                <div
                   style={{
-                    transform: row2Open ? "rotate(180deg)" : "rotate(0deg)",
-                    transition: "transform .2s, color .2s",
+                    width: 30, height: 20, borderRadius: 999,
+                    background: "var(--field)", border: "1px solid var(--line)",
+                    display: "grid", placeItems: "center",
                   }}
-                />
+                >
+                  <ChevronUp
+                    size={16}
+                    color={row2Open ? "var(--accent)" : "var(--text3)"}
+                    style={{
+                      transform: row2Open ? "rotate(180deg)" : "rotate(0deg)",
+                      transition: "transform .2s, color .2s",
+                    }}
+                  />
+                </div>
               </button>
             )}
 
