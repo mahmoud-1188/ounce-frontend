@@ -69,6 +69,11 @@ class ApiError extends Error {
 async function apiFetch(path, { method = "GET", body, headers } = {}) {
   const res = await fetch(`${API_BASE}${path}`, {
     method,
+    // ⚠ no-store صراحة: طلبات مصادقة محمية (auth/me, bootstrap) لا يجوز
+    // تخزينها إطلاقًا — لا من المتصفح ولا من أي بروكسي/CDN وسيط بينهما.
+    // بلا هذا رد 401 قديم مخزّن أو بيانات فارغة مخزّنة من طلب سابق يمكن
+    // أن يُعاد عرضه لمستخدم آخر أو في طلب لاحق، رغم صلاحية التوكن الحقيقية.
+    cache: "no-store",
     headers: {
       "Content-Type": "application/json",
       ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),

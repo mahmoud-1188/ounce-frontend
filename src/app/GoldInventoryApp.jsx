@@ -4002,17 +4002,24 @@ export default function GoldInventoryApp() {
     // حتى انتهاء التحقق من الشبكة فالشاشة السوداء تبقى ظاهرة كاملة
     // مدة ذلك التحقق رغم أن البيانات معروضة بالفعل تقنيًا — وهذا بالضبط
     // ما كان يجعل الفتح يبدو بلا أي تحسّن رغم النسخة المخزّنة.
-    const cached = api.getCachedBootstrap();
     let shownFromCache = false;
-    if (cached && cached.data && cached.user) {
-      applyBootstrap(cached.data);
-      setCurrentUser(cached.user);
-      const land = landingFor(cached.user.role);
-      setMorePage(land.more);
-      setTab(land.tab);
-      shownFromCache = true;
-      setLoading(false);
-      setSessionChecking(false);
+    try {
+      const cached = api.getCachedBootstrap();
+      if (cached && cached.data && cached.user) {
+        applyBootstrap(cached.data);
+        setCurrentUser(cached.user);
+        const land = landingFor(cached.user.role);
+        setMorePage(land.more);
+        setTab(land.tab);
+        shownFromCache = true;
+        setLoading(false);
+        setSessionChecking(false);
+      }
+    } catch (e) {
+      // نسخة مخزّنة تالفة/بشكل غير متوقع — لا توقف التطبيق، نتجاهل الكاش ونكمل
+      // المسار العادي (التحقق الحقيقي من الشبكة أدناه) كأنه لا كاش أصلًا.
+      console.warn("[أوقية] تجاهل نسخة bootstrap المخزّنة:", e);
+      shownFromCache = false;
     }
 
     (async () => {
@@ -4029,17 +4036,23 @@ export default function GoldInventoryApp() {
         setMorePage(land.more);
         setTab(land.tab);
       } catch (e) {
-        // توكن غائب/منتهِ/غير صالح — نمسحه ونعرض شاشة الدخول
-        // العادية، لا نفشل صامتًا بجلسة نصف-محملة.
-        //
-        // إن كنا عرضنا نسخة مخزّنة بالفعل، فالتوكن لم يعد
-        // صالحًا الآن — نفرغ الشاشة ونعرض الدخول بدلًا من
-        // إبقاء المستخدم على بيانات جلسة انتهت.
-        if (shownFromCache) {
-          setCurrentUser(null);
-          setLoading(true);
+        // ⚠ التمييز مهم: فشل شبكة/خادم (مهما كان مؤقتًا) ليس كتوكن
+        // غير صالح — 401/403 فقط يعني ذلك فعليًا. قبل هذا التمييز، أي
+        // فشل مؤقت (انقطاع نت، خطأ 5xx عابر) كان يمسح الجلسة ويطرد
+        // المستخدم لشاشة الدخول رغم أن توكنه لا يزال صالحًا.
+        const isAuthFailure = e instanceof api.ApiError && (e.status === 401 || e.status === 403);
+        if (isAuthFailure) {
+          // توكن غائب/منتهِ/غير صالح فعليًا — نمسحه ونعرض شاشة الدخول
+          // العادية. إن كنا عرضنا نسخة مخزّنة بالفعل، نفرغ الشاشة.
+          if (shownFromCache) {
+            setCurrentUser(null);
+            setLoading(true);
+          }
+          api.logout();
         }
-        api.logout();
+        // غير ذلك (شبكة/خادم): التوكن يبقى كما هو ولا نلمس النسخة
+        // المعروضة من الكاش إن وجدت — محاولة لاحقة (refresh) تُعيد التحقق
+        // بالتوكن نفسه بدل طرد مستخدم لمشكلة شبكة عابرة.
       } finally {
         setSessionChecking(false);
       }
