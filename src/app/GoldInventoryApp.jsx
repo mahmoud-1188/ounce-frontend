@@ -3889,10 +3889,10 @@ export default function GoldInventoryApp() {
   };
 
   // جلب فعلي من الشبكة + تطبيق + تحديث النسخة المخزّنة محليًا.
-  const loadBootstrap = async () => {
+  const loadBootstrap = async (user) => {
     const boot = await api.fetchBootstrap();
     applyBootstrap(boot);
-    api.setCachedBootstrap(boot);
+    api.setCachedBootstrap(boot, user);
   };
 
   /// الدخول باختيار المستخدم مباشرة — حين تكون الحماية مطفأة.
@@ -3927,7 +3927,7 @@ export default function GoldInventoryApp() {
       // تنقّل بين شاشات). setLoading الموجود أصلًا لعرض دوّار التحميل.
       setLoading(true);
       try {
-        await loadBootstrap();
+        await loadBootstrap(user);
       } finally {
         setLoading(false);
       }
@@ -3974,16 +3974,27 @@ export default function GoldInventoryApp() {
       return;
     }
 
-    // الإحساس المحلي: لو عندنا نسخة bootstrap مخزّنة من جلسة
-    // سابقة نعرضها فورًا (0 ثانية انتظار) بدل شاشة تحميل
-    // سوداء، ثم نتحقق من الجلسة في الخلفية ونحدّث البيانات
-    // بصمت إن نجح التحقق — لا شاشة تحميل ثانية إطلاقًا.
+    // الإحساس المحلي: لو عندنا نسخة bootstrap + مستخدم مخزّنين من
+    // جلسة سابقة نعرضهما فورًا (0 ثانية انتظار) — بيانات ودخول معًا،
+    // فتظهر شاشة التطبيق نفسها لا شاشة تحميل ولا شاشة دخول — ثم
+    // نتحقق من الجلسة في الخلفية ونحدّث البيانات بصمت إن نجح التحقق.
+    //
+    // ⚠ إطفاء loading وحده لا يكفي: شرط عرض شاشة التحميل في الأسفل هو
+    // `loading || sessionChecking` معًا، فإن بقي sessionChecking صحيحًا
+    // حتى انتهاء التحقق من الشبكة فالشاشة السوداء تبقى ظاهرة كاملة
+    // مدة ذلك التحقق رغم أن البيانات معروضة بالفعل تقنيًا — وهذا بالضبط
+    // ما كان يجعل الفتح يبدو بلا أي تحسّن رغم النسخة المخزّنة.
     const cached = api.getCachedBootstrap();
     let shownFromCache = false;
-    if (cached && cached.data) {
+    if (cached && cached.data && cached.user) {
       applyBootstrap(cached.data);
+      setCurrentUser(cached.user);
+      const land = landingFor(cached.user.role);
+      setMorePage(land.more);
+      setTab(land.tab);
       shownFromCache = true;
       setLoading(false);
+      setSessionChecking(false);
     }
 
     (async () => {
@@ -3991,7 +4002,7 @@ export default function GoldInventoryApp() {
         const { user } = await api.fetchCurrentUser();
         if (!shownFromCache) setLoading(true);
         try {
-          await loadBootstrap();
+          await loadBootstrap(user);
         } finally {
           setLoading(false);
         }
