@@ -8,7 +8,9 @@
     "dev": "vite",
     "build": "vite build && cp serve.json dist/serve.json",
     "preview": "vite preview",
-    "start": "serve -s dist -l $PORT"
+    "start": "serve -s dist -l $PORT",
+    "build:hq": "cross-env OQIYYAH_EDITION=hq vite build --outDir dist-hq && cp serve.json dist-hq/serve.json",
+    "dev:hq": "cross-env OQIYYAH_EDITION=hq vite"
   },
   "dependencies": {
     "lucide-react": "0.383.0",
@@ -18,8 +20,10 @@
     "xlsx": "0.18.5"
   },
   "devDependencies": {
+    "@babel/parser": "^8.0.5",
     "@vitejs/plugin-react": "4.3.1",
     "autoprefixer": "10.4.19",
+    "cross-env": "^7.0.3",
     "postcss": "8.4.38",
     "tailwindcss": "3.4.4",
     "vite": "5.3.1"

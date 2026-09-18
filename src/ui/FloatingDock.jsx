@@ -3,6 +3,9 @@ import React, { useRef, useState } from "react";
 function FloatingDock({ pos, onPosChange, collapsed, onToggle, actions = [] }) {
   const [dragging, setDragging] = useState(false);
   const info = useRef({ sx: 0, sy: 0, ox: 0, oy: 0, moved: false });
+  // ⚠ مؤقّت الضغط المطوّل يعيش هنا لا في كائن الفعل: `actions` يُعاد
+  // بناؤه مع كل رسم في المستدعي، فمرجعٌ عليه يُفقد قبل أن يُطلق.
+  const holdRef = useRef({});
 
   const W = 50;
   const GAP = 8;
@@ -93,6 +96,10 @@ function FloatingDock({ pos, onPosChange, collapsed, onToggle, actions = [] }) {
           <button
             key={a.id}
             onClick={a.onPress}
+            onContextMenu={a.onLongPress ? (e) => { e.preventDefault(); a.onLongPress(); } : undefined}
+            onTouchStart={a.onLongPress ? () => { holdRef.current[a.id] = setTimeout(a.onLongPress, 450); } : undefined}
+            onTouchEnd={a.onLongPress ? () => clearTimeout(holdRef.current[a.id]) : undefined}
+            onTouchMove={a.onLongPress ? () => clearTimeout(holdRef.current[a.id]) : undefined}
             aria-label={a.label}
             title={a.label}
             style={{

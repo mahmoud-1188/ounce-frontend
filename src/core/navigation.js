@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Barcode, BarChart3, BookmarkCheck, Building2, CalendarCheck, ClipboardCheck, Coins, Database, FileMinus, FileText, Flame, Grid, Handshake, Landmark, LayoutGrid, Lock, PiggyBank, Plus, Printer, Receipt, RotateCcw, Scale, Search, Send, Settings, ShieldCheck, ShoppingCart, Sparkles, Sun, Truck, UserRound, Users, Wallet, Warehouse, Wrench } from "lucide-react";
+import { ArrowLeftRight, Barcode, BarChart3, BookmarkCheck, Building2, CalendarCheck, ClipboardCheck, Coins, Database, FileMinus, FileText, Flame, Grid, Handshake, Landmark, LayoutGrid, Lock, PiggyBank, Plus, Printer, Receipt, RefreshCw, RotateCcw, Scale, Search, Send, Settings, ShieldCheck, ShoppingCart, Sparkles, Sun, Truck, UserRound, Users, Wallet, Warehouse, Wrench } from "lucide-react";
 import { ROLES } from "./constants.js";
 
 const TAB_KIND_IDS = ["inventory", "sales", "cash", "expenses", "stocktake"];
@@ -64,6 +64,13 @@ const NAV_REGISTRY = [
   { id: "attendanceHr", label: "الحضور والإجازات", icon: CalendarCheck },
   { id: "hqReports", label: "تقرير الفروع", icon: Building2 },
   { id: "priceFix", label: "التثبيت ذهب ↔ نقد", icon: ArrowLeftRight },
+  { id: "generalLedger", label: "الأستاذ العام", icon: FileText },
+  { id: "masterReport", label: "التقارير الموحّدة", icon: LayoutGrid },
+  { id: "anyStatement", label: "كشف حساب — أي شيء", icon: Search },
+  { id: "fullStatements", label: "القوائم المالية الكاملة", icon: FileText },
+  { id: "exchange", label: "التبادل مع الأنظمة", icon: RefreshCw },
+  { id: "customerReport", label: "تقرير العملاء", icon: Users },
+  { id: "docCycle", label: "الدورة المستندية", icon: ClipboardCheck },
 ];
 
 // Default arrangement: which of a role's permitted pages start out in the
@@ -114,7 +121,7 @@ const NAV_BUNDLES = [
     label: "التقارير",
     icon: BarChart3,
     hint: "كل التقارير واليومية",
-    items: ["reports", "journal", "salesReturn", "trialBalance", "supplierLedger", "officeLedger", "salesReturn", "bankRecon", "search",
+    items: ["reports", "journal", "generalLedger", "salesReturn", "trialBalance", "fullStatements", "anyStatement", "masterReport", "supplierLedger", "officeLedger", "salesReturn", "bankRecon", "search",
             "inventory", "salesHistory", "sellerReports", "taxReport", "financials", "openingCompare"],
   },
   {
@@ -218,6 +225,13 @@ const SHORTCUT_HINTS = {
   attendanceHr: ["حضور", "غياب", "اجازة", "إجازة", "اجازات", "إجازات", "بصمة"],
   hqReports: ["فروع", "الفروع", "ادارة", "إدارة", "تقرير الفروع", "hq"],
   priceFix: ["تثبيت", "تسبيك", "ذهب نقد", "تحويل ذهب"],
+  generalLedger: ["استاذ", "أستاذ", "الاستاذ العام", "الأستاذ العام"],
+  masterReport: ["تقرير موحد", "تقارير موحدة", "تقرير شامل"],
+  anyStatement: ["كشف حساب", "كشف", "اي شخص", "أي شخص"],
+  fullStatements: ["قوائم مالية كاملة", "قوائم كاملة", "الميزانية العمومية"],
+  exchange: ["تبادل", "استيراد", "تصدير", "ربط أنظمة"],
+  customerReport: ["تقرير عملاء", "تقرير العملاء", "كشف عملاء"],
+  docCycle: ["دورة مستندية", "الدورة المستندية", "مبادئ محاسبية"],
 };
 
 /// يُعيد أفضل صفحة تطابق الطلب، أو null. لا يقترح ما هو خارج الصلاحية.
@@ -230,7 +244,7 @@ const MENU_GROUPS = [
     label: "التقارير",
     hint: "كل التقارير والقوائم",
     icon: BarChart3,
-    items: ["reports", "journal", "trialBalance", "search", "bankRecon", "supplierLedger", "officeLedger", "salesReturn", "sellerReports", "salesHistory", "taxReport", "financials"],
+    items: ["reports", "journal", "generalLedger", "trialBalance", "fullStatements", "anyStatement", "masterReport", "customerReport", "docCycle", "search", "bankRecon", "supplierLedger", "officeLedger", "salesReturn", "sellerReports", "salesHistory", "taxReport", "financials"],
   },
   {
     id: "inventory",
@@ -265,7 +279,7 @@ const MENU_GROUPS = [
     label: "الربط",
     hint: "الأنظمة المحاسبية والمتجر",
     icon: ArrowLeftRight,
-    items: ["integration", "storeLink"],
+    items: ["integration", "storeLink", "exchange"],
   },
   {
     id: "system",

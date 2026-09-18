@@ -7,8 +7,12 @@ function buildJournalLines(opType, amount, extra = {}) {
   if (amt <= 0) return { lines: [], balanced: true, error: null };
 
   const lines = [];
-  if (rule.cash?.debit) lines.push({ account: rule.cash.debit, debit: amt, credit: 0 });
-  if (rule.cash?.credit) lines.push({ account: rule.cash.credit, debit: 0, credit: amt });
+  // القاعدة تحمل الطرف الأشيع؛ المستدعي يبدّله حين يخرج المال من مصدر آخر
+  // (الشبكة بدل الكاش) — بدل تكرار قاعدة لكل مصدر.
+  const debitAcc = extra.debitOverride || rule.cash?.debit;
+  const creditAcc = extra.creditOverride || rule.cash?.credit;
+  if (debitAcc) lines.push({ account: debitAcc, debit: amt, credit: 0 });
+  if (creditAcc) lines.push({ account: creditAcc, debit: 0, credit: amt });
 
   // أطراف إضافية معلَنة في الاستدعاء — الضريبة مثلًا
   (extra.splits || []).forEach((sp) => {

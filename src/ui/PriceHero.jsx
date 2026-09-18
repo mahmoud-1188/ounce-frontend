@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { fmt } from "../core/money.js";
+import { OqiyyahLogo } from "./OqiyyahLogo.jsx";
 
 function PriceHero({ chartData = [], price, prevPrice, currency, updatedAt, karat = 24, compact = false }) {
   const [shown, setShown] = useState(Number(price) || 0);
@@ -60,6 +61,14 @@ function PriceHero({ chartData = [], price, prevPrice, currency, updatedAt, kara
         padding: compact ? "14px 16px" : "18px 18px 16px",
       }}
     >
+      {/* ⚠ الشعار علامةٌ مائية خلف الرقم لا فوقه: السعر هو ما يُقرأ،
+          والشعار يُذكّر بالهوية بلا أن يزاحمه. */}
+      {!compact && (
+        <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center",
+          pointerEvents: "none", opacity: 0.07, zIndex: 0 }} aria-hidden="true">
+          <OqiyyahLogo size={180} still glow={false} />
+        </div>
+      )}
       {/* الخلفية: المنحنى */}
       {path && (
         <svg

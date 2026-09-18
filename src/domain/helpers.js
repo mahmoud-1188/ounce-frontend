@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import * as XLSX from "xlsx";
 import { Search } from "lucide-react";
 import { AI_APP_GUIDE, ARABIC_INDIC, EASTERN_INDIC, TRACE_TOPICS } from "../core/assistant.js";
 import { CATEGORY_TO_ACCOUNT, CHART_OF_ACCOUNTS } from "../core/chart.js";
-import { ACCOUNT_TREE, ALL_ACCOUNT_NODES, APP_MODES, ATTACH_PREFIX, B32, BREAKPOINTS, CATEGORY_STATE, DEFAULT_CATEGORIES, EXPENSE_CATEGORIES, MIGRATION_FLAG, NHR, NHR_POWER_MAX_DBM, OUNCE_SECRET, RFID_DEFAULTS, RFID_SECTIONS } from "../core/constants.js";
+import { ACCOUNT_TREE, AI_APP_MANUAL, ALL_ACCOUNT_NODES, APP_MODES, ATTACH_PREFIX, B32, BREAKPOINTS, C128, CASH_ACCOUNT_OF, CATEGORY_STATE, DEFAULT_CATEGORIES, EXCHANGE_KINDS, EXPENSE_ACCOUNT_OF, EXPENSE_CATEGORIES, MGR_FEE_DEFAULT, MIGRATION_FLAG, NHR, NHR_POWER_MAX_DBM, OUNCE_SECRET, PRICE_SANE, PRICE_SOURCES, QR_EXP, QR_VER, RECOVERY_ALPHABET, RECOVERY_WINDOW_MIN, RFID_DEFAULTS, RFID_SECTIONS } from "../core/constants.js";
 import { GRAMS_PER_OUNCE, PURITY, WEIGHT_UNITS, fine24, fmt, fmtW, fromHalalas, halalas, pricePerGram, roundW, weightTimesPrice } from "../core/money.js";
 import { BANK_COLUMN_HINTS, DEFAULT_CARD_FEES, DEFAULT_MARGINS, USD_TO_SAR_PEG } from "../core/money-rules.js";
 import { NAV_BUNDLES, NAV_MAX_PER_ROW } from "../core/navigation.js";
@@ -105,6 +106,22 @@ const normalizeFundingSource = (id) => {
   if (id === "daily_transfer") return "daily_cash";
   return id;
 };
+
+/// حساب الصندوق حسب مصدر التمويل — ترحيل القيود بأثر رجعي يحتاج طرفًا
+/// نقديًّا محدَّدًا لا تخمينًا.
+///
+/// ⚠ مصدرٌ غير معروف يُرمى لا يُفترض «الخزنة»: افتراضٌ صامت يُقيّد على
+/// حسابٍ لم يُمسّ.
+const cashAccountFor = (sourceId) => {
+  const acc = CASH_ACCOUNT_OF[normalizeFundingSource(sourceId)];
+  if (!acc) throw new Error(`مصدر تمويل غير معروف: ${sourceId}`);
+  return acc;
+};
+
+/// حساب المصروف حسب فئته.
+///
+/// ⚠ المفاتيح هي فئات `EXPENSE_CATEGORIES` كما هي — لا أسماءٌ مخمَّنة.
+const expenseAccountFor = (category) => EXPENSE_ACCOUNT_OF[category] || "6900";
 
 const fundingSourceLabel = (id) => FUNDING_SOURCES.find((f) => f.id === normalizeFundingSource(id))?.label || "—";
 
@@ -587,6 +604,44 @@ function lotAllocatedWeight(lotId, items) {
   return items.filter((i) => i.lotId === lotId).reduce((a, i) => a + i.weight * i.quantity, 0);
 }
 
+/// عدد القطع المُكوَّدة من دفعة.
+
+function lotAllocatedPieces(lotId, items) {
+  return items
+    .filter((i) => i.lotId === lotId)
+    .reduce((a, i) => a + ((i.units || []).length || Number(i.quantity) || 0), 0);
+}
+
+/// حالة الدفعة: ما اشتُري وما كُوِّد والفرق — عددًا ووزنًا.
+///
+/// ⚠ بُعدان لا بُعد.
+///
+/// الوزن وحده يُخفي عشر قطع تائهة إن كُوِّدت التسعون بوزن المئة. والعدد
+/// وحده يُخفي خمسة جرامات إن كُوِّدت المئة بخمسة وتسعين. فنعرض الاثنين
+/// ونسمّي كلًّا باسمه: ما زاد فائض، وما نقص هدر.
+
+function lotReconcile(lot, items) {
+  const boughtW = roundW(Number(lot?.weight) || 0);
+  const boughtN = Math.max(0, Number(lot?.pieces) || 0);
+  const codedW = roundW(lotAllocatedWeight(lot?.id, items));
+  const codedN = lotAllocatedPieces(lot?.id, items);
+  const dW = roundW(codedW - boughtW);
+  const dN = codedN - boughtN;
+  // ⚠ حدّ الوزن بالمِلّي لا بالجرام: ميزانان يختلفان بمِلّيَّين طبيعيٌّ،
+  // وبجرامٍ كامل ليس طبيعيًا.
+  const TOL_W = 0.005;
+  return {
+    boughtW, boughtN, codedW, codedN,
+    remainW: roundW(boughtW - codedW),
+    remainN: boughtN - codedN,
+    dW, dN,
+    weightState: Math.abs(dW) <= TOL_W ? "match" : dW > 0 ? "surplus" : "shortage",
+    piecesState: boughtN === 0 ? "untracked" : dN === 0 ? "match" : dN > 0 ? "surplus" : "shortage",
+    // كامل: العدد والوزن كلاهما في محلّه
+    complete: boughtN > 0 && dN === 0 && Math.abs(dW) <= TOL_W,
+  };
+}
+
 function categoryLabel(id) {
   // ⚠ لا نُعيد المعرّف حين لا نجده: `id` قد يكون undefined، فتظهر
   // كلمة «undefined» في تسمية القطعة أمام البائع.
@@ -986,10 +1041,10 @@ function weightTrialBalance(sources) {
     const q = (it.units || []).filter((u) => !u.sold).length;
     if (q > 0) put("1210", "ذهب مشغول", it.karat, (Number(it.weight) || 0) * q, 0);
   });
-  // 1220 ذهب خام بالخزنة
+  // 1220 ذهب كسر بالخزنة
   if (derived) safeGoldTx.forEach((t) => {
     const w = Number(t.weight) || 0;
-    put("1220", "ذهب خام بالخزنة", t.karat, t.type === "in" ? w : 0, t.type === "in" ? 0 : w);
+    put("1220", "ذهب كسر بالخزنة", t.karat, t.type === "in" ? w : 0, t.type === "in" ? 0 : w);
   });
   // 1230 الكسر
   //
@@ -1631,8 +1686,17 @@ function detectTraceTopic(q) {
 /// يجمع الأدلة الفعلية للموضوع. كل عنصر يحمل قيمته ومرجعه وتاريخه ومنفّذه
 /// — فالإجابة تُشير إلى سجل يمكن فتحه لا إلى تخمين.
 
-async function askReportAi(messages, maxTokens = 900) {
-  const data = await aiApi.chat(messages, maxTokens);
+async function askReportAi(messages, maxTokens = 900, system = null) {
+  // ⚠ لا يوجد حقل `system` منفصل في هذا المسار — الخادم يمرّر `messages`
+  // فقط لواجهة الذكاء. فحين يُطلب نصٌّ ثابت (قواعد ودليل) نُلحقه بأول
+  // رسالة مستخدم بدل حقنه في جسمٍ لا يقرأه الخادم أو استدعاء الذكاء
+  // مباشرةً (وهو الثقب الأمني الذي أُغلق سابقًا في هذا التطبيق).
+  const list = system
+    ? messages.map((m, i) => (i === 0 && m.role === "user"
+        ? { ...m, content: `${system}\n\n${m.content}` }
+        : m))
+    : messages;
+  const data = await aiApi.chat(list, maxTokens);
   const text = (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("\n").trim();
   if (!text) throw new Error("empty");
   return text;
@@ -2347,4 +2411,769 @@ function rfidSettingsFor(sectionId, settings) {
   };
 }
 
-export { accountForCategory, accountGroup, accountLabel, accountPath, aiAllowedFor, aiAllowedForRole, aiScope, askReportAi, attachmentByteSize, b32Decode, b32Encode, branchDataKey, branchSnapshotKey, btSupported, bundleById, bundledPages, cardFeeOf, cashTrialBalance, categoryById, categoryLabel, childrenOf, cleanToken, codeCounter, compressImage, contentWidth, createNhrFileAssembler, detectColumns, detectTraceTopic, emptyRow, exportTablesPdf, fetchAiAuditNarrative, fetchAiBusinessInsights, fetchAiChatReply, fetchAiReportSpec, fetchGoldPriceSAR, fineAt, fmtWeight, fromGram, fundingSourceLabel, generateUnitCode, goldDestLabel, hiddenNumbersScan, inPeriod, inputStyle, isBundle, isGoldCogs, isLiveScrap, isPartial, isUnder, issueBranchCode, issueLicense, itemLabel, journalTrialBalance, loadAttachment, lotAllocatedWeight, marginFor, migrateLegacyKeys, modeAllowsAction, modeAllowsPage, modeAllowsTab, nameExists, navPerRow, nhrClassify, nhrCommand, nhrCommands, nhrCrc32, nhrHex, nhrIsLiveFrame, nhrParseBatchFile, nhrParseJson, nhrParseLiveFrame, normHeader, normalizeFundingSource, normalizeName, onlineBlockReason, openAttachment, ounceHash, periodRange, prettyToken, priceBreakdown, printedCount, r2, r3, readFileAsDataUrl, readKeyOrNull, remainingQty, reportFactsText, reportFindings, rfidSettingsFor, runAuditChecks, saleModeOf, saleProfitOf, saleProfitSplit, saveAttachment, scrapPrice24, sellPrice24, setRuntimeCategories, splitCsvLine, toGram, toLatinDigits, trustBalance, unitById, unitCostBasis, unitCurrentValue, useDebounced, useNhrReader, useViewport, useVoice, useWedgeScanner, weightTrialBalance };
+
+// ═══════════════════════════════════════════════════════════════════════
+//  القوائم المالية والتقارير الموحّدة — منقول من نسخة العميل
+//
+//  ⚠ إضافات بحتة تخدم شاشات القوائم المالية الجديدة (screens/FullStatementsPage.jsx
+//  وAnyStatementPage.jsx وGeneralLedgerPage.jsx وMasterReportPage.jsx). كلّها
+//  تُبنى من journal/CHART_OF_ACCOUNTS الموجودَين بالفعل — لا اعتماد على أي
+//  بنية بيانات جديدة.
+// ═══════════════════════════════════════════════════════════════════════
+
+/// أرصدة الحسابات حتى تاريخٍ معيّن — من الدفتر وحده.
+
+function balancesAt(journal, to) {
+  const t1 = to ? new Date(String(to).length <= 10 ? `${to}T23:59:59.999` : to).getTime() : Infinity;
+  const b = {};
+  for (const e of journal) {
+    if (new Date(e.at || e.date).getTime() > t1) continue;
+    for (const l of e.lines || []) b[l.account] = (b[l.account] || 0) + halalas(l.debit) - halalas(l.credit);
+  }
+  return b;
+}
+
+/// يُصدّر كشفًا كملف إكسل.
+
+function exportLedgerXlsx({ title, meta = [], headers, rows, totals, fileBase }) {
+  const aoa = [
+    [title],
+    ...meta.map((m) => [m]),
+    [],
+    headers,
+    ...rows,
+    ...(totals ? [[], totals] : []),
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws["!cols"] = headers.map((h, i) => ({ wch: i === 0 ? 12 : Math.max(12, String(h).length + 4) }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "كشف");
+  const stamp = new Date().toISOString().slice(0, 10);
+  // ⚠ اسم الملف بلا مسافات: بعض الأنظمة تقطعه عندها
+  XLSX.writeFile(wb, `${String(fileBase || title).replace(/\s+/g, "_")}_${stamp}.xlsx`);
+}
+
+/// توقيع مستندٍ رقمي — يكشف أي تعديل بعد الإصدار.
+
+function statementDigest(o) {
+  const text = JSON.stringify(o);
+  let h1 = 0x811c9dc5, h2 = 0x01000193;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    h1 = ((h1 ^ c) * 16777619) >>> 0;
+    h2 = ((h2 + c * (i + 3)) * 2654435761) >>> 0;
+  }
+  return (h1.toString(16).padStart(8, "0") + h2.toString(16).padStart(8, "0")).toUpperCase();
+}
+
+/// بداية اليوم ونهايته بالتوقيت المحلي.
+
+/// عنوان خادم البثّ — يُضبط من الإعدادات.
+///
+/// ⚠ فارغٌ افتراضيًا: من لا خادم له يعمل بالاستطلاع المباشر، ولا يرى
+/// شاشة خطأ عن خادمٍ لم يطلبه.
+const streamBase = (settings) =>
+  String(settings?.priceStreamUrl || "").trim().replace(/\/+$/, "");
+
+const dayStart = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+
+const dayEnd = (d) => { const x = new Date(d); x.setHours(23, 59, 59, 999); return x; };
+
+/// الأسبوع يبدأ السبت (سبت–خميس).
+
+const weekStart = (d) => {
+  const x = dayStart(d);
+  const back = (x.getDay() + 1) % 7;
+  x.setDate(x.getDate() - back);
+  return x;
+};
+
+/// يحسب المدى الزمني من معرّف المدى (اليوم/الأسبوع/الشهر/مخصّص).
+
+function resolveRange(id, custom = {}, now = new Date()) {
+  const mk = (from, to, label) => ({
+    id, from: from.getTime(), to: to.getTime(), label,
+  });
+  const t = new Date(now);
+  switch (id) {
+    case "today":
+      return mk(dayStart(t), dayEnd(t), "اليوم");
+    case "yesterday": {
+      const y = new Date(t); y.setDate(y.getDate() - 1);
+      return mk(dayStart(y), dayEnd(y), "أمس");
+    }
+    case "this_week": {
+      const a = weekStart(t);
+      return mk(a, dayEnd(t), "هذا الأسبوع");
+    }
+    case "last_week": {
+      const a = weekStart(t); a.setDate(a.getDate() - 7);
+      const z = new Date(a); z.setDate(z.getDate() + 6);
+      return mk(a, dayEnd(z), "الأسبوع الماضي");
+    }
+    case "this_month":
+      return mk(new Date(t.getFullYear(), t.getMonth(), 1), dayEnd(t), "هذا الشهر");
+    case "last_month": {
+      const a = new Date(t.getFullYear(), t.getMonth() - 1, 1);
+      const z = new Date(t.getFullYear(), t.getMonth(), 0);
+      return mk(a, dayEnd(z), "الشهر الماضي");
+    }
+    case "custom": {
+      const a = custom.from ? dayStart(new Date(custom.from)) : dayStart(t);
+      let z = custom.to ? dayEnd(new Date(custom.to)) : dayEnd(t);
+      const today = dayEnd(t);
+      if (z > today) z = today;
+      return mk(a, z, "مدى مخصّص");
+    }
+    default:
+      return mk(dayStart(t), dayEnd(t), "اليوم");
+  }
+}
+
+/// مدى المقارنة — يُطابق الطول لا الاسم.
+
+function resolveCompare(base, mode, custom = {}) {
+  const span = base.to - base.from;
+  const shift = (ms) => ({
+    from: base.from - ms, to: base.to - ms,
+    label: "الفترة المقارَنة",
+  });
+  if (mode === "prev") {
+    return { ...shift(span + 1), label: "الفترة السابقة" };
+  }
+  if (mode === "last_month") {
+    const a = new Date(base.from); a.setMonth(a.getMonth() - 1);
+    const z = new Date(base.to); z.setMonth(z.getMonth() - 1);
+    return { from: a.getTime(), to: z.getTime(), label: "الشهر الماضي" };
+  }
+  if (mode === "last_year") {
+    const a = new Date(base.from); a.setFullYear(a.getFullYear() - 1);
+    const z = new Date(base.to); z.setFullYear(z.getFullYear() - 1);
+    return { from: a.getTime(), to: z.getTime(), label: "العام الماضي" };
+  }
+  const a = custom.from ? dayStart(new Date(custom.from)).getTime() : base.from - span;
+  const z = custom.to ? dayEnd(new Date(custom.to)).getTime() : base.from - 1;
+  return { from: a, to: z, label: "مدى مخصّص" };
+}
+
+/// يبني فروقات مجموعتَي مؤشّرات (الآن مقابل قبل).
+
+function diffDatasets(now, before) {
+  const out = {};
+  for (const k of Object.keys(now.kpi)) {
+    const a = Number(now.kpi[k]) || 0;
+    const b = Number(before?.kpi?.[k]) || 0;
+    const d = Math.round((a - b) * 100) / 100;
+    out[k] = {
+      now: a, before: b, diff: d,
+      pct: b === 0 ? null : Math.round(((a - b) / Math.abs(b)) * 1000) / 10,
+      dir: Math.abs(d) < 0.005 ? "flat" : d > 0 ? "up" : "down",
+    };
+  }
+  return out;
+}
+
+/// تطبيع نصٍّ عربي للبحث — يُسقط التشكيل والتطويل ويوحّد الهمزات.
+
+function normalizeArabicQuery(text) {
+  return String(text || "")
+    .replace(/[\u064B-\u0652\u0640]/g, "")
+    .replace(/[أإآٱ]/g, "ا")
+    .replace(/ة/g, "ه")
+    .replace(/[ىئ]/g, "ي")
+    .replace(/ؤ/g, "و")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+/// يرجّح شاشات تفيد سؤال المستخدم — من الدليل، بمطابقة أسمائها البديلة.
+///
+/// ⚠ كلمة عابرة تُصيب اسمًا بديلًا بالصدفة («يوم» في «كم الساعة اليوم»)
+/// لا تكفي لترجيح شاشة — نطلب عبارةً كاملة أو كلمتين.
+
+function guessScreens(question) {
+  const q = normalizeArabicQuery(question);
+  const words = new Set(q.split(" ").filter((w) => w.length >= 2));
+  const scored = AI_APP_MANUAL.map(([id, label, path, does, aliases]) => {
+    let score = 0;
+    for (const alias of aliases.split("،")) {
+      const a = normalizeArabicQuery(alias);
+      if (!a) continue;
+      if (q.includes(a)) score += a.length >= 4 ? 3 : 2;
+      else for (const w of a.split(" ")) if (words.has(w)) score += 1;
+    }
+    return { id, label, path, score };
+  }).filter((x) => x.score >= 2).sort((a, b) => b.score - a.score);
+  return scored.slice(0, 3);
+}
+
+function qrGaloisTables() {
+  const exp = new Array(512), log = new Array(256);
+  let x = 1;
+  for (let i = 0; i < 255; i++) {
+    exp[i] = x; log[x] = i;
+    x <<= 1;
+    if (x & 0x100) x ^= 0x11d;
+  }
+  for (let i = 255; i < 512; i++) exp[i] = exp[i - 255];
+  return { exp, log };
+}
+
+function qrEccBytes(data, eccLen) {
+  const { exp, log } = qrGaloisTables();
+  // متعدّد المولّد
+  let gen = [1];
+  for (let i = 0; i < eccLen; i++) {
+    const next = new Array(gen.length + 1).fill(0);
+    for (let j = 0; j < gen.length; j++) {
+      next[j] ^= gen[j];
+      next[j + 1] ^= gen[j] ? exp[(log[gen[j]] + i) % 255] : 0;
+    }
+    gen = next;
+  }
+  const rem = new Array(eccLen).fill(0);
+  for (const b of data) {
+    const factor = b ^ rem[0];
+    rem.shift(); rem.push(0);
+    if (factor !== 0) {
+      for (let i = 0; i < eccLen; i++) rem[i] ^= exp[(log[gen[i + 1]] + log[factor]) % 255];
+    }
+  }
+  return rem;
+}
+
+const qrMul = (a, b) => (a === 0 || b === 0 ? 0 : QR_EXP.e[QR_EXP.l[a] + QR_EXP.l[b]]);
+
+function qrRS(data, ecLen) {
+  let poly = [1];
+  for (let i = 0; i < ecLen; i++) {
+    const next = new Array(poly.length + 1).fill(0);
+    for (let j = 0; j < poly.length; j++) { next[j] ^= qrMul(poly[j], QR_EXP.e[i]); next[j + 1] ^= poly[j]; }
+    poly = next;
+  }
+  const res = new Array(ecLen).fill(0);
+  for (const d of data) {
+    const f = d ^ res[0];
+    res.shift(); res.push(0);
+    if (f !== 0) for (let j = 0; j < ecLen; j++) res[j] ^= qrMul(poly[j + 1], f);
+  }
+  return res;
+}
+
+function qrMatrix(text) {
+  const bytes = Array.from(new TextEncoder().encode(String(text || "")));
+  let ver = 1;
+  while (ver < 4 && bytes.length > QR_VER[ver][1]) ver += 1;
+  const [size, cap, ecLen] = QR_VER[ver];
+  // البتات: وضع 0100، الطول 8 بت، البيانات، ثم 0000 والحشو
+  const bits = [];
+  const push = (v, n) => { for (let i = n - 1; i >= 0; i--) bits.push((v >> i) & 1); };
+  push(4, 4); push(bytes.length, 8);
+  for (const b of bytes) push(b, 8);
+  const totalData = cap;
+  push(0, Math.min(4, totalData * 8 - bits.length));
+  while (bits.length % 8) bits.push(0);
+  const words = [];
+  for (let i = 0; i < bits.length; i += 8) words.push(parseInt(bits.slice(i, i + 8).join(""), 2));
+  const PAD = [0xec, 0x11];
+  let pi = 0;
+  while (words.length < totalData) { words.push(PAD[pi % 2]); pi += 1; }
+  const ec = qrRS(words, ecLen);
+  const all = [...words, ...ec];
+
+  const m = Array.from({ length: size }, () => new Array(size).fill(null));
+  const put = (r, c, v) => { if (r >= 0 && r < size && c >= 0 && c < size) m[r][c] = v; };
+  // كواشف الموضع
+  const finder = (r0, c0) => {
+    for (let r = -1; r <= 7; r++) for (let c = -1; c <= 7; c++) {
+      const on = r >= 0 && r <= 6 && c >= 0 && c <= 6
+        && (r === 0 || r === 6 || c === 0 || c === 6 || (r >= 2 && r <= 4 && c >= 2 && c <= 4));
+      put(r0 + r, c0 + c, on ? 1 : 0);
+    }
+  };
+  finder(0, 0); finder(0, size - 7); finder(size - 7, 0);
+  // التوقيت
+  for (let i = 8; i < size - 8; i++) { put(6, i, i % 2 === 0 ? 1 : 0); put(i, 6, i % 2 === 0 ? 1 : 0); }
+  put(size - 8, 8, 1);                                  // وحدة داكنة
+  // نمط المحاذاة للنسخ 2+
+  if (ver >= 2) {
+    const p = size - 7;
+    for (let r = -2; r <= 2; r++) for (let c = -2; c <= 2; c++)
+      put(p + r, p + c, Math.max(Math.abs(r), Math.abs(c)) !== 1 ? 1 : 0);
+  }
+  // حجز معلومات الشكل
+  for (let i = 0; i < 9; i++) { if (m[8][i] === null) put(8, i, 0); if (m[i][8] === null) put(i, 8, 0); }
+  for (let i = 0; i < 8; i++) { if (m[8][size - 1 - i] === null) put(8, size - 1 - i, 0); if (m[size - 1 - i][8] === null) put(size - 1 - i, 8, 0); }
+  // البيانات بنمط الأفعى + قناع 0
+  let bitI = 0;
+  const dataBits = [];
+  for (const w of all) for (let i = 7; i >= 0; i--) dataBits.push((w >> i) & 1);
+  let up = true;
+  for (let col = size - 1; col > 0; col -= 2) {
+    if (col === 6) col -= 1;
+    for (let k = 0; k < size; k++) {
+      const row = up ? size - 1 - k : k;
+      for (const c of [col, col - 1]) {
+        if (m[row][c] !== null) continue;
+        let bit = bitI < dataBits.length ? dataBits[bitI] : 0;
+        bitI += 1;
+        if ((row + c) % 2 === 0) bit ^= 1;             // قناع 0
+        m[row][c] = bit;
+      }
+    }
+    up = !up;
+  }
+  // معلومات الشكل: L + قناع 0 = 111011111000100
+  const FMT = "111011111000100";
+  for (let i = 0; i < 15; i++) {
+    const b = Number(FMT[i]);
+    if (i < 6) put(8, i, b); else if (i < 8) put(8, i + 1, b);
+    else if (i === 8) put(7, 8, b); else put(14 - i, 8, b);
+    if (i < 8) put(size - 1 - i, 8, b); else put(8, size - 15 + i, b);
+  }
+  return m.map((row) => row.map((v) => (v === null ? 0 : v)));
+}
+
+function drawQr(g, text, x, y, size) {
+  const m = qrMatrix(text);
+  const n = m.length;
+  const quiet = 2;
+  const unit = Math.max(1, Math.floor(size / (n + quiet * 2)));
+  const total = unit * (n + quiet * 2);
+  const ox = x + Math.floor((size - total) / 2), oy = y + Math.floor((size - total) / 2);
+  g.fillStyle = "#fff"; g.fillRect(ox, oy, total, total);
+  g.fillStyle = "#000";
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++)
+    if (m[r][c]) g.fillRect(ox + (c + quiet) * unit, oy + (r + quiet) * unit, unit, unit);
+}
+
+function drawCode128(g, text, x, y, w, h) {
+  const t = String(text || "").replace(/[^\x20-\x7e]/g, "");
+  if (!t) return;
+  // المجموعة B: تبدأ بـ104
+  const codes = [104];
+  let sum = 104;
+  for (let i = 0; i < t.length; i++) {
+    const v = t.charCodeAt(i) - 32;
+    codes.push(v); sum += v * (i + 1);
+  }
+  codes.push(sum % 103);
+  codes.push(106);                                   // إيقاف
+  const pattern = codes.map((c) => C128[c]).join("");
+  const modules = pattern.split("").reduce((a, ch) => a + Number(ch), 0);
+  const unit = Math.max(1, Math.floor(w / modules));
+  const total = unit * modules;
+  let cx = x + Math.floor((w - total) / 2);
+  let dark = true;
+  g.fillStyle = "#000";
+  for (const ch of pattern) {
+    const n = Number(ch) * unit;
+    if (dark) g.fillRect(cx, y, n, h);
+    cx += n; dark = !dark;
+  }
+}
+
+function toCsv(headers, rows) {
+  const esc = (v) => {
+    const s = v == null ? "" : String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  // ⚠ BOM أولًا: إكسل العربي يقرأ الملف بلا BOM كمحارف مكسّرة
+  return "\uFEFF" + [headers.map(esc).join(","), ...rows.map((r) => r.map(esc).join(","))].join("\n");
+}
+
+function goldProfit(opening, closing) {
+  if (!opening || !closing) return null;
+  const grams = Math.round((closing.net - opening.net) * 1000) / 1000;
+  // أثر السعر على النقد المحمول: نفس الريالات بسعرين.
+  //
+  // ⚠ يُحسب على النقد **الختامي** لا الافتتاحي: هو ما كان في يدك حين
+  // تحرّك السعر. من بدأ بلا نقد وباع ثم أمسك الريالات وصعد السعر،
+  // خسارته على ما أمسك — لا على ما لم يكن عنده.
+  const cashHeld = (closing.cashSide?.cash || 0) * (closing.price24 || 0);   // بالريال
+  const priceEffect = opening.price24 > 0 && closing.price24 > 0
+    ? Math.round((cashHeld / closing.price24 - cashHeld / opening.price24) * 1000) / 1000
+    : 0;
+  return {
+    grams,
+    pct: opening.net > 0 ? Math.round((grams / opening.net) * 10000) / 100 : null,
+    tradingGrams: Math.round((grams - priceEffect) * 1000) / 1000,
+    priceEffectGrams: priceEffect,
+    openingNet: opening.net,
+    closingNet: closing.net,
+  };
+}
+
+// ⚠ حقلا mgrFeeEnabled/mgrFeeRate مستقلّان عمدًا عن taxEnabled/taxRate:
+// الأخيران لضريبة القيمة المضافة (15٪) المربوطة بالباك إند الحقيقي، وهذان
+// لعمولة المدير — نسخة العميل الأصلية كانت تقرأ عمولة المدير من
+// taxEnabled/taxRate نفسيهما، وهو خلطٌ يُفسد الضريبة والعمولة معًا لو
+// نُقل كما هو. راجع core/constants.js: DEFAULT_SETTINGS.mgrFeeEnabled/mgrFeeRate.
+const mgrFeeEnabled = (settings) => settings?.mgrFeeEnabled === true;
+
+const mgrFeeRate = (settings) => {
+  const v = Number(settings?.mgrFeeRate);
+  if (!Number.isFinite(v) || v < 0) return MGR_FEE_DEFAULT;
+  const pct = Math.round((v <= 1 ? v * 100 : v) * 1000) / 1000;
+  return pct <= 100 ? pct : MGR_FEE_DEFAULT;
+};
+
+function mgrFeeOn(amount, rate) {
+  return fromHalalas(Math.round(halalas(amount) * (Number(rate) || 0) / 100));
+}
+
+function mgrFeeBreakdown({ sales, returns = [], users = [], dayId, rate }) {
+  const inDay = (x) => !dayId || x.dayId === dayId || x.businessDayId === dayId;
+  const byId = new Map();
+  const touch = (id, name) => {
+    if (!byId.has(id)) byId.set(id, { sellerId: id, name: name || "غير محدّد", sales: 0, returns: 0, invoices: 0 });
+    return byId.get(id);
+  };
+  for (const s of sales.filter(inDay)) {
+    const u = users.find((x) => x.id === s.sellerId);
+    const row = touch(s.sellerId || "none", s.sellerName || u?.name);
+    row.sales = fromHalalas(halalas(row.sales) + halalas(s.total));
+    row.invoices += 1;
+  }
+  for (const r of returns.filter(inDay)) {
+    const row = touch(r.sellerId || "none", r.sellerName);
+    row.returns = fromHalalas(halalas(row.returns) + halalas(r.refund ?? r.total ?? 0));
+  }
+  const rows = [...byId.values()].map((r) => {
+    const net = fromHalalas(halalas(r.sales) - halalas(r.returns));
+    return { ...r, net, fee: mgrFeeOn(net, rate) };
+  }).sort((a, b) => b.net - a.net);
+  return {
+    rows,
+    totalSales: fromHalalas(rows.reduce((a, r) => a + halalas(r.sales), 0)),
+    totalReturns: fromHalalas(rows.reduce((a, r) => a + halalas(r.returns), 0)),
+    totalNet: fromHalalas(rows.reduce((a, r) => a + halalas(r.net), 0)),
+    totalFee: fromHalalas(rows.reduce((a, r) => a + halalas(r.fee), 0)),
+  };
+}
+
+const exchangeKind = (id) => EXCHANGE_KINDS.find((k) => k.id === id);
+
+const normalizeRecovery = (code) => String(code || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+
+function vendorChallenge(branchCode, atMs = Date.now()) {
+  const slot = Math.floor(atMs / (RECOVERY_WINDOW_MIN * 60 * 1000));
+  const seed = `${String(branchCode || "LOCAL")}::${slot}`;
+  const h = hashPin(seed, "challenge");
+  return h.slice(0, 4).toUpperCase() + "-" + h.slice(4, 8).toUpperCase();
+}
+
+function vendorResponse(challenge, branchCode) {
+  const clean = normalizeRecovery(challenge);
+  return hashPin(`${clean}::${String(branchCode || "LOCAL")}`, OUNCE_SECRET)
+    .slice(0, 6).toUpperCase();
+}
+
+function renderLabelCanvas({ item, code, cfg, currency, price24, logoImg }) {
+  const dpi = Number(cfg.dpi) || 203;
+  const mm = (v) => Math.round((Number(v) || 0) / 25.4 * dpi);
+  const W = mm(cfg.labelWidthMm || 50);
+  const H = mm(cfg.labelHeightMm || 20);
+  const L = { ...DEFAULT_PRINTER.layout, ...(cfg.layout || {}) };
+  const c = document.createElement("canvas");
+  c.width = W; c.height = H;
+  const g = c.getContext("2d");
+  g.fillStyle = "#fff"; g.fillRect(0, 0, W, H);
+  g.fillStyle = "#000";
+  // ⚠ x من الحافة اليمنى: يُحوَّل لإحداثي الكانفس بطرحه من العرض مع عرض
+  // العنصر — فالمستطيل يجلس حيث وضعه المستخدم بالضبط.
+  const rect = (el) => ({ x: W - mm(el.x || 0) - mm(el.w || 0), y: mm(el.y || 0), w: mm(el.w || 0), h: mm(el.h || 0) });
+
+  // ⚠ النص يملأ ارتفاع مستطيله لا حجمًا ثابتًا: ما تراه في المعاينة هو
+  // ما يُطبع. القياس الذي اشتكى منه المستخدم كان من حجمٍ ثابت لا يتبع
+  // المستطيل، فتختلف المعاينة عن الورق.
+  const fitText = (text, el, align) => {
+    if (!el?.show || !text) return;
+    const r = rect(el);
+    let px = Math.floor(r.h * 0.82);
+    g.textBaseline = "middle";
+    for (let k = 0; k < 24; k++) {
+      g.font = `bold ${px}px Cairo, Tajawal, "Noto Sans Arabic", sans-serif`;
+      if (g.measureText(String(text)).width <= r.w || px <= 6) break;
+      px -= 1;
+    }
+    g.direction = /[\u0600-\u06FF]/.test(String(text)) ? "rtl" : "ltr";
+    if (align === "center") { g.textAlign = "center"; g.fillText(String(text), r.x + r.w / 2, r.y + r.h / 2); }
+    else { g.textAlign = "right"; g.fillText(String(text), r.x + r.w, r.y + r.h / 2); }
+  };
+
+  if (L.logo?.show && logoImg) {
+    const r = rect(L.logo);
+    // ⚠ يحافظ على النسبة داخل المستطيل — صورةٌ ممطوطة تُفسد الشعار
+    const ratio = logoImg.width / logoImg.height;
+    let w = r.w, h = Math.round(r.w / ratio);
+    if (h > r.h) { h = r.h; w = Math.round(r.h * ratio); }
+    g.drawImage(logoImg, r.x + Math.round((r.w - w) / 2), r.y + Math.round((r.h - h) / 2), w, h);
+  }
+  fitText(String(item?.description || "").slice(0, 30), L.desc);
+  if (item?.karat) fitText(`K ${item.karat}`, L.karat);
+  if (item?.weight) fitText(`W ${fmtW(item.weight)}`, L.weight);
+  if (price24 && item?.weight && item?.karat) {
+    const p = item.weight * item.karat / 24 * price24 + (Number(item.workmanshipPerUnit) || 0);
+    fitText(`${currency}${fmtMoney(Math.round(p))}`, L.price);
+  }
+  const theCode = String(code || item?.ref || "");
+  const useQr = cfg.symbology === "qr";
+  if (useQr && L.qr?.show) {
+    const r = rect(L.qr);
+    drawQr(g, theCode, r.x, r.y, Math.min(r.w, r.h));
+  }
+  if (!useQr && L.barcode?.show) {
+    const r = rect(L.barcode);
+    g.fillStyle = "#000";
+    drawCode128(g, theCode, r.x, r.y, r.w, r.h);
+  }
+  g.fillStyle = "#000";
+  if (L.code?.show) {
+    const r = rect(L.code);
+    let px = Math.floor(r.h * 0.9);
+    for (let k = 0; k < 20; k++) { g.font = `${px}px monospace`; if (g.measureText(theCode).width <= r.w || px <= 6) break; px -= 1; }
+    g.textAlign = "center"; g.direction = "ltr"; g.textBaseline = "middle";
+    g.fillText(theCode, r.x + r.w / 2, r.y + r.h / 2);
+  }
+  return c;
+}
+
+/// يحوّل رمز 8 خانات لـEPC بالست عشري (12 بايت = 96 بت) لرقاقة RFID.
+///
+/// ⚠ الرمز ASCII يُحشى بأصفار إلى 12 بايت: القارئ يقرأ 24 رمزًا ست عشريًّا
+/// ويُعيد الثمانية الأولى نصًّا — بلا جدول ربطٍ يضيع.
+function codeToEpcHex(code) {
+  const bytes = new Uint8Array(12);
+  const src = String(code || "").toUpperCase();
+  for (let i = 0; i < 12; i++) bytes[i] = i < src.length ? src.charCodeAt(i) & 0xff : 0;
+  return Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("").toUpperCase();
+}
+
+/// يحوّل canvas إلى بايتات BITMAP بلغة TSPL.
+///
+/// ⚠ TSPL: البت 1 = أبيض، 0 = أسود (عكس المتوقّع). والعرض بالبايتات
+/// لا بالنقاط، وكل صفٍّ يُحشى لثمانيةٍ.
+function canvasToTsplBitmap(c, threshold = 160) {
+  const W = c.width, H = c.height;
+  const d = c.getContext("2d").getImageData(0, 0, W, H).data;
+  const wb = Math.ceil(W / 8);
+  const out = new Uint8Array(wb * H);
+  for (let yy = 0; yy < H; yy++) {
+    for (let xb = 0; xb < wb; xb++) {
+      let b = 0;
+      for (let k = 0; k < 8; k++) {
+        const xx = xb * 8 + k;
+        let bit = 1;                                   // أبيض افتراضًا (الحشو)
+        if (xx < W) {
+          const i = (yy * W + xx) * 4;
+          const lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+          bit = lum < threshold ? 0 : 1;
+        }
+        b = (b << 1) | bit;
+      }
+      out[yy * wb + xb] = b;
+    }
+  }
+  return { bytes: out, widthBytes: wb, height: H };
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  معايرة الطابعة — قبل أي طباعة
+//
+//  ⚠ الطابعة لا تعرف مقاس ورقك حتى تُعايَر. تُخبرها «80×40» فتطبع بمقاسٍ
+//  لا يطابق الورق، فيقع الملصق على حدّ ورقتين — وهذا ما يُرى في الطباعة
+//  وسطًا بدل اليمين، والمحتوى مقسومًا بين ملصقين.
+//
+//  `GAPDETECT` تجعلها **تقيس الورق بنفسها**: تسحب ورقتين وتحسب المقاس
+//  والفجوة، ثم تُثبّتهما في ذاكرتها.
+// ═══════════════════════════════════════════════════════════════════════
+
+/// أوامر المعايرة — تُرسَل وحدها، بلا صورة.
+function tsplCalibrateBytes({ widthMm, heightMm, gapMm }) {
+  const lines = [
+    // ⚠ SIZE وGAP أولًا: المعايرة تبدأ من تقديرٍ ثم تُصحّحه بالقياس
+    `SIZE ${widthMm} mm, ${heightMm} mm`,
+    `GAP ${gapMm} mm, 0 mm`,
+    // ⚠ تُخزَّن في ذاكرة الطابعة: بلاها تُنسى عند الإطفاء وتعود المشكلة
+    `SET TEAR ON`,
+    `GAPDETECT`,
+    `HOME`,
+    `CLS`,
+  ];
+  return new TextEncoder().encode(lines.join("\r\n") + "\r\n");
+}
+
+/// يبني الأمر الكامل لطباعة ملصق.
+///
+/// ⚠ الكتابة في الرقاقة قبل PRINT: الطابعة تُشفّر الرقاقة ثم تطبع فوقها —
+/// ونسختان بالرمز نفسه تعنيان رقاقتين بالرمز نفسه، لذلك تُطبع الـRFID
+/// نسخةً واحدةً دائمًا.
+function tsplJobBytes({ canvas, cfg, copies = 1, code = "" }) {
+  const enc = new TextEncoder();
+  const bmp = canvasToTsplBitmap(canvas);
+  const rfidLine = cfg.rfid && code
+    ? String(cfg.rfidCommand || 'RFID WRITE,EPC,"{HEX}"').replace("{HEX}", codeToEpcHex(code)).replace("{CODE}", code)
+    : null;
+  const head = [
+    `SIZE ${cfg.labelWidthMm || 50} mm, ${cfg.labelHeightMm || 20} mm`,
+    `GAP ${cfg.gapMm ?? 2} mm, 0 mm`,
+    `DENSITY ${Math.min(15, Math.max(0, Number(cfg.density) || 8))}`,
+    `SPEED ${cfg.speed || 3}`,
+    `DIRECTION ${cfg.direction ?? 1}`,
+    `REFERENCE 0,0`,
+    `CLS`,
+    ...(rfidLine ? [rfidLine] : []),
+    // BITMAP x,y,width_bytes,height,mode(0=overwrite),data
+    `BITMAP 0,0,${bmp.widthBytes},${bmp.height},0,`,
+  ].join("\r\n");
+  const tail = `\r\nPRINT 1,${rfidLine ? 1 : Math.max(1, Number(copies) || 1)}\r\n`;
+  const h = enc.encode(head), t = enc.encode(tail);
+  const all = new Uint8Array(h.length + bmp.bytes.length + t.length);
+  all.set(h, 0); all.set(bmp.bytes, h.length); all.set(t, h.length + bmp.bytes.length);
+  return all;
+}
+
+/// يُرسل بايتات لطابعة عبر BLE بقطعٍ صغيرة.
+///
+/// ⚠ BLE يقبل نحو 512 بايت في الكتابة — والملصق 12 كيلو. إرسالٌ دفعةً
+/// واحدة يُرفض أو يُقطع بصمت. ومهلةٌ قصيرة بين القطع تمنع تجاوز
+/// مخزن الطابعة.
+async function bleWriteChunked(characteristic, bytes, chunk = 180) {
+  const noResp = characteristic.properties.writeWithoutResponse;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    const part = bytes.slice(i, i + chunk);
+    if (noResp) await characteristic.writeValueWithoutResponse(part);
+    else await characteristic.writeValue(part);
+    if (i + chunk < bytes.length) await new Promise((r) => setTimeout(r, 12));
+  }
+}
+
+/// يُرسل عبر WebUSB — طابعات ملصقاتٍ موصولة بمنفذ USB مباشرة.
+///
+/// ⚠ كروم على الحاسب وأندرويد فقط؛ لا سفاري. والطابعة تُطلب مرةً
+/// بمربّع اختيارٍ ثم تُذكَر.
+async function usbPrint(bytes, cfg, remember) {
+  if (!navigator.usb) throw new Error("WebUSB غير مدعوم — استعمل كروم على الحاسب أو أندرويد");
+  let dev = (await navigator.usb.getDevices()).find((d) => !cfg.usbSerial || d.serialNumber === cfg.usbSerial);
+  if (!dev) {
+    // ⚠ بلا فلتر مورّد: طرازاتٌ مختلفة تُصدر بمعرّفاتٍ مختلفة
+    dev = await navigator.usb.requestDevice({ filters: [{ classCode: 7 }, {}] });
+    remember?.(dev.serialNumber || "");
+  }
+  await dev.open();
+  if (dev.configuration === null) await dev.selectConfiguration(1);
+  // منفذ الإخراج: أول واجهة طابعة (class 7) أو أول واجهة فيها OUT
+  let ifaceNum = null, epOut = null;
+  for (const iface of dev.configuration.interfaces) {
+    const alt = iface.alternates[0];
+    const out = alt.endpoints.find((e) => e.direction === "out");
+    if (out && (alt.interfaceClass === 7 || epOut === null)) { ifaceNum = iface.interfaceNumber; epOut = out.endpointNumber; if (alt.interfaceClass === 7) break; }
+  }
+  if (epOut === null) throw new Error("لا منفذ إخراج في الطابعة");
+  await dev.claimInterface(ifaceNum);
+  try {
+    const chunk = 4096;
+    for (let i = 0; i < bytes.length; i += chunk) await dev.transferOut(epOut, bytes.slice(i, i + chunk));
+  } finally {
+    try { await dev.releaseInterface(ifaceNum); await dev.close(); } catch (e) { /* أُغلقت */ }
+  }
+}
+
+/// يُرسل بايتاتٍ خامًا للطابعة — للمعايرة وأوامر الصيانة.
+///
+/// ⚠ مسارُ إرسالٍ واحد: نسخُ منطق البلوتوث وUSB في كل دالةٍ يجعل
+/// المعايرة تعمل والطباعة لا، بلا سببٍ ظاهر.
+async function sendRawToPrinter(bytes, cfg, deviceRef, onRemember) {
+  if (cfg.transport === "usb") {
+    await usbPrint(bytes, cfg, onRemember);
+    return { transport: "usb", bytes: bytes.length };
+  }
+  if (!deviceRef?.current) throw new Error("لا طابعة بلوتوث مقترنة — اضغط «اقتران»");
+  const server = await deviceRef.current.gatt.connect();
+  const services = await server.getPrimaryServices();
+  for (const svc of services) {
+    const chars = await svc.getCharacteristics();
+    const target = chars.find((c) => c.properties.write || c.properties.writeWithoutResponse);
+    if (target) {
+      await bleWriteChunked(target, bytes);
+      return { transport: "bluetooth", bytes: bytes.length };
+    }
+  }
+  throw new Error("الطابعة لا تعرض خاصية كتابة");
+}
+
+/// يطبع ملصقًا واحدًا على الطابعة المضبوطة — نقطةٌ واحدة لكل الطباعة.
+///
+/// ⚠ الشعار شعارُ المحل الذي اختاره المستخدم من الاستوديو — لا شعار
+/// التطبيق. بلا شعارٍ مخصّص لا يُطبع شيء.
+async function printLabelToDevice({ item, code, cfg, currency, price24, deviceRef, onRemember }) {
+  const lang = "tspl";
+  let bytes;
+  {
+    let logoImg = null;
+    if (cfg.showLogo && cfg.customLogo) {
+      logoImg = await new Promise((res) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = cfg.customLogo; });
+    }
+    // ⚠ الخطوط العربية تُحمَّل قبل الرسم — وإلا رُسم النص بخطٍّ بديل قبيح
+    try { await document.fonts?.ready; } catch (e) { /* لا تحكّم */ }
+    const canvas = renderLabelCanvas({ item, code, cfg, currency, price24, logoImg });
+    bytes = tsplJobBytes({ canvas, cfg, copies: cfg.copies || 1, code });
+  }
+  const r = await sendRawToPrinter(bytes, cfg, deviceRef, onRemember);
+  return { lang, ...r };
+}
+
+async function fetchLiveGram24(signal) {
+  for (const src of PRICE_SOURCES) {
+    try {
+      const r = await fetch(src.url, { signal, cache: "no-store" });
+      if (!r.ok) continue;
+      const j = await r.json();
+      const g = src.parse(j);
+      if (g == null) continue;
+      const v = Math.round(g * 100) / 100;
+      if (v < PRICE_SANE.min || v > PRICE_SANE.max) continue;
+      return { gram24: v, source: src.label, at: Date.now() };
+    } catch (_) {
+      // ⚠ نمرّ للتالي بصمت: عرض خطأ شبكة لكل مصدر يملأ الشاشة بما
+      // لا يفيد البائع — يهمّه السعر أو غيابه، لا أيّ خادمٍ سقط.
+      continue;
+    }
+  }
+  return null;
+}
+
+function toIntlPhone(raw, country = "966") {
+  const d = String(raw || "").replace(/\D/g, "");
+  if (!d) return "";
+  if (d.startsWith("00")) return d.slice(2);
+  if (d.startsWith(country)) return d;
+  if (d.startsWith("0")) return country + d.slice(1);
+  if (d.length === 9) return country + d;
+  return d;
+}
+
+function prettyPhone(raw) {
+  const intl = toIntlPhone(raw);
+  if (!intl) return "";
+  const local = intl.startsWith("966") ? "0" + intl.slice(3) : intl;
+  return local.replace(/(\d{3})(\d{3})(\d+)/, "$1 $2 $3");
+}
+
+function openWhatsApp(phone, message) {
+  const intl = toIntlPhone(phone);
+  const text = encodeURIComponent(String(message || ""));
+  const url = intl ? `https://wa.me/${intl}?text=${text}` : `https://wa.me/?text=${text}`;
+  window.open(url, "_blank");
+  return !!intl;
+}
+
+function generateRecoveryCode() {
+  const pick = () => RECOVERY_ALPHABET[Math.floor(Math.random() * RECOVERY_ALPHABET.length)];
+  return Array.from({ length: 4 }, () => Array.from({ length: 4 }, pick).join("")).join("-");
+}
+
+export { accountForCategory, accountGroup, accountLabel, accountPath, aiAllowedFor, aiAllowedForRole, aiScope, askReportAi, attachmentByteSize, b32Decode, b32Encode, balancesAt, bleWriteChunked, branchDataKey, branchSnapshotKey, btSupported, bundleById, bundledPages, canvasToTsplBitmap, cardFeeOf, cashAccountFor, cashTrialBalance, categoryById, categoryLabel, childrenOf, cleanToken, codeCounter, codeToEpcHex, compressImage, contentWidth, createNhrFileAssembler, dayEnd, dayStart, detectColumns, detectTraceTopic, diffDatasets, drawCode128, drawQr, emptyRow, exchangeKind, expenseAccountFor, exportLedgerXlsx, exportTablesPdf, fetchAiAuditNarrative, fetchAiBusinessInsights, fetchAiChatReply, fetchAiReportSpec, fetchGoldPriceSAR, fetchLiveGram24, fineAt, fmtWeight, fromGram, fundingSourceLabel, generateRecoveryCode, generateUnitCode, goldDestLabel, goldProfit, guessScreens, hiddenNumbersScan, inPeriod, inputStyle, isBundle, isGoldCogs, isLiveScrap, isPartial, isUnder, issueBranchCode, issueLicense, itemLabel, journalTrialBalance, loadAttachment, lotAllocatedPieces, lotAllocatedWeight, lotReconcile, marginFor, mgrFeeBreakdown, mgrFeeEnabled, mgrFeeOn, mgrFeeRate, migrateLegacyKeys, modeAllowsAction, modeAllowsPage, modeAllowsTab, nameExists, navPerRow, nhrClassify, nhrCommand, nhrCommands, nhrCrc32, nhrHex, nhrIsLiveFrame, nhrParseBatchFile, nhrParseJson, nhrParseLiveFrame, normHeader, normalizeArabicQuery, normalizeFundingSource, normalizeName, normalizeRecovery, onlineBlockReason, openAttachment, openWhatsApp, ounceHash, periodRange, prettyPhone, prettyToken, priceBreakdown, printLabelToDevice, printedCount, qrEccBytes, qrGaloisTables, qrMatrix, qrMul, qrRS, r2, r3, readFileAsDataUrl, readKeyOrNull, remainingQty, renderLabelCanvas, reportFactsText, reportFindings, resolveCompare, resolveRange, rfidSettingsFor, runAuditChecks, saleModeOf, saleProfitOf, saleProfitSplit, saveAttachment, scrapPrice24, sellPrice24, sendRawToPrinter, setRuntimeCategories, splitCsvLine, statementDigest, streamBase, toCsv, toGram, toIntlPhone, toLatinDigits, trustBalance, tsplCalibrateBytes, tsplJobBytes, unitById, unitCostBasis, unitCurrentValue, usbPrint, useDebounced, useNhrReader, useViewport, useVoice, useWedgeScanner, vendorChallenge, vendorResponse, weekStart, weightTrialBalance };

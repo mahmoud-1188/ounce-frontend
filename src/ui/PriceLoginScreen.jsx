@@ -5,6 +5,7 @@ import { GRAMS_PER_OUNCE, KARATS, fmt, pricePerGram } from "../core/money.js";
 import { Card } from "./Card.jsx";
 import { GoldPriceChart } from "./GoldPriceChart.jsx";
 import { Hallmark } from "./Hallmark.jsx";
+import { OqiyyahLogo } from "./OqiyyahLogo.jsx";
 import { PriceHero } from "./PriceHero.jsx";
 
 function PriceLoginScreen({ priceData, autoUpdating, autoError, lastAutoFetch, onRefreshNow, onLogin, requirePin = true, users = [], onDirectLogin }) {
@@ -73,16 +74,12 @@ function PriceLoginScreen({ priceData, autoUpdating, autoError, lastAutoFetch, o
         .chart-pulse-ring { animation: chartPulseRing 1.8s ease-out infinite; }
       `}</style>
       <div className="mx-auto px-4 pt-6 pb-10">
-        <div className="flex items-center justify-center mb-3">
-          <img
-            src="/brand/logo-mark-transparent.png"
-            alt="أوقية"
-            style={{ width: 72, height: 72, objectFit: "contain" }}
-          />
+        <div className="flex items-center gap-3 mb-4">
+          <OqiyyahLogo size={64} />
+          <h1 style={{ fontFamily: "'Cairo', sans-serif", color: "var(--text)", margin: 0 }} className="text-2xl font-extrabold">
+            أسعار الذهب
+          </h1>
         </div>
-        <h1 style={{ fontFamily: "'Cairo', sans-serif", color: "var(--text)" }} className="text-2xl font-extrabold mb-4 text-center">
-          أسعار الذهب
-        </h1>
         <Card style={{ padding: 18 }}>
           <div className="flex items-center justify-between mb-1">
             <div className="flex items-center gap-1.5">

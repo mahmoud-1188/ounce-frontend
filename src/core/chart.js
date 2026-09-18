@@ -1,3 +1,5 @@
+import { ISSUE_REASONS } from "./constants.js";
+
 const ACC_UNIT = {
   currency: "عملة",
   gram: "جرام صافٍ",
@@ -30,7 +32,7 @@ const CHART_OF_ACCOUNTS = [
   // مخزون الذهب — يُمسك بالوحدتين: الوزن حقيقة والقيمة تقدير
   { code: "1200", name: "مخزون الذهب", parent: "1000", unit: "both", nature: "debit", statement: "balance", group: true },
   { code: "1210", name: "ذهب مشغول — جاهز للبيع", parent: "1200", unit: "both", nature: "debit", statement: "balance" },
-  { code: "1220", name: "ذهب خام بالخزنة", parent: "1200", unit: "both", nature: "debit", statement: "balance" },
+  { code: "1220", name: "ذهب كسر بالخزنة", parent: "1200", unit: "both", nature: "debit", statement: "balance" },
   // ⚠ خزنة الكسر غير خزنة المشغول.
   //
   // خلطهما يجعل جرد الخزنة يعدّ ذهبًا لم يُصفَّ مع بضاعةٍ جاهزة —
@@ -61,7 +63,11 @@ const CHART_OF_ACCOUNTS = [
 
   { code: "2200", name: "التزامات أخرى", parent: "2000", unit: "currency", nature: "credit", statement: "balance", group: true },
   { code: "2210", name: "عرابين وحجوزات عملاء", parent: "2200", unit: "currency", nature: "credit", statement: "balance" },
-  { code: "2220", name: "ضريبة القيمة المضافة المستحقة", parent: "2200", unit: "currency", nature: "credit", statement: "balance" },
+  { code: "2220", name: "عمولة مدير مستحقة — تحصيل", parent: "2200", unit: "currency", nature: "credit", statement: "balance" },
+  // ⚠ حساب مستقل للعمولة: خلطها بالعمولات العامة (2340) يجعل كشف
+  // المدير وكشف البائعين رقمًا واحدًا لا يُفصل.
+  { code: "2240", name: "عمولة مدير مستحقة — إقفال", parent: "2200", unit: "currency",
+    nature: "credit", statement: "balance" },
   { code: "2230", name: "رواتب مستحقة", parent: "2200", unit: "currency", nature: "credit", statement: "balance" },
 
   // ═══ ٣ حقوق الملكية ═══
@@ -104,6 +110,15 @@ const CHART_OF_ACCOUNTS = [
   { code: "4310", name: "فائض تصفية الكسر", parent: "4300", unit: "both", nature: "credit", statement: "income" },
   { code: "4320", name: "فائض وزن", parent: "4300", unit: "both", nature: "credit", statement: "income" },
   { code: "4330", name: "زيادة بالجرد", parent: "4300", unit: "currency", nature: "credit", statement: "income" },
+  // ⚠ فروق التثبيت حسابٌ مستقلّ لا «متنوّعة».
+  //
+  // من ثبّت ذهبًا بسعر 400 وكان تكلفته 380 ربح عشرين للجرام — وهذا
+  // ربحُ سوقٍ لا ربحُ مصنعية. ودفنُه في «متنوّعة» يُخفي أهمّ رقمٍ في
+  // تجارة الذهب: كم ربحتَ من تحرّك السعر وكم من الصنعة.
+  { code: "4180", name: "أرباح تثبيت السعر", parent: "4100", unit: "currency",
+    nature: "credit", statement: "income" },
+  { code: "5180", name: "خسائر تثبيت السعر", parent: "5100", unit: "currency",
+    nature: "debit", statement: "income" },
   { code: "4390", name: "إيرادات متنوّعة", parent: "4300", unit: "currency",
     nature: "credit", statement: "income" },
   { code: "4340", name: "ذهب مُستخرَج بالإصلاح", parent: "4300", unit: "both", nature: "credit", statement: "income" },
@@ -112,19 +127,25 @@ const CHART_OF_ACCOUNTS = [
   { code: "5000", name: "تكلفة المبيعات", parent: null, unit: "both", nature: "debit", statement: "income", group: true },
 
   { code: "5100", name: "تكلفة الذهب المباع", parent: "5000", unit: "both", nature: "debit", statement: "income", group: true },
+  // ⚠ ورقةٌ لا أبٌ: القيد على 5100 الرئيسي يجلس فوق فروعه فلا يظهر
+  // تحت أيٍّ منها، ومجموع الفروع لا يساوي أباها.
+  { code: "5105", name: "تكلفة المبيعات — قطع مباعة", parent: "5100", unit: "currency",
+    nature: "debit", statement: "income" },
   { code: "5110", name: "مشتريات من الموردين", parent: "5100", unit: "both", nature: "debit", statement: "income" },
   { code: "5120", name: "شراء كسر", parent: "5100", unit: "both", nature: "debit", statement: "income" },
-  { code: "5130", name: "شراء سبائك وخام", parent: "5100", unit: "both", nature: "debit", statement: "income" },
+  { code: "5130", name: "شراء سبائك وكسر", parent: "5100", unit: "both", nature: "debit", statement: "income" },
 
   { code: "5200", name: "المصنعية", parent: "5000", unit: "currency", nature: "debit", statement: "income", group: true },
   { code: "5210", name: "أجور الموردين", parent: "5200", unit: "currency", nature: "debit", statement: "income" },
   { code: "5220", name: "مصنعية تصنيع من كسر", parent: "5200", unit: "currency", nature: "debit", statement: "income" },
+  { code: "5240", name: "عمولة مدير", parent: "5200", unit: "currency",
+    nature: "debit", statement: "income" },
   { code: "5230", name: "إعدام مصنعية عند الصهر", parent: "5200", unit: "currency", nature: "debit", statement: "income" },
 
   { code: "5300", name: "الفاقد والهالك", parent: "5000", unit: "both", nature: "debit", statement: "income", group: true },
   { code: "5310", name: "هالك تصنيع", parent: "5300", unit: "both", nature: "debit", statement: "income" },
   { code: "5320", name: "ذهب مُضاف بالإصلاح", parent: "5300", unit: "both", nature: "debit", statement: "income" },
-  { code: "5330", name: "عجز بالجرد", parent: "5300", unit: "currency", nature: "debit", statement: "income" },
+  { code: "5330", name: "عجز بالجرد", parent: "5300", unit: "both", nature: "debit", statement: "income" },
 
   // ═══ ٦ المصروفات التشغيلية ═══
   { code: "6000", name: "المصروفات التشغيلية", parent: null, unit: "currency", nature: "debit", statement: "income", group: true },
@@ -186,6 +207,10 @@ const CHART_OF_ACCOUNTS = [
   //
   //  والمحل هنا كالبنك: يحفظ ويُقيّد ويُسلّم عند الطلب.
   // ══════════════════════════════════════════════════════════════
+  // موردو الأصول غير موردي الذهب: ديونٌ تُسدَّد نقدًا لا وزنًا، ولا تدخل
+  // كشف الموردين ولا التزام الذهب.
+  { code: "2140", name: "دائنون — موردو أصول", parent: "2100", unit: "currency",
+    nature: "credit", statement: "balance" },
   { code: "2400", name: "حسابات العملاء — أمانة", parent: "2000", unit: "both",
     nature: "credit", statement: "balance" },
   { code: "2410", name: "أمانة نقدية — أرصدة العملاء", parent: "2400",
@@ -223,6 +248,111 @@ const CHART_OF_ACCOUNTS = [
   { code: "7100", name: "ذهب أمانة لدى المحل", parent: "7000", unit: "gram", nature: "debit", statement: "offBalance", note: "ملك العميل — لا يدخل الميزانية" },
   { code: "7200", name: "بضاعة محجوزة", parent: "7000", unit: "both", nature: "debit", statement: "offBalance" },
   { code: "7300", name: "تحويلات داخلية", parent: "7000", unit: "both", nature: "debit", statement: "offBalance", note: "طرفاها يُلغيان بعضهما" },
+
+  // ══════════════════════════════════════════════════════════════════
+  //  الحسابات الانتقالية
+  //
+  //  ⚠ بضاعةٌ بين حالتين ليست في أيٍّ منهما. وبلا حسابٍ لها تختفي من
+  //  الدفترين بين الخروج والوصول — أو تُحسب مرتين.
+  // ══════════════════════════════════════════════════════════════════
+  { code: "1245", name: "ذهب مباع لم يُسلَّم", parent: "1200", unit: "both",
+    nature: "debit", statement: "balance" },
+  { code: "1246", name: "ذهب وارد بالطريق", parent: "1200", unit: "both",
+    nature: "debit", statement: "balance" },
+  { code: "1290", name: "تحويلات بين الفروع — وسيط", parent: "1200", unit: "both",
+    nature: "debit", statement: "balance" },
+
+  // ══════════════════════════════════════════════════════════════════
+  //  المخصصات
+  //
+  //  ⚠ بلاها أرباحك مبالَغٌ فيها: تحسب ديونًا لن تُحصَّل وبضاعةً لن
+  //  تُباع بسعرها. والمخصص لا يُخرج نقدًا — يُصحّح رقمًا.
+  //
+  //  وطبيعتها دائنة رغم أنها في الأصول: حساباتٌ مقابلة تُنقص ما فوقها.
+  // ══════════════════════════════════════════════════════════════════
+  { code: "1195", name: "مخصص ديون مشكوك في تحصيلها", parent: "1100", unit: "currency",
+    nature: "credit", statement: "balance" },
+  { code: "1295", name: "مخصص هبوط قيمة المخزون", parent: "1200", unit: "currency",
+    nature: "credit", statement: "balance" },
+  { code: "1180", name: "مصروفات مدفوعة مقدمًا", parent: "1100", unit: "currency",
+    nature: "debit", statement: "balance" },
+  { code: "2250", name: "مصروفات مستحقة غير مدفوعة", parent: "2200", unit: "currency",
+    nature: "credit", statement: "balance" },
+  { code: "6910", name: "مصروف مخصص الديون المشكوك فيها", parent: "6901", unit: "currency",
+    nature: "debit", statement: "income" },
+  { code: "6920", name: "مصروف هبوط قيمة المخزون", parent: "6901", unit: "currency",
+    nature: "debit", statement: "income" },
+  { code: "6901", name: "المخصصات", parent: "6000", unit: "currency",
+    nature: "debit", statement: "income", group: true },
+
+  // ══════════════════════════════════════════════════════════════════
+  //  الضمانات
+  //
+  //  ⚠ خارج الميزانية عمدًا: كفالةٌ أعطيتَها ليست مصروفًا ولا التزامًا
+  //  حتى تُطالَب بها — لكنها تُذكَر، فمن يقرأ الميزانية يحتاج أن يعرف.
+  // ══════════════════════════════════════════════════════════════════
+  { code: "7400", name: "ضمانات وكفالات صادرة", parent: "7000", unit: "currency",
+    nature: "debit", statement: "memo" },
+  { code: "7500", name: "ضمانات وكفالات واردة", parent: "7000", unit: "currency",
+    nature: "credit", statement: "memo" },
+
+  // ═══ ما يطلبه المراجع الخارجي والزكاة والدخل ═══
+  //
+  // ⚠ كشفُ حسابٍ لجهةٍ رسمية يحتاج حساباتٍ بأسمائها المعروفة عندها.
+  // «مصروفات أخرى» لا تُقبل جوابًا عن «كم دفعتم ضريبةً هذا العام؟».
+
+  // الضريبة والزكاة — طرفان لا طرف
+  { code: "1360", name: "ضريبة القيمة المضافة — مدخلات", parent: "1300", unit: "currency",
+    nature: "debit", statement: "balance" },
+  { code: "2225", name: "ضريبة القيمة المضافة — مخرجات", parent: "2200", unit: "currency",
+    nature: "credit", statement: "balance" },
+  { code: "2227", name: "الزكاة المستحقة", parent: "2200", unit: "currency",
+    nature: "credit", statement: "balance" },
+  { code: "6550", name: "مصروف الزكاة والضرائب", parent: "6000", unit: "currency",
+    nature: "debit", statement: "income" },
+
+  // الأوراق التجارية — الشيك التزامٌ قبل أن يُصرف
+  { code: "1315", name: "شيكات برسم التحصيل", parent: "1300", unit: "currency",
+    nature: "debit", statement: "balance" },
+  { code: "2255", name: "شيكات صادرة — لم تُصرف", parent: "2200", unit: "currency",
+    nature: "credit", statement: "balance" },
+
+  // التمويل
+  { code: "2270", name: "قروض قصيرة الأجل", parent: "2200", unit: "currency",
+    nature: "credit", statement: "balance" },
+  { code: "2500", name: "التزامات طويلة الأجل", parent: "2000", unit: "currency",
+    nature: "credit", statement: "balance", group: true },
+  { code: "2510", name: "قروض طويلة الأجل", parent: "2500", unit: "currency",
+    nature: "credit", statement: "balance" },
+  { code: "6560", name: "فوائد وأعباء تمويلية", parent: "6000", unit: "currency",
+    nature: "debit", statement: "income" },
+
+  // حقوق الملكية — ما يطلبه النظام السعودي
+  { code: "3150", name: "جاري الشركاء", parent: "3000", unit: "currency",
+    nature: "credit", statement: "balance" },
+  { code: "3250", name: "الاحتياطي النظامي", parent: "3000", unit: "currency",
+    nature: "credit", statement: "balance" },
+
+  // الخصومات — طرفٌ مستقل لا خصمٌ من الإيراد
+  //
+  // ⚠ الخصم الممنوح يُقيَّد مدينًا مستقلًّا لا يُنقص الإيراد مباشرةً:
+  // مراجعٌ يسأل «كم خصمتم؟» لا يجد جوابًا إن ذاب في رقم المبيعات.
+  { code: "4155", name: "خصومات ممنوحة للعملاء", parent: "4100", unit: "currency",
+    nature: "debit", statement: "income" },
+  { code: "5185", name: "خصم مكتسب من الموردين", parent: "5100", unit: "currency",
+    nature: "credit", statement: "income" },
+  { code: "5175", name: "مشتريات مردودة للموردين", parent: "5100", unit: "currency",
+    nature: "credit", statement: "income" },
+
+  // الجرد الدوري — طرفا قائمة الدخل
+  //
+  // ⚠ النظام دوري: تكلفة المبيعات = مخزون أول + مشتريات − مخزون آخر.
+  // بلا هذين الحسابين لا تُبنى قائمة دخلٍ يقبلها مراجع.
+  { code: "5150", name: "مخزون أول المدة", parent: "5100", unit: "currency",
+    nature: "debit", statement: "income" },
+  { code: "5160", name: "مخزون آخر المدة", parent: "5100", unit: "currency",
+    nature: "credit", statement: "income" },
+
 ];
 
 /// خريطة التصنيفات القديمة إلى أكواد الشجرة.
@@ -295,11 +425,33 @@ const CATEGORY_TO_ACCOUNT = {
 
   // ⚠ سداد مكتب التسكير يُنقص التزامه لا يُنشئ مصروفًا
   taskir_settlement: "2130",
-
+  // ⚠ التثبيت: نقدٌ يدخل الخزنة مقابل ذهبٍ خرج — أو العكس
+  price_fix_in: "4180",
+  price_fix_out: "5180",
+  gosi: "2320",
+  eos: "2330",
+  asset_purchase: "1410",   // للتصنيف النقدي فقط؛ القيد يأخذ حساب الفئة الفعلي
+  asset_sale: "4210",
 };
 
 const POSTING_RULES = {
   // ── المبيعات ──
+  // ══ التثبيت — الجسر الوحيد بين الدفترين ══
+  //
+  // ⚠ قيدٌ في الدفترين معًا: الوزن يخرج من الخزنة والنقد يدخلها.
+  // أحدهما بلا الآخر يجعل ذهبًا يختفي أو نقدًا يظهر من لا شيء.
+  price_fix_sell: {
+    label: "تثبيت ذهب → نقد",
+    cash: { debit: "1110", credit: "4180" },      // الخزنة ← أرباح التثبيت
+    weight: { from: "1220", to: null },           // يخرج من ذهب الخزنة
+    note: "الوزن بمعادل 24 · المبلغ = الوزن × سعر التثبيت · الفرق عن التكلفة يُفصل لاحقًا",
+  },
+  price_fix_buy: {
+    label: "تثبيت نقد → ذهب",
+    cash: { debit: "5180", credit: "1110" },      // خسائر/تكلفة ← الخزنة
+    weight: { from: null, to: "1220" },           // يدخل ذهب الخزنة
+    note: "النقد يخرج بسعر التثبيت والوزن يدخل بمعادل 24",
+  },
   sale_cash: {
     label: "بيع نقدي",
     cash: { debit: "1130", credit: "4140" },     // الصندوق اليومي ← إيراد المبيعات
@@ -327,6 +479,124 @@ const POSTING_RULES = {
     cash: { debit: "4140", credit: "1130" },
     weight: { from: null, to: "1210" },
   },
+  // ── الحسابات الانتقالية ──
+  //
+  // ⚠ بيعٌ لم يُسلَّم: خرج من «جاهز للبيع» ولم يخرج من المحل. ولو تُرك
+  // في المخزون لبِيع مرتين، ولو أُخرج لاختفى.
+  sold_undelivered: {
+    label: "بيع لم يُسلَّم",
+    cash: null,
+    weight: { from: "1210", to: "1245" },
+    note: "يخرج من الجاهز ويبقى في عهدة المحل حتى التسليم",
+  },
+  delivered_out: {
+    label: "تسليم بيعٍ مؤجّل",
+    cash: null,
+    weight: { from: "1245", to: null },
+    note: "الخروج النهائي عند التسليم",
+  },
+  goods_in_transit: {
+    label: "ذهب وارد بالطريق",
+    cash: { debit: "1246", credit: "1110" },
+    weight: { from: null, to: "1246" },
+    note: "دُفع ولم يصل — ليس مخزونًا بعد",
+  },
+  transit_received: {
+    label: "استلام الوارد",
+    cash: { debit: "1210", credit: "1246" },
+    weight: { from: "1246", to: "1210" },
+    note: "وصل فصار مخزونًا",
+  },
+  branch_out: {
+    label: "تحويل لفرع آخر",
+    cash: null,
+    weight: { from: "1210", to: "1290" },
+    note: "⚠ يبقى في الوسيط حتى يؤكّد الفرع الآخر — بلاه يختفي بين الاثنين",
+  },
+  branch_in: {
+    label: "استلام من فرع",
+    cash: null,
+    weight: { from: "1290", to: "1210" },
+    note: "يُغلق الوسيط عند التأكيد",
+  },
+
+  // ── المخصصات ──
+  //
+  // ⚠ لا نقد يتحرّك: المخصص يُصحّح رقمًا لا يدفع مالًا. ومن يظنّه صرفًا
+  // يبحث عن المبلغ في الصندوق ولا يجده.
+  provision_doubtful: {
+    label: "مخصص ديون مشكوك فيها",
+    cash: { debit: "6910", credit: "1195" },
+    weight: null,
+    note: "يُقلّل الذمم بلا مسّ النقد",
+  },
+  provision_inventory: {
+    label: "مخصص هبوط قيمة المخزون",
+    cash: { debit: "6920", credit: "1295" },
+    weight: null,
+    note: "بضاعةٌ راكدة قيمتها الدفترية فوق قيمتها السوقية",
+  },
+  accrue_expense: {
+    label: "مصروف مستحق",
+    cash: { debit: "6100", credit: "2250" },
+    weight: null,
+    note: "استُهلك ولم يُدفع — يُحمَّل على شهره لا على شهر الدفع",
+  },
+  prepaid_expense: {
+    label: "مصروف مدفوع مقدمًا",
+    cash: { debit: "1180", credit: "1110" },
+    weight: null,
+    note: "دُفع ولم يُستهلك — أصلٌ حتى يُستهلك",
+  },
+
+  workmanship_accrued: {
+    label: "أجور مورّد مستحقة",
+    cash: { debit: "5210", credit: "2120" },
+    weight: null,
+    note: "تُقيَّد عند الشراء الآجل — تُسوّى عند السداد",
+  },
+
+  // ── إخراج ذهب وكسر بدل ──
+  //
+  // ⚠ كانتا تُستدعيان ولا توجدان: `buildWeightEntries` يُرجع [] بصمت،
+  // فالذهب الخارج (تلف، إعادة لمورّد، تحويل لفرع) لا ينقص من الدفتر
+  // الوزني أبدًا. مخزونٌ دفتري يزيد عن الواقع بكل ما خرج — والجرد
+  // يُظهر عجزًا لا سبب له.
+  gold_out: {
+    label: "إخراج ذهب",
+    cash: null,
+    // الوجهة تُبدَّل من الاستدعاء بحسب السبب: مورّد 1320، كسر 1230،
+    // فرع 1290، تلف/فقد 5310، هدية 6900
+    weight: { from: "1210", to: "5310" },
+    note: "الوجهة من ISSUE_REASONS — لا تختفي القطعة أبدًا",
+  },
+  purchase_scrap: {
+    label: "كسر بدلٌ في فاتورة",
+    cash: null,
+    weight: { from: null, to: "1230" },
+    note: "كسر الزبون يدخل صندوق الكسر — قيمته تُقاصّ بالفاتورة",
+  },
+
+  // ── تحويل عهدة ──
+  float_out: {
+    label: "تسليم عهدة",
+    cash: { debit: "1130", credit: "1110" },
+    weight: null,
+    note: "الحسابان يُبدَّلان من الاستدعاء حسب الصندوق المستلِم",
+  },
+  float_in: {
+    label: "ردّ عهدة",
+    cash: { debit: "1110", credit: "1130" },
+    weight: null,
+  },
+
+  mgr_fee: {
+    label: "عمولة مدير",
+    cash: { debit: "5240", credit: "2240" },
+    weight: null,
+    note: "تُستحقّ عند اعتماد الإقفال وتُصرف من كشف المدير",
+  },
+
   network_fee: {
     label: "عمولة الشبكة",
     cash: { debit: "6500", credit: "1140" },
@@ -334,7 +604,7 @@ const POSTING_RULES = {
     note: "مصروف تشغيلي لا يُنقص الإيراد",
   },
   vat_collected: {
-    label: "ضريبة محصّلة",
+    label: "عمولة مستحقة",
     cash: { debit: "1130", credit: "2220" },
     weight: null,
   },
@@ -451,10 +721,10 @@ const POSTING_RULES = {
     liabilityDown: "2110",
   },
   depreciation: {
-    label: "إهلاك شهري",
-    cash: { debit: "6800", credit: "1490" },
+    label: "إهلاك الشهر",
+    cash: null,
     weight: null,
-    note: "⚠ مصروف لا يخرج نقدًا — يُنقص الربح ولا يُنقص الصندوق",
+    composite: true,
   },
   asset_purchase: {
     label: "شراء أصل ثابت",
@@ -464,9 +734,9 @@ const POSTING_RULES = {
   },
   asset_disposal: {
     label: "استبعاد أصل",
-    cash: { debit: "1490", credit: "1410" },
+    cash: null,
     weight: null,
-    note: "عكس المجمّع وإخراج الأصل — والفرق ربح أو خسارة",
+    composite: true,
   },
   payroll_run: {
     label: "مسيّر رواتب",
@@ -494,9 +764,23 @@ const POSTING_RULES = {
   settle_office_gold: {
     label: "سداد مكتب بالذهب",
     cash: null,
-    weight: { from: "1220", to: null },
-    liabilityMove: { from: "2130", to: null },
+    // ⚠ الذهب يذهب إلى 2130 لا إلى null: يُغلق التزام المكتب الذي فُتح
+    // عند `settle_office`. كان يخرج ويختفي، فيبقى المكتب دائنًا للأبد
+    // ولو سُدّد كاملًا — والمراجع يرى دَينًا لا وجود له.
+    weight: { from: "1220", to: "2130" },
     note: "⚖ ذهب يخرج من الخزنة ويُبرئ المكتب بمعادله عيار 24",
+  },
+  cogs_trueup: {
+    label: "تسوية تكلفة المبيعات — إقفال",
+    cash: { debit: "5105", credit: "1210" },
+    weight: null,
+    note: "الفرق بين ربح الدفتر وربح لقطات التكلفة يُقيَّد عند إقفال السنة",
+  },
+  settle_office_cash_gold: {
+    label: "إغلاق التزام مكتب بالنقد",
+    cash: null,
+    weight: { from: null, to: "2130" },
+    note: "الوزن المعادل للمبلغ يدخل 2130 فيُنقص الالتزام",
   },
   settle_office_cash: {
     label: "سداد مكتب نقدًا",
@@ -517,7 +801,7 @@ const POSTING_RULES = {
     weight: null,
   },
 
-  // ── الخزنة والذهب الخام ──
+  // ── الخزنة وذهب الكسر ──
   safe_gold_in: {
     label: "إدخال ذهب للخزنة",
     cash: null,
@@ -530,10 +814,27 @@ const POSTING_RULES = {
     requires: "destination",
     note: "الوجهة إجبارية — سحب بلا وجهة يضيع أثره",
   },
-  taskir_sell: {
-    label: "تسكير — بيع خام لمكتب",
-    cash: { debit: "1110", credit: "5130" },
-    weight: { from: "1220", to: null },
+  // ⚠ الاتجاه: أنت تشتري من المكتب ولا تبيع له.
+  //
+  // كانت القاعدة تُقيَّد بيعًا (نقدٌ يدخل وذهبٌ يخرج) — وهو عكس ما يحدث:
+  // المكتب مصدرُ سبائك عيار 24، فالنقد يخرج والوزن يدخل.
+  taskir_buy: {
+    label: "شراء ذهب من مكتب التسكير",
+    cash: { debit: "5130", credit: "1110" },
+    weight: { from: null, to: "1220" },
+    note: "سبائك عيار 24 — تدخل خزنة الكسر ثم تُسوّى بها ديون الموردين",
+  },
+
+  // تسوية دَين المورد بذهبٍ من مخزون الكسر: وزنٌ يخرج والتزامٌ يسقط
+  taskir_settle_scrap: {
+    label: "تسوية مورد من الكسر",
+    // ⚠ لا قيد نقدي: 2110 حسابُ جرامٍ لا يقبل ريالًا، وتكلفة الكسر
+    // صُرفت يوم شرائه (5120). التسوية وزنٌ خالص.
+    cash: null,
+    // ⚠ الذهب يذهب إلى 2110 لا إلى null: يُغلق الالتزام الذي فُتح عند
+    // الشراء. كان يختفي، فيبقى 2110 سالبًا للأبد ولو سُدّد كاملًا.
+    weight: { from: "1230", to: "2110" },
+    note: "⚖ الكسر يخرج بتكلفته ويُبرئ التزام الذهب على المورد",
   },
 
   // ── الفروقات ──
@@ -543,17 +844,31 @@ const POSTING_RULES = {
     weight: { from: "1210", to: null },
     cost: "5310",
   },
+  gold_wastage: {
+    label: "هالك وزن",
+    // الوزن الناقص عند إقفال الدفعة: خسارةٌ بتكلفته تُخصم من المخزون
+    //
+    // ⚠ `5310` هالك التصنيع لا `5315` فروق الجرد. الأول خسارةٌ معروفة
+    // السبب عند الصياغة، والثاني فرقٌ غير مفسَّر يُراجَع. وخلطهما يُخفي
+    // السرقة داخل الهالك الطبيعي.
+    cash: { debit: "5310", credit: "1210" },
+    weight: { from: "1210", to: null },
+  },
+
   weight_surplus: {
     label: "فائض وزن",
-    cash: null,
+    // الوزن الزائد يزيد المخزون بقيمته ويُقابله إيراد غير تشغيلي
+    cash: { debit: "1210", credit: "4320" },
     weight: { from: null, to: "1210" },
-    revenue: "4320",
   },
   audit_missing: {
     label: "عجز جرد",
-    cash: null,
-    weight: { from: "1210", to: null },
-    cost: "5330",
+    // ⚠ الوزن يذهب لحسابٍ مقابل لا لـ`null`.
+    //
+    // كان يخرج من المخزون ويختفي — فلا أستاذ له، ومن يسأل «كم ضاع
+    // هذا العام؟» لا يجد حسابًا يفتحه. الآن يتراكم في 5330 ويُقرأ.
+    cash: { debit: "5330", credit: "1210" },
+    weight: { from: "1210", to: "5330" },
   },
 
   // ── نقد صرف ──
@@ -565,16 +880,24 @@ const POSTING_RULES = {
   customer_deposit: { label: "عربون", cash: { debit: "1130", credit: "2210" }, weight: null },
   repair_income: { label: "إيراد إصلاح", cash: { debit: "1130", credit: "4130" }, weight: null },
   receipt: { label: "تحصيل آجل", cash: { debit: "1130", credit: "1310" }, weight: null },
-  cash_surplus: { label: "زيادة جرد", cash: { debit: "1130", credit: "4330" }, weight: null },
-  cash_shortage: { label: "عجز جرد", cash: { debit: "5330", credit: "1130" }, weight: null },
-  transfer: {
-    label: "تحويل داخلي",
-    cash: { debit: "7300", credit: "7300" },
+  cash_surplus: {
+    label: "زيادة جرد",
+    cash: { debit: "1130", credit: "4390" },
     weight: null,
-    note: "طرفاه يُلغيان بعضهما — خارج القوائم",
+    note: "عدُّ الصندوق فوق الدفتر — يُقيَّد إيرادًا عرضيًّا ويُراجَع",
   },
-
+  cash_shortage: { label: "عجز جرد", cash: { debit: "5330", credit: "1130" }, weight: null },
   // ── خارج الميزانية ──
+  // ⚠ الاستلام من الإدارة: الوزن يدخل مخزون الفرع مقابل حساب التحويلات
+  // 1290 — لا مقابل رأس المال، فالبضاعة انتقلت داخل الشركة ولم تُشترَ.
+  branch_receive: {
+    label: "استلام شحنة من الإدارة",
+    cash: null,
+    // ⚠ من حساب التحويلات بين الفروع لا من رأس المال: البضاعة انتقلت
+    // داخل الشركة ولم تُشترَ، فقيمتها لا تتغيّر — يتغيّر موضعها فقط.
+    weight: { from: "1290", to: "1210" },
+    note: "بضاعة مُكوَّدة من الإدارة تدخل مخزون الفرع برموزها",
+  },
   trust_in: {
     label: "استلام ذهب أمانة",
     cash: null,

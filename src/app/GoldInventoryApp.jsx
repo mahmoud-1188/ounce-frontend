@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Banknote, ChevronUp, FileText, Handshake, Loader2, Lock, LogOut, Menu, Mic, Package, PackageMinus, Plus, Printer, Receipt, RotateCcw, Scale, Search, ShoppingCart, Truck, Wrench, X } from "lucide-react";
-import { POSTING_RULES } from "../core/chart.js";
+import { CHART_OF_ACCOUNTS, POSTING_RULES } from "../core/chart.js";
 import { APP_MODES, CATEGORY_STATE, DEFAULT_APP_MODE, DEFAULT_CATEGORIES, DEFAULT_INTEGRATION, DEFAULT_OPENING_BALANCE, DEFAULT_PRINTER, DEFAULT_SETTINGS, DEFAULT_STORE, DEFAULT_USERS, EXPENSE_CATEGORIES, ISSUE_REASONS, MIGRATION_FLAG, PARTNER_REQUIRED, PUBLISH_CAP, RFID_DEFAULTS, ROLES, TRUST_MOVES } from "../core/constants.js";
 import { DEFAULT_COMMISSION } from "../core/erp.js";
 import { AUDIT_KEY, AUDIT_LOG_KEY, BANK_TX_KEY, BRANCH_IDENTITY_KEY, BUSINESS_DAYS_KEY, CASH_KEY, CATEGORIES_KEY, COMMISSIONS_KEY, CUSTOMERS_KEY, CUSTOM_GROUPS_KEY, DAILY_CUSTODY_KEY, ENTRY_SESSIONS_KEY, EXPENSES_KEY, EXPENSE_NAMES_KEY, EXT_INVOICES_KEY, FISCAL_CLOSURES_KEY, GOLD_LEDGER_KEY, HQ_PERMISSIONS_KEY, INTEGRATION_KEY, ITEMS_KEY, JOURNAL_KEY, LOTS_KEY, MENU_ORDER_KEY, NAV_LAYOUT_KEY, OPENING_BALANCE_KEY, PARTNERS_KEY, PARTNER_TX_KEY, PRICE_KEY, PRINTER_KEY, RECEIPTS_KEY, REPAIRS_KEY, RESERVATIONS_KEY, RETURNS_KEY, RFID_KEY, SAFE_AUDITS_KEY, SAFE_GOLD_KEY, SAFE_KEY, SALES_KEY, SCRAP_CUSTODY_KEY, SCRAP_KEY, SCRAP_REQUESTS_KEY, SCRAP_SURPLUS_KEY, SETTINGS_KEY, SHORTCUTS_KEY, STOCKTAKE_LOCK_KEY, STORE_KEY, STORE_ORDERS_KEY, SUPPLIERS_KEY, TASKIR_KEY, TASKIR_OFFICES_KEY, TASKIR_OFFICE_TX_KEY, TRUST_ACCOUNTS_KEY, TRUST_GOLD_KEY, TRUST_LEDGER_KEY, USERS_KEY, WEIGHT_ADJ_KEY } from "../core/keys.js";
@@ -134,7 +134,7 @@ import { buildWeightEntries } from "../domain/buildWeightEntries.js";
 import { computeCommission } from "../domain/computeCommission.js";
 import { computeReturnAmounts } from "../domain/computeReturnAmounts.js";
 import { hashPin } from "../domain/hashPin.js";
-import { aiAllowedFor, aiScope, branchDataKey, branchSnapshotKey, bundleById, cardFeeOf, categoryLabel, contentWidth, exportTablesPdf, fetchGoldPriceSAR, generateUnitCode, goldDestLabel, inPeriod, isBundle, isLiveScrap, itemLabel, lotAllocatedWeight, migrateLegacyKeys, modeAllowsAction, modeAllowsPage, modeAllowsTab, nameExists, navPerRow, normalizeFundingSource, normalizeName, r2, r3, remainingQty, saleProfitOf, saveAttachment, setRuntimeCategories, trustBalance, unitCostBasis, unitCurrentValue, useViewport } from "../domain/helpers.js";
+import { aiAllowedFor, aiScope, branchDataKey, branchSnapshotKey, bundleById, cardFeeOf, cashAccountFor, categoryLabel, contentWidth, exchangeKind, expenseAccountFor, exportTablesPdf, fetchGoldPriceSAR, generateUnitCode, goldDestLabel, goldProfit, inPeriod, isBundle, isLiveScrap, itemLabel, lotAllocatedWeight, migrateLegacyKeys, modeAllowsAction, modeAllowsPage, modeAllowsTab, nameExists, navPerRow, normalizeFundingSource, normalizeName, r2, r3, remainingQty, saleProfitOf, saveAttachment, setRuntimeCategories, streamBase, trustBalance, unitCostBasis, unitCurrentValue, useViewport, weightTrialBalance } from "../domain/helpers.js";
 import { isPeriodClosed } from "../domain/isPeriodClosed.js";
 import { key } from "../domain/key.js";
 import { nextCashRef } from "../domain/nextCashRef.js";
@@ -171,6 +171,7 @@ import { CustomersPage } from "../screens/CustomersPage.jsx";
 import { DailyJournalPage } from "../screens/DailyJournalPage.jsx";
 import { ExpensesTab } from "../screens/ExpensesTab.jsx";
 import { FinancialStatementsPage } from "../screens/FinancialStatementsPage.jsx";
+import { computeGoldPosition } from "../domain/computeGoldPosition.js";
 import { IntegrationPage } from "../screens/IntegrationPage.jsx";
 import { InventorySummaryTab } from "../screens/InventorySummaryTab.jsx";
 import { IssueOutPage } from "../screens/IssueOutPage.jsx";
@@ -186,6 +187,13 @@ import { FixedAssetsPage } from "../screens/FixedAssetsPage.jsx";
 import { PayrollPage } from "../screens/PayrollPage.jsx";
 import { AttendanceHrPage } from "../screens/AttendanceHrPage.jsx";
 import { HqReportPage } from "../screens/HqReportPage.jsx";
+import { FullStatementsPage } from "../screens/FullStatementsPage.jsx";
+import { AnyStatementPage } from "../screens/AnyStatementPage.jsx";
+import { GeneralLedgerPage } from "../screens/GeneralLedgerPage.jsx";
+import { MasterReportPage } from "../screens/MasterReportPage.jsx";
+import { CustomerReportPage } from "../screens/CustomerReportPage.jsx";
+import { DocCyclePage } from "../screens/DocCyclePage.jsx";
+import { ExchangePage } from "../screens/ExchangePage.jsx";
 import { PriceFixPage } from "../screens/PriceFixPage.jsx";
 import { RfidSettingsCard } from "../ui/RfidSettingsCard.jsx";
 import { PrintingPage } from "../screens/PrintingPage.jsx";
@@ -217,6 +225,7 @@ import { AiLogoBadge } from "../ui/AiLogoBadge.jsx";
 import { Card } from "../ui/Card.jsx";
 import { DayControl } from "../ui/DayControl.jsx";
 import { FloatingDock } from "../ui/FloatingDock.jsx";
+import { GoldTicker } from "../ui/GoldTicker.jsx";
 import { MoreMenu } from "../ui/MoreMenu.jsx";
 import { NavBtn } from "../ui/NavBtn.js";
 import { PriceLoginScreen } from "../ui/PriceLoginScreen.jsx";
@@ -332,6 +341,9 @@ export default function GoldInventoryApp() {
   const [showPartialSale, setShowPartialSale] = useState(false);
   const [openBundle, setOpenBundle] = useState(null);
   const [showAiSheet, setShowAiSheet] = useState(false);
+  // ⚠ يُستهلك فورًا في AiChatTab عبر onVoiceConsumed كي لا يُعاد الترحيب
+  // الصوتي مع كل فتحٍ لاحق لشاشة المساعد من غير الضغطة المطوّلة.
+  const [aiVoiceFirst, setAiVoiceFirst] = useState(false);
   /// الرصيف يبدأ مطويًّا.
   ///
   /// ⚠ أربعة أزرار عائمة تفتح مع كل تشغيل تحجب المحتوى وتُشتّت.
@@ -2010,7 +2022,12 @@ export default function GoldInventoryApp() {
   };
   const persistOpeningBalance = (next) => persist(OPENING_BALANCE_KEY, next, setOpeningBalance);
   const handleSaveOpeningBalance = (next) => {
-    persistOpeningBalance(normalizeOpeningBalance({ ...next, date: openingBalance.date || new Date().toISOString() }));
+    // ⚠ يُجمَّد المركز الذهبي هنا أيضًا: أول سنةٍ لا إقفال سابقًا لها،
+    // فبلا هذا لا افتتاحي يُقاس منه ربح أول سنة بالجرام.
+    persistOpeningBalance(normalizeOpeningBalance({
+      ...next, date: openingBalance.date || new Date().toISOString(),
+      goldPosition: { ...goldPosition, frozenAt: new Date().toISOString() },
+    }));
     flashToast("تم حفظ الرصيد الافتتاحي");
   };
   const persistFiscalClosures = (next) => persist(FISCAL_CLOSURES_KEY, next, setFiscalClosures);
@@ -2037,6 +2054,12 @@ export default function GoldInventoryApp() {
     const price24 = priceData.current || 0;
     const netProfitGrams = price24 > 0 ? netProfit / price24 : 0;
 
+    // ⚠ ربح السنة بالجرام — الافتتاحي: مركز آخر إقفالٍ سابق، أو المركز
+    // المحفوظ في الرصيد الافتتاحي إن كانت أول سنة. والختامي: المركز الآن.
+    const openingPos = latestClosure?.goldPosition || openingBalance?.goldPosition || null;
+    const closingPos = goldPosition;
+    const gp = openingPos ? goldProfit(openingPos, closingPos) : null;
+
     const closure = {
       id: Date.now().toString(),
       ref: nextRef("closure", fiscalClosures),
@@ -2049,6 +2072,9 @@ export default function GoldInventoryApp() {
       netProfitGrams,
       goldGramsAtClose: goldEquivalent.goldGrams,
       cashGramsAtClose: goldEquivalent.cashGrams,
+      // المركز الذهبي — يُجمَّد هنا ليكون افتتاحي السنة التالية
+      goldPosition: closingPos,
+      goldProfit: gp,
       closingBalances: {
         dailyCash: cashBalance.cash,
         dailyNetwork: cashBalance.network,
@@ -3357,6 +3383,225 @@ export default function GoldInventoryApp() {
     return stamped;
   };
 
+  const handleImportExchange = ({ kind, rows }) => txn("handleImportExchange", () => {
+    if (!rows?.length) return null;
+    const now = new Date().toISOString();
+    const stamp = `IMP-${Date.now().toString(36).toUpperCase().slice(-6)}`;
+    const num = (v) => Number(String(v ?? "").replace(/[^\d.\-]/g, "")) || 0;
+    let posted = 0;
+
+    if (kind === "journal") {
+      // ⚠ تُجمَّع بالمرجع: كل مرجعٍ قيدٌ واحد بأسطره، لا قيدٌ لكل سطر —
+      // وإلا صار كل طرفٍ قيدًا غير متوازن بذاته.
+      const byRef = {};
+      for (const r of rows) (byRef[r.ref || stamp] ??= []).push(r);
+      const entries = Object.entries(byRef).map(([ref, ls]) => ({
+        id: `${stamp}_${ref}`, at: new Date(ls[0].date).toISOString(),
+        refDoc: ref, extRef: ref, opType: "imported", createdBy: currentUser?.name || "",
+        note: ls[0].note || `مستورد — ${stamp}`,
+        lines: ls.map((l) => ({ account: l.account, debit: num(l.debit), credit: num(l.credit) })),
+      }));
+      persist(JOURNAL_KEY, [...entries, ...journal], setJournal);
+      posted = entries.length;
+    } else if (kind === "expenses") {
+      const made = rows.map((r) => ({
+        id: `${stamp}_${r.ref}`, ref: r.ref, extRef: r.ref,
+        date: new Date(r.date).toISOString(),
+        category: EXPENSE_CATEGORIES.find((c) => c.label === r.category)?.id || "other",
+        amount: num(r.amount), fundingSource: r.fundedBy || "safe_cash",
+        note: r.note || `مستورد — ${stamp}`, createdBy: currentUser?.name || "", imported: true,
+      }));
+      persistExpenses([...made, ...expenses]);
+      posted = made.length;
+    } else if (kind === "customers") {
+      const known = new Set(customers.map((c) => c.name));
+      const made = rows.filter((r) => !known.has(r.name)).map((r) => ({
+        id: `${stamp}_${r.ref}`, ref: r.ref, extRef: r.ref,
+        name: r.name, phone: r.phone || "", note: r.note || "", createdAt: now, imported: true,
+      }));
+      persistCustomers([...customers, ...made]);
+      posted = made.length;
+    } else if (kind === "suppliers") {
+      const known = new Set(suppliers.map((x) => x.name));
+      const made = rows.filter((r) => !known.has(r.name)).map((r) => ({
+        id: `${stamp}_${r.ref}`, ref: r.ref, extRef: r.ref,
+        name: r.name, phone: r.phone || "", note: r.note || "", createdAt: now, imported: true,
+      }));
+      persistSuppliers([...suppliers, ...made]);
+      posted = made.length;
+    } else if (kind === "sales") {
+      // ⚠ فاتورةٌ كاملة لا سطرٌ في دفتر: البيع يُخرج وزنًا ويُنشئ ذمّةً
+      // ويُعلّم القطع مباعة. ترحيله قيدًا نقديًّا وحده يترك الذهب في الجرد.
+      const byCode = new Map();
+      for (const it of items) for (const u of it.units || []) if (u.code) byCode.set(u.code, it);
+      const soldCodes = new Set();
+      const made = [];
+      for (const r of rows) {
+        const cs = String(r.codes || "").split(/[;,|]/).map((x) => x.trim()).filter(Boolean);
+        const lines = cs.map((c) => {
+          const it = byCode.get(c);
+          if (!it) return null;
+          soldCodes.add(c);
+          return {
+            itemId: it.id, unitCode: c, quantity: 1,
+            // ⚠ اللقطة من القطعة لا من الملف: نظامٌ آخر قد يُرسل عيارًا
+            // مخالفًا لما في مخزوننا، والمخزون هو المرجع.
+            karatSnapshot: it.karat, weightSnapshot: it.weight,
+            unitPrice: 0, description: it.description,
+          };
+        }).filter(Boolean);
+        if (!lines.length) continue;
+        const total = num(r.total);
+        // السعر يُوزَّع بالوزن — لا بالتساوي، فالقطع تختلف
+        const totW = lines.reduce((a, l) => a + (l.weightSnapshot || 0) * (l.karatSnapshot || 21), 0) || 1;
+        lines.forEach((l) => {
+          l.unitPrice = fromHalalas(Math.round(halalas(total) * ((l.weightSnapshot || 0) * (l.karatSnapshot || 21)) / totW));
+        });
+        const cust = customers.find((c) => c.name === String(r.customer || "").trim());
+        made.push({
+          id: `${stamp}_${r.ref}`, ref: r.ref, extRef: r.ref, imported: true,
+          date: new Date(r.date).toISOString(),
+          customerId: cust?.id || null, customerName: r.customer || "",
+          lines, total, subtotal: total,
+          paidAmount: num(r.paid), paymentMethod: r.method || "cash",
+          note: r.note || `مستورد — ${stamp}`, createdBy: currentUser?.name || "",
+        });
+      }
+      if (!made.length) { flashToast("لا فاتورةَ صالحة"); return null; }
+      persistSales([...made, ...sales]);
+      // القطع تُعلَّم مباعة
+      persistItems(items.map((it) => ({
+        ...it,
+        units: (it.units || []).map((u) => (soldCodes.has(u.code) ? { ...u, sold: true, soldAt: now } : u)),
+      })));
+      // والوزن يخرج من المخزون بعياره
+      postWeight("sale_cash", made.flatMap((sale) => sale.lines.map((l) => ({
+        karat: l.karatSnapshot, weight: l.weightSnapshot, refId: sale.ref,
+        note: `${l.unitCode} · مستورد`,
+      }))));
+      posted = made.length;
+    } else {
+      // ⚠ الأنواع التي تمسّ المخزون أو تُنشئ فواتير لا تُستورد بعد:
+      // فاتورةٌ بلا قطعةٍ في المخزون تُنتج بيعًا لوزنٍ لا وجود له.
+      // أُعلنها صراحةً بدل أن أُرحّل نصفها.
+      flashToast(`استيراد «${exchangeKind(kind)?.label}» لم يُفعَّل بعد — صدّره وراجعه يدويًّا`);
+      return null;
+    }
+
+    audit("create", { entity: "exchange", entityRef: stamp,
+      note: `استيراد ${exchangeKind(kind)?.label} — ${posted} سجلًّا` });
+    flashToast(`رُحّل ${posted} سجلًّا`);
+    return posted;
+  });
+
+  // ── ترحيل القيود بأثر رجعي ──
+  //
+  // الحركات المسجّلة قبل توحيد الدفتر لا قيود لها: الميزان يبدأ من يوم
+  // التوحيد ويترك ما قبله خارجه. الترحيل يمرّ على المخازن ويكتب القيد
+  // الغائب لكل حركة — بتاريخها هي لا بتاريخ اليوم.
+  //
+  // ⚠ يُشغَّل مرة واحدة. كل قيد يحمل `backfilledFrom` بمعرّف حركته، فإن
+  // أُعيد التشغيل تُتخطّى ما كُتب — ولا يتضاعف الميزان.
+  const buildBackfillPlan = () => {
+    const done = new Set(journal.map((e) => e.backfilledFrom).filter(Boolean));
+    const plan = [];
+    const add = (opType, amount, srcId, date, note, extra = {}) => {
+      if (!srcId || done.has(srcId) || !(Number(amount) > 0)) return;
+      plan.push({ opType, amount: fromHalalas(halalas(amount)), srcId, date, note, extra });
+    };
+
+    for (const l of lots) {
+      const fees = Number(l.workmanshipTotal) || 0;
+      const gold = fromHalalas(halalas(l.totalCost || 0) - halalas(fees));
+      const rule = l.paymentMethod === "scrap" ? "purchase_scrap_pay"
+        : l.paymentMethod === "office" ? "purchase_office"
+        : l.paymentMethod === "deferred" ? "purchase_deferred"
+        : l.paymentMethod === "safe_network" ? "purchase_network" : "purchase_cash";
+      if (rule === "purchase_cash" || rule === "purchase_network") {
+        add(rule, gold, l.id, l.date, `شراء ${l.ref}`);
+        add("workmanship_paid", fees, `${l.id}_fee`, l.date, `أجور ${l.ref}`);
+      }
+    }
+    for (const e of scrapEntries) add("scrap_buy", e.total, e.id, e.date, `كسر ${e.ref}`);
+    for (const sale of sales) {
+      const rule = sale.paymentMethod === "credit" ? "sale_credit"
+        : sale.paymentMethod === "card" ? "sale_card" : "sale_cash";
+      add(rule, sale.total, sale.id, sale.date, `فاتورة ${sale.ref}`, {
+        splits: (Number(sale.taxAmount) || 0) > 0
+          ? [{ account: "2220", side: "credit", amount: sale.taxAmount },
+             { account: "4140", side: "debit", amount: sale.taxAmount }]
+          : [],
+      });
+    }
+    // ⚠ رأس المال ومساهمات الشركاء — كانت خارج الترحيل.
+    //
+    // فالخزنة تظهر سالبةً بعد الترحيل: المشتريات والمصروفات تُقيَّد
+    // خروجًا، والمال الذي موّلها لا يدخل. ودفترٌ يبدأ بخزنةٍ سالبة لا
+    // يُقنع مراجعًا.
+    for (const t of safeTx) {
+      const safeAcc = t.method === "network" ? "1120" : "1110";
+      if (t.type === "in" && t.category === "capital_injection") {
+        add("capital_in", t.amount, t.id, t.date, t.note || "رأس مال", { debitOverride: safeAcc });
+      } else if (t.type === "out" && t.category === "owner_withdrawal") {
+        add("owner_draw", t.amount, t.id, t.date, t.note || "سحب مالك", { creditOverride: safeAcc });
+      } else if (t.type === "out" && t.category === "transfer_to_custody") {
+        // ⚠ العهدة تُرحَّل تحويلًا: بلاها يظهر صندوق الكسر سالبًا بقدر ما
+        // اشتُري منه — والمال جاء من الخزنة فعلًا.
+        add("float_out", t.amount, t.id, t.date, t.note || "عهدة الكسر",
+          { debitOverride: "1150", creditOverride: safeAcc });
+      } else if (t.type === "out" && t.category === "transfer_to_daily") {
+        add("float_out", t.amount, t.id, t.date, t.note || "عهدة الصندوق",
+          { debitOverride: t.method === "network" ? "1140" : "1130", creditOverride: safeAcc });
+      }
+    }
+    for (const x of expenses) {
+      // المصروف يُقيَّد بحساب فئته؛ الفئة بلا حساب تذهب للمصروفات العامة
+      add("expense", x.amount, x.id, x.date, x.description || x.name || "مصروف",
+        { debitOverride: expenseAccountFor(x.category),
+          // ⚠ المصدر يحكم الدائن هنا كما في الإدخال الحيّ — وإلا رُحّل
+          // مصروفُ الصندوق اليومي على الخزنة.
+          creditOverride: (() => { try { return cashAccountFor(x.fundingSource || "safe_cash"); } catch (e) { return "1110"; } })() });
+    }
+    return plan;
+  };
+
+  const handleBackfillJournal = () => txn("handleBackfillJournal", () => {
+    // ⚠ حارسٌ مركزي: الإدارة تمنع الفعل لا الشاشة فقط
+    if (!can("backfill")) return null;
+    if (role !== "manager") { flashToast("الترحيل بيد المدير"); return null; }
+    const plan = buildBackfillPlan();
+    if (!plan.length) { flashToast("لا حركات بحاجة لترحيل"); return null; }
+
+    const written = [];
+    let skipped = 0;
+    for (const p of plan) {
+      const built = buildJournalLines(p.opType, p.amount, p.extra);
+      if (built.error || !built.balanced || !built.lines.length) { skipped += 1; continue; }
+      const entry = {
+        id: `${Date.now()}_${written.length}_bf`,
+        ref: nextRef("journalEntry", [...journal, ...written]),
+        // ⚠ تاريخ الحركة لا تاريخ الترحيل: قيدٌ بتاريخ اليوم يضع مبيعات
+        // العام الماضي في أرباح هذا الشهر.
+        date: p.date || new Date().toISOString(),
+        opType: p.opType,
+        label: POSTING_RULES[p.opType]?.label || p.opType,
+        lines: built.lines,
+        note: p.note,
+        backfilledFrom: p.srcId,
+        createdBy: currentUser?.name || "",
+        posted: true, isReversal: false, reversed: false,
+      };
+      written.push(entry);
+    }
+    if (!written.length) { flashToast("تعذّر بناء أي قيد"); return null; }
+    const next = [...written, ...journal];
+    persist(JOURNAL_KEY, next, setJournal);
+    audit("create", { entity: "journal", note: "ترحيل بأثر رجعي",
+      after: { written: written.length, skipped } });
+    flashToast(`رُحّل ${written.length} قيدًا${skipped ? ` · تُخطّي ${skipped}` : ""}`);
+    return { written: written.length, skipped };
+  });
+
   // ── ② التكسير الفعلي ──
   //
   // يُدخل الوزن الصافي بعد نزع الفصوص. الفرق عن التقدير يُقيَّد:
@@ -4556,6 +4801,29 @@ export default function GoldInventoryApp() {
   // Unified "everything expressed as 24k-gold-equivalent grams" figure, combining
   // physical inventory, all liquidity (daily + safe + scrap custody), gold held in
   // the safe (raw + crafted), and in-stock scrap gold.
+  // ═══ المركز الذهبي الصافي — الرقم الذي يحكم السنة ═══
+  //
+  // ⚠ يُحسب من الدفتر الوزني لا من الشاشات: الشاشات تجمع من مستنداتٍ
+  // متفرّقة، والدفتر مصدرٌ واحد كل حركةٍ فيه بمرجعها.
+  const goldPosition = useMemo(() => {
+    const wb = weightTrialBalance({ scrapEntries, safeGoldTx, items, sales, lots, weightAdjustments, goldLedger });
+    // الذمم: مبيعات آجلة لم تُسدَّد
+    const receivables = sales
+      .filter((x) => x.paymentMethod === "credit" && !x.settled)
+      .reduce((a, x) => a + (Number(x.total) || 0) - (Number(x.paidAmount) || 0), 0);
+    // ما عليك بالريال: أجور مورّدين مؤجَّلة
+    const cashPayables = lots
+      .filter((l) => l.paymentMethod === "deferred" && !l.feesPaid)
+      .reduce((a, l) => a + (Number(l.workmanshipTotal) || 0), 0);
+    return computeGoldPosition({
+      weightBalance: wb,
+      cashTotal: cashBalance.total + safeBalance.total + scrapCustodyBalance.total,
+      receivables, cashPayables,
+      price24: priceData.current || 0,
+    });
+  }, [scrapEntries, safeGoldTx, items, sales, lots, weightAdjustments, goldLedger,
+      cashBalance, safeBalance, scrapCustodyBalance, priceData.current]);
+
   const goldEquivalent = useMemo(() => {
     const price24 = priceData.current || 0;
     const liquidity = cashBalance.total + safeBalance.total + scrapCustodyBalance.total;
@@ -6554,6 +6822,19 @@ export default function GoldInventoryApp() {
             </button>
           </div>
         </div>
+        {/* ── شريط السعر الحيّ ── */}
+        {appSettings?.showLiveTicker !== false && (
+          <GoldTicker
+            shopPrice={priceData.current}
+            currency={priceData.currency}
+            canUse={role === "manager" || role === "assistant"}
+            streamUrl={streamBase(appSettings)}
+            /* ⚠ العملة تُمرَّر: `handleSetPrice(val, currency)` بوسيطين،
+                وتركُ الثاني يجعل العملة undefined فتختفي «ر.س» من كل شاشة. */
+            onUseLive={(g) => handleSetPrice(g, priceData.currency)}
+          />
+        )}
+
         {stocktakeLock && (
         <button
           onClick={() => setTab("stocktake")}
@@ -7046,7 +7327,7 @@ export default function GoldInventoryApp() {
         {morePage === "settings" && (
           <AppSettingsPage
             priceData={priceData}
-            settings={appSettings} onSave={handleUpdateSettings} branchIdentity={branchIdentity} onSaveBranch={handleSaveBranchIdentity} hqPermissions={hqPermissions} onBack={() => setMorePage(null)} />
+            settings={appSettings} onSave={handleUpdateSettings} branchIdentity={branchIdentity} onSaveBranch={handleSaveBranchIdentity} hqPermissions={hqPermissions} onBackfill={role === "manager" ? handleBackfillJournal : null} onBack={() => setMorePage(null)} />
         )}
         {morePage === "openingCompare" && (
           <OpeningComparePage
@@ -7080,6 +7361,12 @@ export default function GoldInventoryApp() {
             goldEquivalent={goldEquivalent}
             openingGoldEquivalent={openingGoldEquivalent}
             openingBalance={openingBalance}
+            goldPosition={goldPosition}
+            openingGoldPosition={latestClosure?.goldPosition || openingBalance?.goldPosition || null}
+            sales={sales}
+            returns={returns}
+            users={users}
+            appSettings={appSettings}
             onBack={() => setMorePage(null)}
           />
         )}
@@ -7106,6 +7393,9 @@ export default function GoldInventoryApp() {
         )}
         {morePage === "aiAssistant" && aiAllowedFor(role, currentUser) && (
           <AiAssistantPage
+            voiceFirst={aiVoiceFirst}
+            onVoiceConsumed={() => setAiVoiceFirst(false)}
+            onOpenScreen={openPage}
             auditCtx={{
               items,
               sales,
@@ -7121,6 +7411,30 @@ export default function GoldInventoryApp() {
               cashTx,
               safeTx,
               custodyTx: scrapCustodyTx,
+              // ⚠ الحقول التالية لمحادثة أوقية (buildAiSnapshot) وحدها —
+              // تدقيق الحسابات (runAuditChecks) لا يقرأها، فإضافتها هنا
+              // آمنة ولا تُغيّر سلوك تبويب التدقيق.
+              priceData,
+              returns,
+              safeGoldTx,
+              scrapCustodyTx,
+              customers,
+              suppliers,
+              users,
+              trustAccounts,
+              trustLedger,
+              businessDays,
+              openDay,
+              journal,
+              openingBalance,
+              appSettings,
+              role,
+              payrollRuns,
+              fixedAssets,
+              depreciations,
+              reservations,
+              partners,
+              approvals,
             }}
             reportSnapshot={{
               sales: sales.slice(0, 300).map((s) => ({ date: s.date, total: s.total, tax: s.taxAmount, taxApplicable: s.taxApplicable, seller: s.sellerName, paymentMethod: s.paymentMethod })),
@@ -7228,6 +7542,115 @@ export default function GoldInventoryApp() {
             price24={priceData.current}
             onBack={() => setMorePage(null)}
             flashToast={flashToast}
+          />
+        )}
+        {morePage === "fullStatements" && (
+          <FullStatementsPage
+            journal={journal}
+            goldLedger={goldLedger}
+            accounts={CHART_OF_ACCOUNTS}
+            assets={fixedAssets}
+            currency={priceData.currency}
+            branchName={appSettings?.storeName || ""}
+            preparedBy={currentUser?.name || ""}
+            onBack={() => setMorePage(null)}
+          />
+        )}
+        {morePage === "anyStatement" && (
+          <AnyStatementPage
+            suppliers={suppliers}
+            customers={customers}
+            users={users}
+            taskirOffices={taskirOffices}
+            partners={partners}
+            items={items}
+            lots={lots}
+            accounts={CHART_OF_ACCOUNTS}
+            businessDays={businessDays}
+            expenseNames={expenseNames}
+            sales={sales}
+            returns={returns}
+            expenses={expenses}
+            receipts={receipts}
+            cashTx={cashTx}
+            safeTx={safeTx}
+            scrapEntries={scrapEntries}
+            taskirat={taskirEntries}
+            officeTx={taskirOfficeTx}
+            partnerTx={partnerTx}
+            journal={journal}
+            goldLedger={goldLedger}
+            reservations={reservations}
+            repairs={repairs}
+            currency={priceData.currency}
+            onBack={() => setMorePage(null)}
+          />
+        )}
+        {morePage === "generalLedger" && (
+          <GeneralLedgerPage
+            journal={journal}
+            goldLedger={goldLedger}
+            accounts={CHART_OF_ACCOUNTS}
+            currency={priceData.currency}
+            branchName={appSettings?.storeName || ""}
+            preparedBy={currentUser?.name || ""}
+            onBackfill={role === "manager" ? handleBackfillJournal : null}
+            onBack={() => setMorePage(null)}
+          />
+        )}
+        {morePage === "customerReport" && (
+          <CustomerReportPage
+            customers={customers}
+            sales={sales}
+            returns={returns}
+            receipts={receipts}
+            repairs={repairs}
+            reservations={reservations}
+            trustAccounts={trustAccounts}
+            trustLedger={trustLedger}
+            currency={priceData.currency}
+            branchName={branchIdentity?.name || appSettings?.storeName || ""}
+            onBack={() => setMorePage(null)}
+          />
+        )}
+        {morePage === "docCycle" && (
+          <DocCyclePage
+            branchName={branchIdentity?.name || appSettings?.storeName || ""}
+            preparedBy={currentUser?.name || ""}
+            onBack={() => setMorePage(null)}
+          />
+        )}
+        {morePage === "exchange" && (
+          <ExchangePage
+            sales={sales} returns={returns} expenses={expenses} receipts={receipts}
+            cashTx={cashTx} safeTx={safeTx} journal={journal} items={items}
+            customers={customers} suppliers={suppliers} accounts={CHART_OF_ACCOUNTS}
+            importedRefs={[...journal, ...expenses, ...customers, ...suppliers]
+              .map((x) => x.extRef).filter(Boolean)}
+            branchCode={branchIdentity?.code || ""}
+            branchName={branchIdentity?.name || appSettings?.storeName || ""}
+            currency={priceData.currency}
+            onImport={handleImportExchange}
+            onBack={() => setMorePage(null)}
+          />
+        )}
+        {morePage === "masterReport" && (
+          <MasterReportPage
+            sales={sales}
+            returns={returns}
+            expenses={expenses}
+            cashTx={cashTx}
+            safeTx={safeTx}
+            items={items}
+            lots={lots}
+            scrapEntries={scrapEntries}
+            journal={journal}
+            scrapCustodyTx={scrapCustodyTx}
+            safeGoldTx={safeGoldTx}
+            priceData={priceData}
+            currency={priceData.currency}
+            branchName={appSettings?.storeName || ""}
+            onBack={() => setMorePage(null)}
           />
         )}
         {morePage === "journal" && (
@@ -7725,9 +8148,13 @@ export default function GoldInventoryApp() {
         const acts = [];
         if (aiAllowedFor(role, currentUser))
           acts.push({
-            id: "ai", label: "مساعد أوقية",
+            id: "ai", label: "مساعد أوقية — اضغط مطوّلًا للأسئلة السريعة",
             node: <AiLogoBadge width={30} />,
-            onPress: () => setShowAiSheet(true),
+            // ⚠ نقرة = فتح شاشة المساعد صوتيًّا مباشرة، وضغطة مطوّلة =
+            // ورقة الأوامر السريعة. كانت النقرة العادية تفتح الورقة فقط
+            // وتترك «مساعد أوقية» بابًا لا يُصل إليه بلمسةٍ واحدة.
+            onPress: () => { setAiVoiceFirst(true); openPage("aiAssistant"); },
+            onLongPress: () => setShowAiSheet(true),
           });
         // ── البحث الشامل ──
         //

@@ -1,12 +1,15 @@
 import React, { useState } from "react";
 import { MessageCircle, Package, Search, TrendingUp, Truck, UserRound, X, Zap } from "lucide-react";
-import { inputStyle } from "../domain/helpers.js";
+import { inputStyle, useVoice } from "../domain/helpers.js";
 import { parseShortcutRequest } from "../domain/parseShortcutRequest.js";
 import { AiLogoBadge } from "../ui/AiLogoBadge.jsx";
 import { Card } from "../ui/Card.jsx";
+import { VoiceBar } from "../ui/VoiceBar.jsx";
 
 function AiActionSheet({ onAsk, onOpenChat, onGoTo, hasDay, onClose,
   shortcuts = [], onMakeShortcut, onRemoveShortcut, scope }) {
+  // ⚠ الصوت هنا أهمّ ما يكون: هذه الورقة تُفتح والبائع واقفٌ وزبونٌ أمامه
+  const voice = useVoice("ar-SA");
   const [want, setWant] = useState("");
   const [editing, setEditing] = useState(false);
   // معاينة حيّة: يرى المستخدم أي صفحة سيصنعها قبل الضغط
@@ -135,6 +138,13 @@ function AiActionSheet({ onAsk, onOpenChat, onGoTo, hasDay, onClose,
           </Card>
 
           <p style={{ color: "var(--text2)" }} className="text-[11px] mb-2">أسئلة سريعة</p>
+          {/* ⚠ الصوت هنا أهمّ ما يكون: الورقة تُفتح والبائع واقفٌ وزبونٌ أمامه */}
+          <VoiceBar
+            voice={voice}
+            compact
+            onTranscript={(t) => { onAsk?.(t); onClose?.(); }}
+            replyText=""
+          />
           <div className="flex flex-col gap-2 mb-4">
             {QUICK.map((q, i) => {
               const Icon = q.icon;

@@ -1,6 +1,8 @@
 import React from "react";
-import { fmt, fmtW, weightTimesPrice } from "../core/money.js";
+import { fmt, fmtMoney, fmtW, weightTimesPrice } from "../core/money.js";
+import { mgrFeeBreakdown, mgrFeeEnabled, mgrFeeRate } from "../domain/helpers.js";
 import { Card } from "../ui/Card.jsx";
+import { GoldPositionCard } from "../ui/GoldPositionCard.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 
 function FinancialStatementsPage({
@@ -18,6 +20,12 @@ function FinancialStatementsPage({
   goldEquivalent,
   openingGoldEquivalent,
   openingBalance,
+  goldPosition,
+  openingGoldPosition,
+  sales = [],
+  returns = [],
+  users = [],
+  appSettings,
   onBack,
 }) {
   const currency = priceData.currency;
@@ -84,6 +92,7 @@ function FinancialStatementsPage({
     <div>
       <SubPageHeader title="القوائم المالية والزكاة" onBack={onBack} />
       <div className="px-4 pt-3">
+        {goldPosition && <GoldPositionCard position={goldPosition} opening={openingGoldPosition} />}
         <p style={{ color: "var(--text2)" }} className="text-xs mb-4">
           مبنية على شجرة الحسابات: الأصول (نقدية + ذهب + مخزون) مقابل حقوق الملكية (رأس مال الشركاء + الأرباح المحتجزة)
         </p>
@@ -179,10 +188,28 @@ function FinancialStatementsPage({
         <p style={{ color: "var(--text2)" }} className="text-xs mb-2">
           ملخص الضريبة
         </p>
-        <Card style={{ padding: 14 }}>
+        <Card style={{ padding: 14, marginBottom: mgrFeeEnabled(appSettings) ? 12 : 0 }}>
           <Row label="ضريبة اليوم" value={taxTotals.todayTax} indent />
           <Row label="ضريبة الشهر" value={taxTotals.monthTax} indent />
         </Card>
+
+        {mgrFeeEnabled(appSettings) && (() => {
+          const rate = mgrFeeRate(appSettings);
+          const mgrFee = mgrFeeBreakdown({ sales, returns, users, dayId: null, rate });
+          return (
+            <>
+              <p style={{ color: "var(--text2)" }} className="text-xs mb-2">
+                ملخص عمولة المدير
+              </p>
+              <Card style={{ padding: 14 }}>
+                <Row label={`عمولة كل المبيعات (${rate}٪)`} value={mgrFee.totalFee} indent />
+                <p style={{ color: "var(--text3)" }} className="text-[10px] mt-1">
+                  {fmtMoney(mgrFee.totalFee)} على صافي مبيعات {fmtMoney(mgrFee.totalNet)} — تُعتمد فعليًا يوم الإقفال
+                </p>
+              </Card>
+            </>
+          );
+        })()}
       </div>
     </div>
   );

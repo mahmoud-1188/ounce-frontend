@@ -4,15 +4,19 @@ import { APP_MODES, DEFAULT_APP_MODE, DEFAULT_SETTINGS } from "../core/constants
 import { KARATS, fmt, pricePerGram } from "../core/money.js";
 import { CARD_NETWORKS, DEFAULT_CARD_FEES, DEFAULT_MARGINS } from "../core/money-rules.js";
 import { DEFAULT_THEME, THEMES, applyTheme } from "../core/theme.js";
-import { inputStyle } from "../domain/helpers.js";
+import { hashPin } from "../domain/hashPin.js";
+import { generateRecoveryCode, inputStyle, normalizeRecovery, openWhatsApp, prettyPhone, toIntlPhone } from "../domain/helpers.js";
 import { sanitizeNumeric } from "../domain/sanitizeNumeric.js";
 import { verifyToken } from "../domain/verifyToken.js";
 import { Card } from "../ui/Card.jsx";
 import { Field } from "../ui/Field.jsx";
+import { MgrFeeSettingsCard } from "../ui/MgrFeeSettingsCard.jsx";
 import { NumericInput } from "../ui/NumericInput.jsx";
+import { RfidSettingsCard } from "../ui/RfidSettingsCard.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 
-function AppSettingsPage({ settings, onSave, branchIdentity, onSaveBranch, hqPermissions, priceData = {}, onBack }) {
+function AppSettingsPage({ settings, onSave, branchIdentity, onSaveBranch, hqPermissions, priceData = {}, onBackfill, onBack }) {
+  const [newRecovery, setNewRecovery] = useState("");
   const [fees, setFees] = useState(() => ({ ...DEFAULT_CARD_FEES, ...(settings.cardFees || {}) }));
   const [margins, setMargins] = useState(() => ({ ...DEFAULT_MARGINS, ...(settings.marginByKarat || {}) }));
   const [adj, setAdj] = useState(() => ({ ...DEFAULT_SETTINGS.priceAdjust, ...(settings.priceAdjust || {}) }));
@@ -477,15 +481,154 @@ function AppSettingsPage({ settings, onSave, branchIdentity, onSaveBranch, hqPer
               <input style={inputStyle} type="text" inputMode="decimal" value={taxRate} onChange={(e) => setTaxRate(sanitizeNumeric(e.target.value))} placeholder="15" />
             </Field>
           )}
-        </Card>
         <button
           disabled={!valid}
           onClick={() => onSave({ taxEnabled, taxRate: Number(taxRate) / 100 })}
           className="w-full py-3 rounded-xl font-bold"
           style={{ background: valid ? "linear-gradient(135deg,var(--gradFrom),var(--gradTo))" : "var(--accentBg)", color: valid ? "var(--panel)" : "var(--text3)" }}
         >
-          حفظ الإعدادات
+          حفظ إعدادات الضريبة
         </button>
+        </Card>
+
+        {/* ── بثّ سعر الذهب ── */}
+        <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2 mt-4">
+          بثّ سعر الذهب
+        </p>
+        <Card style={{ padding: 12, marginBottom: 12 }}>
+          <Field label="عنوان خادم البثّ (اختياري)">
+            <input
+              style={inputStyle}
+              type="url"
+              dir="ltr"
+              defaultValue={settings?.priceStreamUrl || ""}
+              onBlur={(e) => {
+                const v = e.target.value.trim();
+                if (v !== (settings?.priceStreamUrl || "")) {
+                  onSave({ ...settings, priceStreamUrl: v });
+                }
+              }}
+              placeholder="https://ounce-price-stream.onrender.com"
+            />
+          </Field>
+          <p style={{ color: "var(--text3)" }} className="text-[10px] leading-6">
+            ⚖ اتركه فارغًا ليسأل التطبيق مصادر السوق مباشرةً. واملأه إن
+            نشرتَ خادم البثّ — عندها يسأل الخادمُ مرةً ويبثّ لكل الأجهزة،
+            فلا يُستهلك حدّ المصدر المجاني.
+          </p>
+          <p style={{ color: "var(--text3)" }} className="text-[10px] leading-6">
+            ⚠ والسعر للنظر لا للفوترة: الفواتير تُحسب بسعر المحل الذي
+            تُثبّته أنت.
+          </p>
+        </Card>
+
+        {/* ── عمولة المدير ── */}
+        <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">عمولة المدير</p>
+        <MgrFeeSettingsCard settings={settings} onSave={onSave} />
+
+        {/* ── واتساب المحل ── */}
+        <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">واتساب المحل</p>
+        <Card style={{ padding: 14, marginBottom: 16 }}>
+          <Field label="رقم واتساب">
+            <input style={inputStyle} inputMode="tel" value={settings.whatsapp || ""}
+              onChange={(e) => onSave({ ...settings, whatsapp: e.target.value })}
+              placeholder="05xxxxxxxx" />
+          </Field>
+          {settings.whatsapp && (
+            <p style={{ color: toIntlPhone(settings.whatsapp).length >= 11 ? "var(--good)" : "var(--bad)", margin: 0 }}
+              className="text-[11px]">
+              {toIntlPhone(settings.whatsapp).length >= 11
+                ? `✓ ${prettyPhone(settings.whatsapp)} — يُرسل إليه بصيغة ${toIntlPhone(settings.whatsapp)}`
+                : "⚠ رقم غير مكتمل"}
+            </p>
+          )}
+          <p style={{ color: "var(--text3)", margin: "6px 0 0" }} className="text-[10px] leading-6">
+            يُستعمل لإرسال التقارير والسندات. تُفتح رسالةٌ جاهزة في واتساب
+            وتضغط إرسال — التطبيق لا يُرسل بنفسك.
+          </p>
+          {settings.whatsapp && toIntlPhone(settings.whatsapp).length >= 11 && (
+            <button onClick={() => openWhatsApp(settings.whatsapp, "رسالة تجربة من تطبيق أوقية ✓")}
+              className="w-full mt-2 py-2 rounded-xl text-[11px] font-bold"
+              style={{ background: "var(--field)", color: "var(--text2)", border: "1px solid var(--line)" }}>
+              جرّب الإرسال
+            </button>
+          )}
+        </Card>
+
+        {/* ── استرجاع الرقم السري ── */}
+        <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">استرجاع الرقم السري</p>
+        <Card style={{ padding: 14, marginBottom: 16 }}>
+          {settings.recoveryCode ? (
+            <>
+              <p style={{ color: "var(--good)", margin: 0 }} className="text-[11px]">✓ رمز استرجاع مُفعَّل</p>
+              <p style={{ color: "var(--text3)", margin: "4px 0 0" }} className="text-[10px] leading-6">
+                الرمز عندك ولا يُعرض ثانيةً. ولّد غيره إن فقدته — القديم يُلغى.
+              </p>
+            </>
+          ) : (
+            <p style={{ color: "var(--text3)", margin: 0 }} className="text-[10px] leading-6">
+              ولّد رمزًا واطبعه واحفظه خارج الجهاز. من نسي رقمه السري يفتح به.
+            </p>
+          )}
+          {newRecovery && (
+            <Card style={{ padding: 12, margin: "8px 0", background: "var(--field)", border: "1px solid var(--accentLine)" }}>
+              <p style={{ color: "var(--text3)", margin: 0 }} className="text-[10px]">اكتبه الآن — لن يظهر ثانيةً</p>
+              <p style={{ color: "var(--accent)", margin: "4px 0", fontFamily: "monospace", letterSpacing: 2 }}
+                className="text-[16px] font-bold">{newRecovery}</p>
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                <button onClick={() => window.print()} className="py-2 rounded-xl text-[11px] font-bold"
+                  style={{ background: "var(--panel)", color: "var(--text2)", border: "1px solid var(--line)" }}>
+                  اطبع
+                </button>
+                <button onClick={() => setNewRecovery("")} className="py-2 rounded-xl text-[11px] font-bold"
+                  style={{ background: "var(--accentBg)", color: "var(--accent)", border: "1px solid var(--accentLine)" }}>
+                  حفظته
+                </button>
+              </div>
+            </Card>
+          )}
+          {!newRecovery && (
+            <button
+              onClick={() => {
+                const code = generateRecoveryCode();
+                setNewRecovery(code);
+                onSave({ ...settings, recoveryCode: hashPin(normalizeRecovery(code), "recovery"),
+                  recoveryAt: new Date().toISOString(), recoveryUsedAt: null });
+              }}
+              className="w-full mt-2 py-2.5 rounded-xl text-[12px] font-bold"
+              style={{ background: "var(--accentBg)", color: "var(--accent)", border: "1px solid var(--accentLine)" }}>
+              {settings.recoveryCode ? "ولّد رمزًا جديدًا" : "ولّد رمز استرجاع"}
+            </button>
+          )}
+          <p style={{ color: "var(--text3)", margin: "8px 0 0" }} className="text-[10px] leading-6">
+            ⚠ وإن فقدت كل شيء: استعادة نسخةٍ احتياطية تُعيد الأرقام السرية
+            معها، أو اتصل بالدعم من شاشة الدخول ← «نسيت الرقم السري».
+          </p>
+        </Card>
+
+        {/* ── قارئ RFID ── */}
+        <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">قارئ RFID</p>
+        <RfidSettingsCard settings={settings} onSave={onSave} currency={priceData.currency} />
+
+        {/* ── ترحيل القيود ── */}
+        {onBackfill && (
+          <>
+            <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">دفتر القيود</p>
+            <Card style={{ padding: 12, marginBottom: 12 }}>
+              <p style={{ color: "var(--text3)", margin: 0 }} className="text-[10px] leading-6">
+                الحركات المسجّلة قبل تحديث الدفتر بلا قيود — الميزان يبدأ من يوم
+                التحديث. الترحيل يكتب القيد الغائب لكل حركة بتاريخها هي.
+              </p>
+              <p style={{ color: "var(--text3)", margin: "4px 0 0" }} className="text-[10px] leading-6">
+                ⚠ يُشغَّل مرة واحدة. المُرحَّل سلفًا يُتخطّى فلا يتضاعف الميزان.
+              </p>
+              <button onClick={onBackfill} className="w-full mt-2 py-2.5 rounded-xl text-[12px] font-bold"
+                style={{ background: "var(--accentBg)", color: "var(--accent)", border: "1px solid var(--accentLine)" }}>
+                ترحيل القيود بأثر رجعي
+              </button>
+            </Card>
+          </>
+        )}
       </div>
     </div>
   );

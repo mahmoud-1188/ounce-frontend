@@ -2,12 +2,13 @@ import React, { useState } from "react";
 import { Check, FileSpreadsheet, FileText, Loader2, Sparkles } from "lucide-react";
 import * as XLSX from "xlsx";
 import { fetchAiAuditNarrative, fetchAiReportSpec, inputStyle, runAuditChecks } from "../domain/helpers.js";
+import { AiChatTab } from "./AiChatTab.jsx";
 import { Card } from "../ui/Card.jsx";
 import { Field } from "../ui/Field.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 
-function AiAssistantPage({ auditCtx, reportSnapshot, currency, onBack }) {
-  const [tab, setTab] = useState("audit"); // 'audit' | 'report'
+function AiAssistantPage({ auditCtx, reportSnapshot, currency, onBack, onOpenScreen, voiceFirst = false, onVoiceConsumed }) {
+  const [tab, setTab] = useState("chat"); // 'chat' | 'audit' | 'report'
 
   // ---- Smart audit state ----
   const [findings, setFindings] = useState(null);
@@ -75,7 +76,14 @@ function AiAssistantPage({ auditCtx, reportSnapshot, currency, onBack }) {
     <div>
       <SubPageHeader title="أوقية — المساعد الذكي" onBack={onBack} />
       <div className="px-4 pt-3">
-        <div className="grid grid-cols-2 gap-2 mb-4">
+        <div className="grid grid-cols-3 gap-2 mb-4">
+          <button
+            onClick={() => setTab("chat")}
+            className="py-2 rounded-xl text-xs font-bold"
+            style={{ background: tab === "chat" ? "var(--accentBg)" : "var(--panel)", color: tab === "chat" ? "var(--accent)" : "var(--text2)", border: "1px solid var(--line)" }}
+          >
+            محادثة
+          </button>
           <button
             onClick={() => setTab("audit")}
             className="py-2 rounded-xl text-xs font-bold"
@@ -91,6 +99,16 @@ function AiAssistantPage({ auditCtx, reportSnapshot, currency, onBack }) {
             تقرير مخصص
           </button>
         </div>
+
+        {tab === "chat" && (
+          <AiChatTab
+            ctx={auditCtx}
+            currency={currency}
+            onOpenScreen={onOpenScreen}
+            voiceFirst={voiceFirst}
+            onVoiceConsumed={onVoiceConsumed}
+          />
+        )}
 
         {tab === "audit" && (
           <>
