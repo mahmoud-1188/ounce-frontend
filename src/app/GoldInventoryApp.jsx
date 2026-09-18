@@ -3494,113 +3494,12 @@ export default function GoldInventoryApp() {
     return posted;
   });
 
-  // ── ترحيل القيود بأثر رجعي ──
-  //
-  // الحركات المسجّلة قبل توحيد الدفتر لا قيود لها: الميزان يبدأ من يوم
-  // التوحيد ويترك ما قبله خارجه. الترحيل يمرّ على المخازن ويكتب القيد
-  // الغائب لكل حركة — بتاريخها هي لا بتاريخ اليوم.
-  //
-  // ⚠ يُشغَّل مرة واحدة. كل قيد يحمل `backfilledFrom` بمعرّف حركته، فإن
-  // أُعيد التشغيل تُتخطّى ما كُتب — ولا يتضاعف الميزان.
-  const buildBackfillPlan = () => {
-    const done = new Set(journal.map((e) => e.backfilledFrom).filter(Boolean));
-    const plan = [];
-    const add = (opType, amount, srcId, date, note, extra = {}) => {
-      if (!srcId || done.has(srcId) || !(Number(amount) > 0)) return;
-      plan.push({ opType, amount: fromHalalas(halalas(amount)), srcId, date, note, extra });
-    };
-
-    for (const l of lots) {
-      const fees = Number(l.workmanshipTotal) || 0;
-      const gold = fromHalalas(halalas(l.totalCost || 0) - halalas(fees));
-      const rule = l.paymentMethod === "scrap" ? "purchase_scrap_pay"
-        : l.paymentMethod === "office" ? "purchase_office"
-        : l.paymentMethod === "deferred" ? "purchase_deferred"
-        : l.paymentMethod === "safe_network" ? "purchase_network" : "purchase_cash";
-      if (rule === "purchase_cash" || rule === "purchase_network") {
-        add(rule, gold, l.id, l.date, `شراء ${l.ref}`);
-        add("workmanship_paid", fees, `${l.id}_fee`, l.date, `أجور ${l.ref}`);
-      }
-    }
-    for (const e of scrapEntries) add("scrap_buy", e.total, e.id, e.date, `كسر ${e.ref}`);
-    for (const sale of sales) {
-      const rule = sale.paymentMethod === "credit" ? "sale_credit"
-        : sale.paymentMethod === "card" ? "sale_card" : "sale_cash";
-      add(rule, sale.total, sale.id, sale.date, `فاتورة ${sale.ref}`, {
-        splits: (Number(sale.taxAmount) || 0) > 0
-          ? [{ account: "2220", side: "credit", amount: sale.taxAmount },
-             { account: "4140", side: "debit", amount: sale.taxAmount }]
-          : [],
-      });
-    }
-    // ⚠ رأس المال ومساهمات الشركاء — كانت خارج الترحيل.
-    //
-    // فالخزنة تظهر سالبةً بعد الترحيل: المشتريات والمصروفات تُقيَّد
-    // خروجًا، والمال الذي موّلها لا يدخل. ودفترٌ يبدأ بخزنةٍ سالبة لا
-    // يُقنع مراجعًا.
-    for (const t of safeTx) {
-      const safeAcc = t.method === "network" ? "1120" : "1110";
-      if (t.type === "in" && t.category === "capital_injection") {
-        add("capital_in", t.amount, t.id, t.date, t.note || "رأس مال", { debitOverride: safeAcc });
-      } else if (t.type === "out" && t.category === "owner_withdrawal") {
-        add("owner_draw", t.amount, t.id, t.date, t.note || "سحب مالك", { creditOverride: safeAcc });
-      } else if (t.type === "out" && t.category === "transfer_to_custody") {
-        // ⚠ العهدة تُرحَّل تحويلًا: بلاها يظهر صندوق الكسر سالبًا بقدر ما
-        // اشتُري منه — والمال جاء من الخزنة فعلًا.
-        add("float_out", t.amount, t.id, t.date, t.note || "عهدة الكسر",
-          { debitOverride: "1150", creditOverride: safeAcc });
-      } else if (t.type === "out" && t.category === "transfer_to_daily") {
-        add("float_out", t.amount, t.id, t.date, t.note || "عهدة الصندوق",
-          { debitOverride: t.method === "network" ? "1140" : "1130", creditOverride: safeAcc });
-      }
-    }
-    for (const x of expenses) {
-      // المصروف يُقيَّد بحساب فئته؛ الفئة بلا حساب تذهب للمصروفات العامة
-      add("expense", x.amount, x.id, x.date, x.description || x.name || "مصروف",
-        { debitOverride: expenseAccountFor(x.category),
-          // ⚠ المصدر يحكم الدائن هنا كما في الإدخال الحيّ — وإلا رُحّل
-          // مصروفُ الصندوق اليومي على الخزنة.
-          creditOverride: (() => { try { return cashAccountFor(x.fundingSource || "safe_cash"); } catch (e) { return "1110"; } })() });
-    }
-    return plan;
-  };
-
-  const handleBackfillJournal = () => txn("handleBackfillJournal", () => {
-    // ⚠ حارسٌ مركزي: الإدارة تمنع الفعل لا الشاشة فقط
-    if (!can("backfill")) return null;
-    if (role !== "manager") { flashToast("الترحيل بيد المدير"); return null; }
-    const plan = buildBackfillPlan();
-    if (!plan.length) { flashToast("لا حركات بحاجة لترحيل"); return null; }
-
-    const written = [];
-    let skipped = 0;
-    for (const p of plan) {
-      const built = buildJournalLines(p.opType, p.amount, p.extra);
-      if (built.error || !built.balanced || !built.lines.length) { skipped += 1; continue; }
-      const entry = {
-        id: `${Date.now()}_${written.length}_bf`,
-        ref: nextRef("journalEntry", [...journal, ...written]),
-        // ⚠ تاريخ الحركة لا تاريخ الترحيل: قيدٌ بتاريخ اليوم يضع مبيعات
-        // العام الماضي في أرباح هذا الشهر.
-        date: p.date || new Date().toISOString(),
-        opType: p.opType,
-        label: POSTING_RULES[p.opType]?.label || p.opType,
-        lines: built.lines,
-        note: p.note,
-        backfilledFrom: p.srcId,
-        createdBy: currentUser?.name || "",
-        posted: true, isReversal: false, reversed: false,
-      };
-      written.push(entry);
-    }
-    if (!written.length) { flashToast("تعذّر بناء أي قيد"); return null; }
-    const next = [...written, ...journal];
-    persist(JOURNAL_KEY, next, setJournal);
-    audit("create", { entity: "journal", note: "ترحيل بأثر رجعي",
-      after: { written: written.length, skipped } });
-    flashToast(`رُحّل ${written.length} قيدًا${skipped ? ` · تُخطّي ${skipped}` : ""}`);
-    return { written: written.length, skipped };
-  });
+  // ⚠ handleBackfillJournal حُذفت عمدًا (2026-09): كانت تبني قيودًا تلقائية
+  // محليًا فقط لتعويض قيود لم تُكتب قط (مفهوم من مرجع محلي بحت). هذا الباك
+  // إند يكتب قيدًا متوازنًا حقيقيًا لكل عملية مالية لحظة حدوثها عبر postJournalEntry
+  // (مشغّل check_journal_balance يمنع أي قيد غير متوازن على مستوى القاعدة نفسها) —
+  // فلا وجود لمفهوم قيد مفقود هنا أصلًا يحتاج ترحيلًا. إبقاؤها كان سيبني قيودًا
+  // وهمية فقط في window.storage المحلي — تختفي عند أول إعادة bootstrap حقيقية.
 
   // ── ② التكسير الفعلي ──
   //
@@ -4149,6 +4048,13 @@ export default function GoldInventoryApp() {
     setReceipts(n.receipts);
     setFixedAssets(n.fixedAssets);
     setDepreciations(n.depreciationSchedule);
+    // ⚠ إصلاح فجوة حقيقية (2026-09): journal/goldLedger كانتا محليتين
+    // بحتة (لا مصدر لهما هنا قبل اليوم) منفصلتين تمامًا عن القيود الحقيقية
+    // التي يكتبها الباك إند فعليًا لكل عملية (بيع/شراء/مصروف/كسر...) عبر
+    // postJournalEntry — الآن مصدر الحقيقة الوحيد لهما هو bootstrap، لا window.storage
+    // (لا setter محلي يكتب إليهما بعد اليوم سوى هذا التحميل ذاته عند إعادة الدخول).
+    setJournal(n.journal);
+    setGoldLedger(n.goldLedger);
     setIsHq(n.isHq);
     if (n.appSettings) {
       // ⚠ دمج لا استبدال: appSettings يحمل أيضًا تفضيلات محلية بحتة
@@ -7327,7 +7233,7 @@ export default function GoldInventoryApp() {
         {morePage === "settings" && (
           <AppSettingsPage
             priceData={priceData}
-            settings={appSettings} onSave={handleUpdateSettings} branchIdentity={branchIdentity} onSaveBranch={handleSaveBranchIdentity} hqPermissions={hqPermissions} onBackfill={role === "manager" ? handleBackfillJournal : null} onBack={() => setMorePage(null)} />
+            settings={appSettings} onSave={handleUpdateSettings} branchIdentity={branchIdentity} onSaveBranch={handleSaveBranchIdentity} hqPermissions={hqPermissions} onBack={() => setMorePage(null)} />
         )}
         {morePage === "openingCompare" && (
           <OpeningComparePage
@@ -7594,7 +7500,6 @@ export default function GoldInventoryApp() {
             currency={priceData.currency}
             branchName={appSettings?.storeName || ""}
             preparedBy={currentUser?.name || ""}
-            onBackfill={role === "manager" ? handleBackfillJournal : null}
             onBack={() => setMorePage(null)}
           />
         )}

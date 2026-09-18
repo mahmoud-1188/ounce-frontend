@@ -672,6 +672,16 @@ function normalizeBootstrap(boot) {
     assetClasses: normalizeAssetClasses(boot.assetClasses || []),
     fixedAssets: normalizeFixedAssets(boot.fixedAssets || []),
     depreciationSchedule: normalizeDepreciationSchedule(boot.depreciationSchedule || []),
+    // ⚠ إصلاح فجوة حقيقية (2026-09): journal/goldLedger كانتا تُبنيان
+    // محليًا بحتة (persist إلى window.storage) منفصلتين عن القيود الحقيقية
+    // التي يكتبها الباك إند فعليًا عبر postJournalEntry لكل عملية مالية، منفصلة
+    // تمامًا عن القيود الحقيقية نفسها. bootstrap.routes.js يُرجع الآن journal/goldLedger
+    // بنفس الشكل الذي تتوقّعه الشاشات بالضبط (id/ref/date/opType/label/lines[{account,debit,credit}]/
+    // note/createdBy/posted/isReversal/reversed/refTable/refId لـjournal، id/at/ref/opType/karat/weight/
+    // accountCode/type/note/createdBy لـgoldLedger) — مرور مباشر بلا تحويل، خلاف
+    // كل الجداول الأخرى هنا (الباك إند يستخدم snake_case).
+    journal: Array.isArray(boot.journal) ? boot.journal : [],
+    goldLedger: Array.isArray(boot.goldLedger) ? boot.goldLedger : [],
     // ⚠ migration 017: boot.branch (كائن الفرع) كان موجودًا في الاستجابة
     // منذ البداية لكن بلا أي مستهلك في كل الفرونت إند — أول استخدام له
     // هنا فقط: isHq يقرّر ظهور تبويب "تقرير الفروع" من عدمه.
