@@ -4315,8 +4315,12 @@ export default function GoldInventoryApp() {
       const user = await api.usersApi.create({ name: name.trim(), pin, role, salary: Number(salary) || 0 });
       setUsers((prev) => [
         ...prev,
+        // ⚠ user.ref حقيقي الآن (يولّده الباك إند عند الإنشاء — راجع
+        // generateUniqueEmployeeRef في branchUsers.js) لا null دائمًا
+        // كما كان قبل تفعيل الأرقام: كان هذا يُخفي الرمز عن المدير حتى
+        // يُعاد تحميل القائمة من الخادم رغم وصوله فعليًا في نفس الرد.
         {
-          id: user.id, name: user.name, ref: null, role: user.role,
+          id: user.id, name: user.name, ref: user.ref ?? null, role: user.role,
           canUseAi: false, allowedPages: null, active: true,
           allowedTabs: [], allowedMore: [], createdAt: user.created_at,
         },
