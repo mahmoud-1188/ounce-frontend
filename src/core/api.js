@@ -108,6 +108,17 @@ function fetchBranchUsers(branchId) {
   return apiFetch(`/branches/${branchId}/users`);
 }
 
+/**
+ * GET /branches/by-ref/:ref — يحل رمز فرعٍ عام (BR-XXXXXXXX، من رابط
+ * دخول الفرع الذي عرضته BranchLinkCard.jsx في ounce-central) إلى
+ * {branchId, branchRef, branchName}. علنيٌّ بلا توكن — يُستدعى مرة
+ * واحدة فقط، أول ما يُفتح رابط الفرع على جهاز جديد، قبل أي تسجيل دخول
+ * (راجع effect حل هوية الفرع في GoldInventoryApp.jsx).
+ */
+function resolveBranchByRef(ref) {
+  return apiFetch(`/branches/by-ref/${encodeURIComponent(ref)}`);
+}
+
 /** POST /auth/login — يرجّع {token, user}. */
 async function login({ branchId, userId, pin }) {
   const result = await apiFetch("/auth/login", {
@@ -416,6 +427,7 @@ export {
   setAuthToken,
   clearAuthToken,
   fetchBranchUsers,
+  resolveBranchByRef,
   login,
   logout,
   fetchCurrentUser,

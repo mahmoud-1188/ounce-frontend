@@ -3,7 +3,7 @@ import { AlertTriangle, Banknote, ChevronUp, FileText, Handshake, Loader2, Lock,
 import { CHART_OF_ACCOUNTS, POSTING_RULES } from "../core/chart.js";
 import { APP_MODES, CATEGORY_STATE, DEFAULT_APP_MODE, DEFAULT_CATEGORIES, DEFAULT_INTEGRATION, DEFAULT_OPENING_BALANCE, DEFAULT_PRINTER, DEFAULT_SETTINGS, DEFAULT_STORE, DEFAULT_USERS, EXPENSE_CATEGORIES, ISSUE_REASONS, MIGRATION_FLAG, PARTNER_REQUIRED, PUBLISH_CAP, RFID_DEFAULTS, ROLES, TRUST_MOVES } from "../core/constants.js";
 import { DEFAULT_COMMISSION } from "../core/erp.js";
-import { AUDIT_KEY, AUDIT_LOG_KEY, BANK_TX_KEY, BRANCH_IDENTITY_KEY, BUSINESS_DAYS_KEY, CASH_KEY, CATEGORIES_KEY, COMMISSIONS_KEY, CUSTOMERS_KEY, CUSTOM_GROUPS_KEY, DAILY_CUSTODY_KEY, ENTRY_SESSIONS_KEY, EXPENSES_KEY, EXPENSE_NAMES_KEY, EXT_INVOICES_KEY, FISCAL_CLOSURES_KEY, GOLD_LEDGER_KEY, HQ_PERMISSIONS_KEY, INTEGRATION_KEY, ITEMS_KEY, JOURNAL_KEY, LOTS_KEY, MENU_ORDER_KEY, NAV_LAYOUT_KEY, OPENING_BALANCE_KEY, PARTNERS_KEY, PARTNER_TX_KEY, PRICE_KEY, PRINTER_KEY, RECEIPTS_KEY, REPAIRS_KEY, RESERVATIONS_KEY, RETURNS_KEY, RFID_KEY, SAFE_AUDITS_KEY, SAFE_GOLD_KEY, SAFE_KEY, SALES_KEY, SCRAP_CUSTODY_KEY, SCRAP_KEY, SCRAP_REQUESTS_KEY, SCRAP_SURPLUS_KEY, SETTINGS_KEY, SHORTCUTS_KEY, STOCKTAKE_LOCK_KEY, STORE_KEY, STORE_ORDERS_KEY, SUPPLIERS_KEY, TASKIR_KEY, TASKIR_OFFICES_KEY, TASKIR_OFFICE_TX_KEY, TRUST_ACCOUNTS_KEY, TRUST_GOLD_KEY, TRUST_LEDGER_KEY, USERS_KEY, WEIGHT_ADJ_KEY } from "../core/keys.js";
+import { AUDIT_KEY, AUDIT_LOG_KEY, BANK_TX_KEY, BRANCH_IDENTITY_KEY, BRANCH_LINK_KEY, BUSINESS_DAYS_KEY, CASH_KEY, CATEGORIES_KEY, COMMISSIONS_KEY, CUSTOMERS_KEY, CUSTOM_GROUPS_KEY, DAILY_CUSTODY_KEY, ENTRY_SESSIONS_KEY, EXPENSES_KEY, EXPENSE_NAMES_KEY, EXT_INVOICES_KEY, FISCAL_CLOSURES_KEY, GOLD_LEDGER_KEY, HQ_PERMISSIONS_KEY, INTEGRATION_KEY, ITEMS_KEY, JOURNAL_KEY, LOTS_KEY, MENU_ORDER_KEY, NAV_LAYOUT_KEY, OPENING_BALANCE_KEY, PARTNERS_KEY, PARTNER_TX_KEY, PRICE_KEY, PRINTER_KEY, RECEIPTS_KEY, REPAIRS_KEY, RESERVATIONS_KEY, RETURNS_KEY, RFID_KEY, SAFE_AUDITS_KEY, SAFE_GOLD_KEY, SAFE_KEY, SALES_KEY, SCRAP_CUSTODY_KEY, SCRAP_KEY, SCRAP_REQUESTS_KEY, SCRAP_SURPLUS_KEY, SETTINGS_KEY, SHORTCUTS_KEY, STOCKTAKE_LOCK_KEY, STORE_KEY, STORE_ORDERS_KEY, SUPPLIERS_KEY, TASKIR_KEY, TASKIR_OFFICES_KEY, TASKIR_OFFICE_TX_KEY, TRUST_ACCOUNTS_KEY, TRUST_GOLD_KEY, TRUST_LEDGER_KEY, USERS_KEY, WEIGHT_ADJ_KEY } from "../core/keys.js";
 import { PURITY, fine24, fmt, fmtMoney, fmtW, fromHalalas, halalas, pricePerGram, roundMoney2, roundW, sumMoney, weightTimesPrice } from "../core/money.js";
 import { CARD_NETWORKS } from "../core/money-rules.js";
 import { DEFAULT_NAV_LAYOUT, MAIN_TAB_IDS, NAV_REGISTRY, TAB_KIND_IDS } from "../core/navigation.js";
@@ -15,9 +15,29 @@ import { normalizeBootstrap, normalizeCashTxRow, normalizeSafeGoldTx, normalizeS
 // لكن استدعاءها هنا يمر عبر n.reservations/n.repairs/... من normalizeBootstrap
 // نفسها — لا حاجة لاستيراد إضافي، فقط تأكيد أنها مضمّنة أعلاه.
 
-// ⚠ راجع .env.example: قيد مؤقت (فرع واحد ثابت) حتى تُبنى شاشة اختيار
-// فرع حقيقية — شاشة الدخول تحتاج معرفة الفرع قبل تسجيل الدخول نفسه.
-const DEFAULT_BRANCH_ID = import.meta.env.VITE_DEFAULT_BRANCH_ID;
+// ⚠ لم يعد الفرع مُعرَّفًا وقت البناء (VITE_DEFAULT_BRANCH_ID سابقًا) —
+// كل نسخة تشغيل الآن تتعرّف على فرعها من رابط دخول الفرع (/b/<ref>،
+// المعروض من BranchLinkCard.jsx في ounce-central)، تُحلّه مرة واحدة عبر
+// GET /branches/by-ref/:ref ثم تحفظه محليًا (BRANCH_LINK_KEY) فلا تحتاج
+// فتح الرابط مرة أخرى. راجع resolveBranchLink أدناه وeffect استخدامه.
+//
+// ⚠ مسار الرابط ثابتٌ هنا (/b/) لأنه يجب أن يطابق بالضبط ما تبنيه
+// BranchLinkCard.jsx على الطرف الآخر — أي تغيير هنا يكسر كل رابطٍ سبق
+// توزيعه على أجهزة الفروع القائمة فعليًّا.
+const BRANCH_LINK_PATH_PREFIX = "/b/";
+
+/** يقرأ رمز الفرع من مسار الرابط الحالي إن وُجد (/b/<ref>...)، وإلا null. */
+function branchRefFromUrl() {
+  try {
+    const path = window.location.pathname || "";
+    if (!path.startsWith(BRANCH_LINK_PATH_PREFIX)) return null;
+    const rest = path.slice(BRANCH_LINK_PATH_PREFIX.length);
+    const ref = rest.split("/")[0];
+    return ref ? decodeURIComponent(ref) : null;
+  } catch (e) {
+    return null;
+  }
+}
 
 // رسائل أخطاء الباك إند الشائعة بالعربية — أي خطأ غير مذكور هنا يعرض
 // fallback عام بدل رمز الخطأ الخام (لا معنى لـ"insufficient_stock" لمستخدم
@@ -546,6 +566,10 @@ export default function GoldInventoryApp() {
   }, [appSettings?.theme]);
   // ⚠ نافذة أخرى تكتب على المخزن نفسه — التبويبان يتنازعان
   const [otherTab, setOtherTab] = useState(false);
+  // { branchId, branchRef, branchName } بعد الحل الناجح، null أثناء
+  // المحاولة أو عند غياب أي رابط/تخزين سابق (راجع effect الحل أدناه).
+  const [branchLink, setBranchLink] = useState(null);
+  const [branchLinkStatus, setBranchLinkStatus] = useState("pending"); // pending | ok | missing | error
   const [branchIdentity, setBranchIdentity] = useState({ code: "", name: "" });
   const [hqPermissions, setHqPermissions] = useState(null); // null = HQ hasn't overridden anything
   const [aiButtonPos, setAiButtonPos] = useState(null); // {x,y} top-left, null = default corner
@@ -675,6 +699,43 @@ export default function GoldInventoryApp() {
     })();
   }, []);
 
+  // ── حل هوية الفرع: من رابط الدخول (/b/<ref>) أو من التخزين المحلي ──
+  //
+  // ⚠ يجب أن يسبق effect قائمة الأسماء أدناه فعليًّا (يعتمد على
+  // branchLink.branchId) — لذا لا اعتماد بينهما في كود الـeffects نفسه
+  // (React لا يضمن ترتيب تنفيذ effects منفصلة بالاعتماد على الترتيب في
+  // الملف وحده بأمان كافٍ)، بل branchLinkStatus صريحة يعتمد عليها الثاني.
+  useEffect(() => {
+    (async () => {
+      const refInUrl = branchRefFromUrl();
+      if (refInUrl) {
+        try {
+          const resolved = await api.resolveBranchByRef(refInUrl);
+          await window.storage.set(BRANCH_LINK_KEY, JSON.stringify(resolved), false);
+          setBranchLink(resolved);
+          setBranchLinkStatus("ok");
+          // ⚠ تنظيف الرابط من شريط العنوان بعد الحفظ — لا حاجة لإبقاء
+          // رمز الفرع ظاهرًا في كل مرة، والتخزين المحلي كافٍ من الآن.
+          window.history.replaceState(null, "", "/");
+          return;
+        } catch (e) {
+          console.error("[أونصة] تعذّر التحقق من رابط الفرع", e);
+          setBranchLinkStatus("error");
+          return;
+        }
+      }
+      try {
+        const stored = await window.storage.get(BRANCH_LINK_KEY, false);
+        setBranchLink(JSON.parse(stored.value));
+        setBranchLinkStatus("ok");
+      } catch (e) {
+        // لا رابط في العنوان ولا تخزين سابق — جهازٌ لم يُفتح عليه رابط
+        // فرعٍ بعد (راجع BranchLinkCard.jsx في ounce-central).
+        setBranchLinkStatus("missing");
+      }
+    })();
+  }, []);
+
   // ── قائمة أسماء شاشة الدخول من الباك إند الحقيقي ──
   //
   // ⚠ لا علاقة لها بـloadAllStores أعلاه (تلك محلية بالكامل، تبقى تعمل
@@ -684,18 +745,15 @@ export default function GoldInventoryApp() {
   // فشل هذا الاستدعاء (خادم غير متاح) لا يمنع بقية التطبيق من العمل —
   // فقط شاشة الدخول تعرض رسالة تعذّر الاتصال (راجع PriceLoginScreen).
   useEffect(() => {
-    if (!DEFAULT_BRANCH_ID) {
-      console.error("[أونصة] VITE_DEFAULT_BRANCH_ID غير مُعرَّف — لن تظهر قائمة الدخول");
-      return;
-    }
-    api.fetchBranchUsers(DEFAULT_BRANCH_ID)
+    if (!branchLink?.branchId) return;
+    api.fetchBranchUsers(branchLink.branchId)
       .then((rows) => {
         setUsers(rows.map((u) => ({ id: u.id, name: u.name, ref: u.ref, role: u.role })));
       })
       .catch((e) => {
         console.error("[أونصة] تعذّر تحميل قائمة المستخدمين", e);
       });
-  }, []);
+  }, [branchLink?.branchId]);
 
   // Load this branch's identity (private) and any permission overrides HQ has
   // pushed (shared). Kept separate from the main load so a missing/unreachable
@@ -4094,12 +4152,16 @@ export default function GoldInventoryApp() {
       return false;
     }
     if (!userId) return false;
+    if (!branchLink?.branchId) {
+      flashToast("لم يُحدَّد فرعٌ لهذا الجهاز بعد — افتح رابط دخول الفرع أولًا");
+      return false;
+    }
     // ⚠ جيل الجلسة الحالي — لو حدث logout (أو دخول آخر) أثناء انتظارنا لـ
     // bootstrap هنا (قد يأخذ 5-6 ثوانٍ من السيرفر)، نتجاهل الرد المتأخر بدل
     // من كتابته فوق حالة الخروج/الدخول الجديد اللي حدثت في الأثناء.
     const myEpoch = ++sessionEpoch.current;
     try {
-      const { user } = await api.login({ branchId: DEFAULT_BRANCH_ID, userId, pin: enteredPin });
+      const { user } = await api.login({ branchId: branchLink.branchId, userId, pin: enteredPin });
       failedTries.current = 0;
       lockUntil.current = 0;
       // ⚠ تحميل كل بيانات الفرع قبل الدخول الفعلي للتطبيق — نفس لحظة
@@ -6564,10 +6626,33 @@ export default function GoldInventoryApp() {
   // تومض للحظة قبل أن يُعرف إن كان هناك توكن محفوظ صالح أصلًا — "ريفرش
   // يعمل تسجيل خروج" كان يبدو صحيحًا بصريًا حتى بعد أن تصير الجلسة تُستعاد
   // فعليًا في الخلفية.
-  if (loading || sessionChecking) {
+  if (loading || sessionChecking || branchLinkStatus === "pending") {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--bg)" }}>
         <Loader2 className="animate-spin" size={28} color="var(--accentText)" />
+      </div>
+    );
+  }
+
+  // ⚠ لا معنى لعرض شاشة دخول (حتى فارغة) بلا فرعٍ معروف — لا رقم فرع
+  // نرسله مع أي محاولة دخول أصلًا. هذا الجهاز يحتاج فتح رابط دخول الفرع
+  // مرة واحدة (BranchLinkCard.jsx في لوحة التحكم المركزية) قبل أي شيء.
+  if (!role && (branchLinkStatus === "missing" || branchLinkStatus === "error")) {
+    return (
+      <div
+        className="min-h-screen flex items-center justify-center text-center px-6"
+        style={{ background: "var(--bg)" }}
+      >
+        <div>
+          <p style={{ color: "var(--text)" }} className="text-base font-bold mb-2">
+            هذا الجهاز غير مرتبط بأي فرع بعد
+          </p>
+          <p style={{ color: "var(--text3)" }} className="text-[13px]">
+            {branchLinkStatus === "error"
+              ? "تعذّر التحقق من رابط الفرع — تأكّد من الاتصال بالإنترنت وأعد فتح الرابط."
+              : "افتح رابط دخول هذا الفرع مرة واحدة (من لوحة التحكم المركزية، تفاصيل الفرع) على هذا الجهاز."}
+          </p>
+        </div>
       </div>
     );
   }
