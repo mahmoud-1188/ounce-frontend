@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { Check, ChevronLeft, Delete, RefreshCw, X } from "lucide-react";
 import { ROLES } from "../core/constants.js";
-import { normalizeName } from "../domain/helpers.js";
 import { GRAMS_PER_OUNCE, KARATS, fmt, pricePerGram } from "../core/money.js";
 import { Card } from "./Card.jsx";
 import { GoldPriceChart } from "./GoldPriceChart.jsx";
@@ -23,12 +22,29 @@ function PriceLoginScreen({ priceData, autoUpdating, autoError, lastAutoFetch, o
   // وضع "الحماية مطفأة" كما كان سابقًا.
   const [selectedUser, setSelectedUser] = useState(null);
   const [submitting, setSubmitting] = useState(false);
-  // ⚠ تغيير حقيقي عن نسخة "قائمة أسماء تُنقر": المستخدم يكتب اسمه أو
-  // رمزه (ref) أولًا هنا بدل استعراض كل الموظفين — نفس بيانات users
-  // المُحمَّلة أصلًا (لا نداء شبكة إضافي)، فقط طريقة عرضها اختلفت.
-  // المطابقة بـnormalizeName نفسها المستخدَمة في تفرّد الأسماء بباقي
-  // التطبيق (تتجاهل التشكيل والتطويل واختلاف الألف/الهاء).
-  const [nameQuery, setNameQuery] = useState("");
+  // ⚠ تغيير حقيقي مقصود عن نسخة "اكتب اسمك فتظهر نتائج مطابقة": لا نعرض
+  // أي معلومة عن أي موظف قبل معرفة رمزه (ref) الفريد كاملًا — رمزٌ فريدٌ
+  // 100% (لا تكرار كالأسماء) فلا حاجة لقائمة اقتراحات أصلًا. المطابقة
+  // ضد users المُحمَّلة أصلًا (لا نداء شبكة إضافي)، ورمزٌ غير موجود يُعرض
+  // بنفس رسالة "رقم سري غير صحيح" تمامًا — بلا تمييز بين الحالتين، حتى
+  // لا يُخبَر من يخمّن أي جزءٍ كان صحيحًا (نفس مبدأ أي نظام دخول آمن).
+  const [refInput, setRefInput] = useState("");
+  const [refError, setRefError] = useState(false);
+  const [refShake, setRefShake] = useState(false);
+
+  const handleRefSubmit = () => {
+    const code = refInput.trim().toUpperCase();
+    if (!code) return;
+    const found = users.find((u) => String(u.ref || "").toUpperCase() === code);
+    if (!found) {
+      setRefError(true);
+      setRefShake(true);
+      setTimeout(() => setRefShake(false), 400);
+      return;
+    }
+    setRefError(false);
+    setSelectedUser(found);
+  };
 
   const last = priceData.history[priceData.history.length - 2];
   const trend = last ? priceData.current - last.price : 0;
@@ -71,25 +87,9 @@ function PriceLoginScreen({ priceData, autoUpdating, autoError, lastAutoFetch, o
     setSelectedUser(null);
     setPin("");
     setError(false);
-    setNameQuery("");
+    setRefInput("");
+    setRefError(false);
   };
-
-  // ⚠ لا نطابق حتى يكتب المستخدم حرفين فأكثر — عرض كل الموظفين عند
-  // فراغ الحقل يُعيد إنتاج نفس "القائمة الكاملة" التي غيّرنا الشاشة
-  // للتخلّص منها أصلًا.
-  const trimmedQuery = nameQuery.trim();
-  const normalizedQuery = normalizeName(nameQuery);
-  const matchedUsers =
-    trimmedQuery.length < 2
-      ? []
-      : users.filter((u) => {
-          const normalizedName = normalizeName(u.name);
-          const ref = String(u.ref || "").toLowerCase();
-          return (
-            normalizedName.includes(normalizedQuery) ||
-            (ref && ref === trimmedQuery.toLowerCase())
-          );
-        });
 
   return (
     <div dir="rtl" style={{ background: "var(--bg)", minHeight: "100vh", fontFamily: "'Cairo','Tajawal',system-ui,sans-serif" }}>
@@ -249,17 +249,23 @@ function PriceLoginScreen({ priceData, autoUpdating, autoError, lastAutoFetch, o
         </div>
       )}
 
-      {/* ⚠ تغيير مقصود: كتابة الاسم/الرمز أولًا بدل عرض كل الموظفين
-          كقائمة نقر — راجع normalizeName/matchedUsers أعلاه. */}
+      {/* ⚠ تغيير مقصود (طلب المستخدم صراحةً): الدخول عن طريق رمز الموظف
+          (ref) فقط — بلا أي عرض لأسماء أو نتائج مطابقة أثناء الكتابة.
+          حقل واحد + زر متابعة، ورمزٌ غير موجود يُعامَل بنفس رسالة/رجّة
+          "رقم سري غير صحيح" تمامًا (راجع handleRefSubmit أعلاه) حتى لا
+          تُكشف أي معلومة عن وجود/عدم وجود موظف بهذا الرمز. */}
       {showPinPad && requirePin && !selectedUser && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center px-6" style={{ background: "var(--veil)" }}>
           <button onClick={closePinPad} className="fixed z-50" style={{ top: 20, left: 20, color: "var(--text2)" }}>
             <X size={24} />
           </button>
-          <p style={{ color: "var(--text)", fontFamily: "'Cairo', sans-serif" }} className="text-base font-bold mb-5">
-            من يستخدم التطبيق؟
+          <p style={{ color: "var(--text)", fontFamily: "'Cairo', sans-serif" }} className="text-base font-bold mb-1">
+            أدخل رمز الموظف
           </p>
-          <div className="w-full" style={{ maxWidth: 320 }}>
+          <p style={{ color: "var(--text3)" }} className="text-[11px] mb-5">
+            الرمز القصير الخاص بك — اطلبه من المدير إن لم تحفظه
+          </p>
+          <div className="w-full" style={{ maxWidth: 320, animation: refShake ? "shakeX 0.4s" : "none" }}>
             {users.length === 0 ? (
               <p style={{ color: "var(--bad)" }} className="text-xs text-center">
                 تعذّر تحميل قائمة المستخدمين — تحقّق من الاتصال بالخادم
@@ -268,55 +274,52 @@ function PriceLoginScreen({ priceData, autoUpdating, autoError, lastAutoFetch, o
               <>
                 <input
                   autoFocus
-                  value={nameQuery}
-                  onChange={(e) => setNameQuery(e.target.value)}
-                  placeholder="اكتب اسمك أو رمزك"
+                  value={refInput}
+                  onChange={(e) => {
+                    setRefInput(e.target.value.toUpperCase());
+                    setRefError(false);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleRefSubmit();
+                  }}
+                  placeholder="رمز الموظف"
+                  dir="ltr"
+                  autoCapitalize="characters"
                   style={{
                     width: "100%",
                     padding: "12px 14px",
                     borderRadius: 12,
                     background: "var(--field)",
-                    border: "1px solid var(--line)",
+                    border: `1px solid ${refError ? "var(--bad)" : "var(--line)"}`,
                     color: "var(--text)",
                     fontFamily: "'Cairo', sans-serif",
-                    fontSize: 15,
+                    fontSize: 18,
+                    letterSpacing: 3,
+                    textAlign: "center",
                     marginBottom: 12,
                   }}
                 />
-                {trimmedQuery.length >= 2 && matchedUsers.length === 0 && (
-                  <p style={{ color: "var(--text3)" }} className="text-xs text-center mb-2">
-                    لا يوجد موظف بهذا الاسم
+                {refError && (
+                  <p style={{ color: "var(--bad)" }} className="text-xs text-center mb-3">
+                    رمز غير صحيح
                   </p>
                 )}
-                {matchedUsers.map((u) => (
-                  <button key={u.id} onClick={() => setSelectedUser(u)} className="w-full text-right mb-2">
-                    <Card style={{ padding: 13 }}>
-                      <div className="flex items-center gap-3">
-                        <div
-                          style={{
-                            width: 40, height: 40, borderRadius: "50%", flexShrink: 0,
-                            background: "linear-gradient(135deg,var(--gradFrom),var(--gradTo))",
-                            display: "grid", placeItems: "center",
-                          }}
-                        >
-                          <span style={{ color: "var(--panel)", fontWeight: 800, fontSize: 16 }}>
-                            {(u.name || "؟").charAt(0)}
-                          </span>
-                        </div>
-                        <div className="flex-1">
-                          <p style={{ color: "var(--text)", fontFamily: "'Cairo', sans-serif", margin: 0 }} className="text-sm font-bold">
-                            {u.name}
-                          </p>
-                          <p style={{ color: "var(--text2)", margin: 0 }} className="text-[11px]">
-                            {ROLES[u.role]?.label || ""}
-                            {u.ref ? ` · ${u.ref}` : ""}
-                          </p>
-                        </div>
-                        <ChevronLeft size={16} color="var(--text3)" style={{ transform: "rotate(180deg)" }} />
-                      </div>
-                    </Card>
-                  </button>
-                ))}
+                <button
+                  onClick={handleRefSubmit}
+                  disabled={!refInput.trim()}
+                  className="w-full font-bold"
+                  style={{
+                    padding: "12px 0",
+                    borderRadius: 12,
+                    background: refInput.trim() ? "linear-gradient(135deg,var(--gradFrom),var(--gradTo))" : "var(--panel)",
+                    color: refInput.trim() ? "var(--panel)" : "var(--text3)",
+                    fontFamily: "'Cairo', sans-serif",
+                    fontSize: 15,
+                    border: refInput.trim() ? "none" : "1px solid var(--line)",
+                  }}
+                >
+                  متابعة
+                </button>
               </>
             )}
           </div>
