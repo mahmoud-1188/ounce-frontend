@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Check, ChevronLeft, Delete, RefreshCw, X } from "lucide-react";
 import { ROLES } from "../core/constants.js";
+import { normalizeName } from "../domain/helpers.js";
 import { GRAMS_PER_OUNCE, KARATS, fmt, pricePerGram } from "../core/money.js";
 import { Card } from "./Card.jsx";
 import { GoldPriceChart } from "./GoldPriceChart.jsx";
@@ -22,6 +23,12 @@ function PriceLoginScreen({ priceData, autoUpdating, autoError, lastAutoFetch, o
   // وضع "الحماية مطفأة" كما كان سابقًا.
   const [selectedUser, setSelectedUser] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  // ⚠ تغيير حقيقي عن نسخة "قائمة أسماء تُنقر": المستخدم يكتب اسمه أو
+  // رمزه (ref) أولًا هنا بدل استعراض كل الموظفين — نفس بيانات users
+  // المُحمَّلة أصلًا (لا نداء شبكة إضافي)، فقط طريقة عرضها اختلفت.
+  // المطابقة بـnormalizeName نفسها المستخدَمة في تفرّد الأسماء بباقي
+  // التطبيق (تتجاهل التشكيل والتطويل واختلاف الألف/الهاء).
+  const [nameQuery, setNameQuery] = useState("");
 
   const last = priceData.history[priceData.history.length - 2];
   const trend = last ? priceData.current - last.price : 0;
@@ -64,7 +71,25 @@ function PriceLoginScreen({ priceData, autoUpdating, autoError, lastAutoFetch, o
     setSelectedUser(null);
     setPin("");
     setError(false);
+    setNameQuery("");
   };
+
+  // ⚠ لا نطابق حتى يكتب المستخدم حرفين فأكثر — عرض كل الموظفين عند
+  // فراغ الحقل يُعيد إنتاج نفس "القائمة الكاملة" التي غيّرنا الشاشة
+  // للتخلّص منها أصلًا.
+  const trimmedQuery = nameQuery.trim();
+  const normalizedQuery = normalizeName(nameQuery);
+  const matchedUsers =
+    trimmedQuery.length < 2
+      ? []
+      : users.filter((u) => {
+          const normalizedName = normalizeName(u.name);
+          const ref = String(u.ref || "").toLowerCase();
+          return (
+            normalizedName.includes(normalizedQuery) ||
+            (ref && ref === trimmedQuery.toLowerCase())
+          );
+        });
 
   return (
     <div dir="rtl" style={{ background: "var(--bg)", minHeight: "100vh", fontFamily: "'Cairo','Tajawal',system-ui,sans-serif" }}>
@@ -224,7 +249,8 @@ function PriceLoginScreen({ priceData, autoUpdating, autoError, lastAutoFetch, o
         </div>
       )}
 
-      {/* ── اختيار الاسم أولًا (إلزامي مع الرقم السري أيضًا — راجع التعليق أعلى handleSubmit) ── */}
+      {/* ⚠ تغيير مقصود: كتابة الاسم/الرمز أولًا بدل عرض كل الموظفين
+          كقائمة نقر — راجع normalizeName/matchedUsers أعلاه. */}
       {showPinPad && requirePin && !selectedUser && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center px-6" style={{ background: "var(--veil)" }}>
           <button onClick={closePinPad} className="fixed z-50" style={{ top: 20, left: 20, color: "var(--text2)" }}>
@@ -239,35 +265,59 @@ function PriceLoginScreen({ priceData, autoUpdating, autoError, lastAutoFetch, o
                 تعذّر تحميل قائمة المستخدمين — تحقّق من الاتصال بالخادم
               </p>
             ) : (
-              users.map((u) => (
-                <button key={u.id} onClick={() => setSelectedUser(u)} className="w-full text-right mb-2">
-                  <Card style={{ padding: 13 }}>
-                    <div className="flex items-center gap-3">
-                      <div
-                        style={{
-                          width: 40, height: 40, borderRadius: "50%", flexShrink: 0,
-                          background: "linear-gradient(135deg,var(--gradFrom),var(--gradTo))",
-                          display: "grid", placeItems: "center",
-                        }}
-                      >
-                        <span style={{ color: "var(--panel)", fontWeight: 800, fontSize: 16 }}>
-                          {(u.name || "؟").charAt(0)}
-                        </span>
+              <>
+                <input
+                  autoFocus
+                  value={nameQuery}
+                  onChange={(e) => setNameQuery(e.target.value)}
+                  placeholder="اكتب اسمك أو رمزك"
+                  style={{
+                    width: "100%",
+                    padding: "12px 14px",
+                    borderRadius: 12,
+                    background: "var(--field)",
+                    border: "1px solid var(--line)",
+                    color: "var(--text)",
+                    fontFamily: "'Cairo', sans-serif",
+                    fontSize: 15,
+                    marginBottom: 12,
+                  }}
+                />
+                {trimmedQuery.length >= 2 && matchedUsers.length === 0 && (
+                  <p style={{ color: "var(--text3)" }} className="text-xs text-center mb-2">
+                    لا يوجد موظف بهذا الاسم
+                  </p>
+                )}
+                {matchedUsers.map((u) => (
+                  <button key={u.id} onClick={() => setSelectedUser(u)} className="w-full text-right mb-2">
+                    <Card style={{ padding: 13 }}>
+                      <div className="flex items-center gap-3">
+                        <div
+                          style={{
+                            width: 40, height: 40, borderRadius: "50%", flexShrink: 0,
+                            background: "linear-gradient(135deg,var(--gradFrom),var(--gradTo))",
+                            display: "grid", placeItems: "center",
+                          }}
+                        >
+                          <span style={{ color: "var(--panel)", fontWeight: 800, fontSize: 16 }}>
+                            {(u.name || "؟").charAt(0)}
+                          </span>
+                        </div>
+                        <div className="flex-1">
+                          <p style={{ color: "var(--text)", fontFamily: "'Cairo', sans-serif", margin: 0 }} className="text-sm font-bold">
+                            {u.name}
+                          </p>
+                          <p style={{ color: "var(--text2)", margin: 0 }} className="text-[11px]">
+                            {ROLES[u.role]?.label || ""}
+                            {u.ref ? ` · ${u.ref}` : ""}
+                          </p>
+                        </div>
+                        <ChevronLeft size={16} color="var(--text3)" style={{ transform: "rotate(180deg)" }} />
                       </div>
-                      <div className="flex-1">
-                        <p style={{ color: "var(--text)", fontFamily: "'Cairo', sans-serif", margin: 0 }} className="text-sm font-bold">
-                          {u.name}
-                        </p>
-                        <p style={{ color: "var(--text2)", margin: 0 }} className="text-[11px]">
-                          {ROLES[u.role]?.label || ""}
-                          {u.ref ? ` · ${u.ref}` : ""}
-                        </p>
-                      </div>
-                      <ChevronLeft size={16} color="var(--text3)" style={{ transform: "rotate(180deg)" }} />
-                    </div>
-                  </Card>
-                </button>
-              ))
+                    </Card>
+                  </button>
+                ))}
+              </>
             )}
           </div>
         </div>
