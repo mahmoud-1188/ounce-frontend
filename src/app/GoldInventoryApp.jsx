@@ -3,7 +3,7 @@ import { AlertTriangle, Banknote, ChevronUp, FileText, Handshake, Loader2, Lock,
 import { CHART_OF_ACCOUNTS, POSTING_RULES } from "../core/chart.js";
 import { APP_MODES, CATEGORY_STATE, DEFAULT_APP_MODE, DEFAULT_CATEGORIES, DEFAULT_INTEGRATION, DEFAULT_OPENING_BALANCE, DEFAULT_PRINTER, DEFAULT_SETTINGS, DEFAULT_STORE, DEFAULT_USERS, EXPENSE_CATEGORIES, ISSUE_REASONS, MIGRATION_FLAG, PARTNER_REQUIRED, PUBLISH_CAP, RFID_DEFAULTS, ROLES, TRUST_MOVES } from "../core/constants.js";
 import { DEFAULT_COMMISSION } from "../core/erp.js";
-import { AUDIT_KEY, AUDIT_LOG_KEY, BANK_TX_KEY, BRANCH_IDENTITY_KEY, BRANCH_LINK_KEY, BUSINESS_DAYS_KEY, CASH_KEY, CATEGORIES_KEY, COMMISSIONS_KEY, CUSTOMERS_KEY, CUSTOM_GROUPS_KEY, DAILY_CUSTODY_KEY, ENTRY_SESSIONS_KEY, EXPENSES_KEY, EXPENSE_NAMES_KEY, EXT_INVOICES_KEY, FISCAL_CLOSURES_KEY, GOLD_LEDGER_KEY, HQ_PERMISSIONS_KEY, INTEGRATION_KEY, ITEMS_KEY, JOURNAL_KEY, LOTS_KEY, MENU_ORDER_KEY, NAV_LAYOUT_KEY, OPENING_BALANCE_KEY, PARTNERS_KEY, PARTNER_TX_KEY, PRICE_KEY, PRINTER_KEY, RECEIPTS_KEY, REPAIRS_KEY, RESERVATIONS_KEY, RETURNS_KEY, RFID_KEY, SAFE_AUDITS_KEY, SAFE_GOLD_KEY, SAFE_KEY, SALES_KEY, SCRAP_CUSTODY_KEY, SCRAP_KEY, SCRAP_REQUESTS_KEY, SCRAP_SURPLUS_KEY, SETTINGS_KEY, SHORTCUTS_KEY, STOCKTAKE_LOCK_KEY, STORE_KEY, STORE_ORDERS_KEY, SUPPLIERS_KEY, TASKIR_KEY, TASKIR_OFFICES_KEY, TASKIR_OFFICE_TX_KEY, TRUST_ACCOUNTS_KEY, TRUST_GOLD_KEY, TRUST_LEDGER_KEY, USERS_KEY, WEIGHT_ADJ_KEY } from "../core/keys.js";
+import { AUDIT_KEY, AUDIT_LOG_KEY, BANK_TX_KEY, BRANCH_IDENTITY_KEY, BRANCH_LINK_KEY, BUSINESS_DAYS_KEY, CASH_KEY, CATEGORIES_KEY, COMMISSIONS_KEY, CUSTOMERS_KEY, CUSTOM_GROUPS_KEY, DAILY_CUSTODY_KEY, ENTRY_SESSIONS_KEY, EXPENSES_KEY, EXPENSE_NAMES_KEY, EXT_INVOICES_KEY, FISCAL_CLOSURES_KEY, GOLD_LEDGER_KEY, HQ_PERMISSIONS_KEY, INTEGRATION_KEY, ITEMS_KEY, JOURNAL_KEY, LOTS_KEY, MENU_ORDER_KEY, NAV_LAYOUT_KEY, OPENING_BALANCE_KEY, SAVED_QUERIES_KEY, PARTNERS_KEY, PARTNER_TX_KEY, PRICE_KEY, PRINTER_KEY, RECEIPTS_KEY, REPAIRS_KEY, RESERVATIONS_KEY, RETURNS_KEY, RFID_KEY, SAFE_AUDITS_KEY, SAFE_GOLD_KEY, SAFE_KEY, SALES_KEY, SCRAP_CUSTODY_KEY, SCRAP_KEY, SCRAP_REQUESTS_KEY, SCRAP_SURPLUS_KEY, SETTINGS_KEY, SHORTCUTS_KEY, STOCKTAKE_LOCK_KEY, STORE_KEY, STORE_ORDERS_KEY, SUPPLIERS_KEY, TASKIR_KEY, TASKIR_OFFICES_KEY, TASKIR_OFFICE_TX_KEY, TRUST_ACCOUNTS_KEY, TRUST_GOLD_KEY, TRUST_LEDGER_KEY, USERS_KEY, WEIGHT_ADJ_KEY } from "../core/keys.js";
 import { PURITY, fine24, fmt, fmtMoney, fmtW, fromHalalas, halalas, pricePerGram, roundMoney2, roundW, sumMoney, weightTimesPrice } from "../core/money.js";
 import { CARD_NETWORKS } from "../core/money-rules.js";
 import { DEFAULT_NAV_LAYOUT, MAIN_TAB_IDS, NAV_REGISTRY, TAB_KIND_IDS } from "../core/navigation.js";
@@ -232,6 +232,7 @@ import { AttendanceHrPage } from "../screens/AttendanceHrPage.jsx";
 import { HqReportPage } from "../screens/HqReportPage.jsx";
 import { HqTransactionsPage } from "../screens/HqTransactionsPage.jsx";
 import { CodingReportPage } from "../screens/CodingReportPage.jsx";
+import { QueryBuilderPage } from "../screens/QueryBuilderPage.jsx";
 import { FullStatementsPage } from "../screens/FullStatementsPage.jsx";
 import { AnyStatementPage } from "../screens/AnyStatementPage.jsx";
 import { GeneralLedgerPage } from "../screens/GeneralLedgerPage.jsx";
@@ -333,6 +334,7 @@ export default function GoldInventoryApp() {
   const [printerCfg, setPrinterCfg] = useState(DEFAULT_PRINTER);
   const [rfidCfg, setRfidCfg] = useState(RFID_DEFAULTS);
   const [menuOrder, setMenuOrder] = useState(null);
+  const [savedQueries, setSavedQueries] = useState([]);
   const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
   const [scrapRequests, setScrapRequests] = useState([]);
   const [goldLedger, setGoldLedger] = useState([]);
@@ -656,7 +658,7 @@ export default function GoldInventoryApp() {
           branchIdentity: setBranchIdentity, hqPermissions: setHqPermissions,
           appSettings: setAppSettings, printerCfg: setPrinterCfg, rfidCfg: setRfidCfg,
           integration: setIntegration, storeLink: setStoreLink,
-          categories: setCategories, menuOrder: setMenuOrder, navLayout: setNavLayout,
+          categories: setCategories, menuOrder: setMenuOrder, navLayout: setNavLayout, savedQueries: setSavedQueries,
           openingBalance: setOpeningBalance,
         };
         // ⚠ إصلاح محلي: أصناف قديمة قد تحمل `category` بلا `categoryId`
@@ -1481,6 +1483,9 @@ export default function GoldInventoryApp() {
   // التنبيه أُزيل عمدًا: كان يظهر مع كل نقلة سهم فيُغرق الشاشة.
   const handleSaveNavLayout = (next) => persistNavLayout(next);
   const handleSaveMenuOrder = (next) => persist(MENU_ORDER_KEY, next, setMenuOrder);
+  // أسئلةٌ محفوظة محليًّا بحتًا (راجع core/stores.js) — إلحاق بسيط،
+  // لا حاجة لتأكيدٍ ولا لمسار خلفي (نفس منزلة الترتيب/التخطيط).
+  const handleSaveQuery = (q) => persist(SAVED_QUERIES_KEY, [...savedQueries, q], setSavedQueries);
 
   /**
    * ⚠ تحويل حقيقي: كانت هذه الدالة تكتب القائمة محليًا فقط (persist →
@@ -7886,6 +7891,18 @@ export default function GoldInventoryApp() {
             suppliers={suppliers}
             users={users}
             currency={priceData.currency}
+            onBack={() => setMorePage(null)}
+          />
+        )}
+        {morePage === "queryBuilder" && (
+          <QueryBuilderPage
+            journal={journal}
+            goldLedger={goldLedger}
+            accounts={CHART_OF_ACCOUNTS}
+            currency={priceData.currency}
+            displayKarat={21}
+            saved={savedQueries}
+            onSaveQuery={handleSaveQuery}
             onBack={() => setMorePage(null)}
           />
         )}

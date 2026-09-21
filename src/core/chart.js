@@ -907,10 +907,63 @@ const POSTING_RULES = {
   trust_out: { label: "تسليم ذهب أمانة", cash: null, weight: { from: "7100", to: null } },
 };
 
+/// تصنيف اليوميات — نظير JOURNALS في المرجع بالمعنى لا بحجم القائمة:
+/// المرجع صمَّم قائمته الأصغر لعملياته الأقل، ومنتجنا الحقيقي عنده 76
+/// نوع عملية فعلي (POSTING_RULES أعلاه) — كل نوعٍ هنا مصنَّف بطبيعته
+/// المحاسبية الحقيقية (لا بتخمين من اسمه)، مرة واحدة فقط، بلا نوعٍ
+/// متروك خارج التصنيف الست (يذهب غير المصنَّف صراحةً لـ"العامة" فقط،
+/// لا بصمت من afterEach).
+///
+/// ⚠ قرارات تصنيف تستحق التوثيق:
+///   • customer_deposit/repair_income/receipt → مبيعات: كلها تدفّق نقدي
+///     من/إلى العميل مباشرة، لا تشغيل داخلي.
+///   • purchase_scrap (كسرٌ بدلٌ في فاتورة شراء) → مشتريات: جزء من
+///     تسوية فاتورة شراء، لا حركة كسر عامة كـscrap_buy.
+///   • taskir_buy/taskir_settle_scrap → مشتريات: كلاهما يخصّ تسوية دَين
+///     مورّد عبر مكتب تسكير، لا يومية مستقلة له في المرجع أصلًا.
+///   • price_fix_sell/price_fix_buy → نقدية: جسرٌ بين الدفترين لا بيع
+///     عميل ولا شراء مورّد؛ أقرب لحركة خزنة/تسعير من الاثنين.
+///   • gosi_pay/payroll_pay/eos_pay → نقدية لا رواتب: هذه *سداد* نقدي
+///     لمستحقّ سابق (2310/2320/2330) لا تحميل مصروف رواتب جديد — التحميل
+///     نفسه (payroll_run) وحده في يومية الرواتب.
+///   • accrue_expense/prepaid_expense → نقدية: تسويات مصروف دورية، لا
+///     تخصّ مخزونًا ولا رواتب ولا بيعًا/شراءً مباشرًا.
+///   • provision_doubtful/provision_inventory/depreciation/asset_purchase/
+///     asset_disposal/cogs_trueup → عامة: تسويات فترة/أصول ثابتة لا
+///     تتكرّر يوميًّا كباقي اليوميات.
+///   • trust_in/trust_out/branch_receive → مخزون: حركة وزنٍ بحتة (أمانة/
+///     تحويل فروع) بلا أي أثر مالي مباشر.
+const JOURNALS = [
+  { id: "sales", label: "يومية المبيعات", prefix: "SAL",
+    ops: ["sale_cash", "sale_card", "sale_credit", "sale_partial", "sale_return",
+      "sold_undelivered", "delivered_out", "customer_deposit", "repair_income", "receipt"] },
+  { id: "purchase", label: "يومية المشتريات", prefix: "PUR",
+    ops: ["purchase_cash", "purchase_network", "purchase_deferred", "purchase_office",
+      "purchase_scrap_pay", "purchase_scrap", "workmanship_paid", "workmanship_accrued",
+      "settle_scrap", "settle_safe_gold", "settle_office_gold", "settle_office_cash_gold",
+      "settle_office_cash", "settle_office", "settle_fees", "taskir_buy", "taskir_settle_scrap"] },
+  { id: "cash", label: "يومية النقدية", prefix: "CSH",
+    ops: ["expense", "salary", "rent", "capital_in", "owner_draw", "float_out", "float_in",
+      "mgr_fee", "network_fee", "vat_collected", "cash_surplus", "cash_shortage",
+      "price_fix_sell", "price_fix_buy", "gosi_pay", "payroll_pay", "eos_pay",
+      "accrue_expense", "prepaid_expense"] },
+  { id: "inventory", label: "يومية المخزون", prefix: "INV",
+    ops: ["scrap_buy", "scrap_send", "scrap_assay_gain", "scrap_assay_loss", "scrap_receive",
+      "scrap_to_product", "product_to_scrap", "repair_add", "repair_reduce", "gold_out",
+      "goods_in_transit", "transit_received", "branch_out", "branch_in", "branch_receive",
+      "safe_gold_in", "safe_gold_out", "wastage", "gold_wastage", "weight_surplus",
+      "audit_missing", "trust_in", "trust_out"] },
+  { id: "payroll", label: "يومية الرواتب", prefix: "PAY",
+    ops: ["payroll_run"] },
+  { id: "general", label: "اليومية العامة", prefix: "JRN",
+    ops: ["provision_doubtful", "provision_inventory", "depreciation", "asset_purchase",
+      "asset_disposal", "cogs_trueup"] },
+];
+
 /// الحسابات الوزنية المسموح بها — أي حساب خارجها في قيد وزني خطأ.
 
 const WEIGHT_ACCOUNTS = ["1210", "1220", "1230", "1240", "2110", "7100", "7200"];
 
 /// يبني قيد الوزن من قاعدة عملية. يُعيد سطرين: خروج ودخول.
 
-export { ACC_NATURE, ACC_STATEMENT, ACC_UNIT, CATEGORY_TO_ACCOUNT, CHART_OF_ACCOUNTS, POSTING_RULES, WEIGHT_ACCOUNTS };
+export { ACC_NATURE, ACC_STATEMENT, ACC_UNIT, CATEGORY_TO_ACCOUNT, CHART_OF_ACCOUNTS, JOURNALS, POSTING_RULES, WEIGHT_ACCOUNTS };

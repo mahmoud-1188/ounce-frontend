@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Barcode, BarChart3, BookmarkCheck, Building2, CalendarCheck, ClipboardCheck, ClipboardList, Coins, Database, FileMinus, FileText, Flame, Grid, Handshake, Landmark, LayoutGrid, Lock, PiggyBank, Plus, Printer, Receipt, RefreshCw, RotateCcw, Scale, Search, Send, Settings, ShieldCheck, ShoppingCart, Sparkles, Sun, Tag, Truck, UserRound, Users, Wallet, Warehouse, Wrench } from "lucide-react";
+import { ArrowLeftRight, Barcode, BarChart3, BookmarkCheck, Building2, CalendarCheck, ClipboardCheck, ClipboardList, Coins, Database, FileMinus, FileText, Flame, Grid, Handshake, Landmark, LayoutGrid, Lock, PiggyBank, Plus, Printer, Receipt, RefreshCw, RotateCcw, Scale, Search, Send, Settings, ShieldCheck, ShoppingCart, Sparkles, Sun, SlidersHorizontal, Tag, Truck, UserRound, Users, Wallet, Warehouse, Wrench } from "lucide-react";
 import { ROLES } from "./constants.js";
 
 const TAB_KIND_IDS = ["inventory", "sales", "cash", "expenses", "stocktake"];
@@ -65,6 +65,7 @@ const NAV_REGISTRY = [
   { id: "hqReports", label: "تقرير الفروع", icon: Building2 },
   { id: "hqDocs", label: "معاملات الإدارة", icon: ClipboardList },
   { id: "codingReport", label: "تقرير التكويد", icon: Tag },
+  { id: "queryBuilder", label: "مُنشئ الاستعلام", icon: SlidersHorizontal },
   { id: "priceFix", label: "التثبيت ذهب ↔ نقد", icon: ArrowLeftRight },
   { id: "generalLedger", label: "الأستاذ العام", icon: FileText },
   { id: "masterReport", label: "التقارير الموحّدة", icon: LayoutGrid },
@@ -227,6 +228,7 @@ const SHORTCUT_HINTS = {
   attendanceHr: ["حضور", "غياب", "اجازة", "إجازة", "اجازات", "إجازات", "بصمة"],
   hqReports: ["فروع", "الفروع", "ادارة", "إدارة", "تقرير الفروع", "hq"],
   codingReport: ["تكويد", "التكويد", "تقرير التكويد", "اضافة بضاعة", "إضافة بضاعة", "أصناف جديدة"],
+  queryBuilder: ["استعلام", "منشئ الاستعلام", "مُنشئ الاستعلام", "سؤال محاسبي", "بحث متقدم", "فلترة القيود"],
   priceFix: ["تثبيت", "تسبيك", "ذهب نقد", "تحويل ذهب"],
   generalLedger: ["استاذ", "أستاذ", "الاستاذ العام", "الأستاذ العام"],
   masterReport: ["تقرير موحد", "تقارير موحدة", "تقرير شامل"],
@@ -247,7 +249,7 @@ const MENU_GROUPS = [
     label: "التقارير",
     hint: "كل التقارير والقوائم",
     icon: BarChart3,
-    items: ["reports", "journal", "generalLedger", "trialBalance", "fullStatements", "anyStatement", "masterReport", "customerReport", "docCycle", "search", "bankRecon", "supplierLedger", "officeLedger", "salesReturn", "sellerReports", "salesHistory", "taxReport", "financials"],
+    items: ["reports", "journal", "generalLedger", "trialBalance", "fullStatements", "anyStatement", "masterReport", "queryBuilder", "customerReport", "docCycle", "search", "bankRecon", "supplierLedger", "officeLedger", "salesReturn", "sellerReports", "salesHistory", "taxReport", "financials"],
   },
   {
     id: "inventory",

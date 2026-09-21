@@ -2,8 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { Search } from "lucide-react";
 import { AI_APP_GUIDE, ARABIC_INDIC, EASTERN_INDIC, TRACE_TOPICS } from "../core/assistant.js";
-import { CATEGORY_TO_ACCOUNT, CHART_OF_ACCOUNTS } from "../core/chart.js";
-import { ACCOUNT_TREE, AI_APP_MANUAL, ALL_ACCOUNT_NODES, APP_MODES, ATTACH_PREFIX, B32, BREAKPOINTS, C128, CASH_ACCOUNT_OF, CATEGORY_STATE, DEFAULT_CATEGORIES, EXCHANGE_KINDS, EXPENSE_ACCOUNT_OF, EXPENSE_CATEGORIES, MGR_FEE_DEFAULT, MIGRATION_FLAG, NHR, NHR_POWER_MAX_DBM, OUNCE_SECRET, PRICE_SANE, PRICE_SOURCES, QR_EXP, QR_VER, RECOVERY_ALPHABET, RECOVERY_WINDOW_MIN, RFID_DEFAULTS, RFID_SECTIONS } from "../core/constants.js";
+import { CATEGORY_TO_ACCOUNT, CHART_OF_ACCOUNTS, JOURNALS } from "../core/chart.js";
+import { ACCOUNT_TREE, AI_APP_MANUAL, ALL_ACCOUNT_NODES, APP_MODES, ATTACH_PREFIX, B32, BREAKPOINTS, C128, CASH_ACCOUNT_OF, CATEGORY_STATE, DEFAULT_CATEGORIES, EXCHANGE_KINDS, EXPENSE_ACCOUNT_OF, EXPENSE_CATEGORIES, MGR_FEE_DEFAULT, MIGRATION_FLAG, NHR, NHR_POWER_MAX_DBM, OUNCE_SECRET, PRICE_SANE, PRICE_SOURCES, QUERY_FIELDS, QUERY_OPS, QR_EXP, QR_VER, RECOVERY_ALPHABET, RECOVERY_WINDOW_MIN, RFID_DEFAULTS, RFID_SECTIONS } from "../core/constants.js";
 import { GRAMS_PER_OUNCE, PURITY, WEIGHT_UNITS, fine24, fmt, fmtW, fromHalalas, halalas, pricePerGram, roundW, weightTimesPrice } from "../core/money.js";
 import { BANK_COLUMN_HINTS, DEFAULT_CARD_FEES, DEFAULT_MARGINS, USD_TO_SAR_PEG } from "../core/money-rules.js";
 import { NAV_BUNDLES, NAV_MAX_PER_ROW } from "../core/navigation.js";
@@ -2784,6 +2784,170 @@ function toCsv(headers, rows) {
   return "\uFEFF" + [headers.map(esc).join(","), ...rows.map((r) => r.map(esc).join(","))].join("\n");
 }
 
+/// أي يوميةٍ ينتمي لها نوع عملية — راجع تعليق JOURNALS في core/chart.js
+/// لتفصيل تصنيف كل نوع. ما لا يُعرف يذهب لـ"العامة" لا يُرمى.
+function journalOf(opType) {
+  const j = JOURNALS.find((x) => x.ops.includes(opType));
+  return j ? j.id : "general";
+}
+
+/// معادل عيار 24 لعيار عرض آخر — عكس fineWeight/fine24 (اللتين تحوّلان
+/// *إلى* الصافي عيار 24). يُستعمل حصرًا في QueryBuilderPage/runQuery
+/// لعرض الصافي بعيار المستخدم المختار بدل 24 دائمًا.
+function fineToKarat(fine, karat = 21) {
+  const k = Number(karat) || 24;
+  if (k <= 0 || k > 24) return roundW(fine);
+  return roundW((Number(fine) || 0) * 24 / k);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  مُنشئ الاستعلام — نظير QueryBuilderPage.js/runQuery في المرجع، لكن
+//  فوق أشكال journal/goldLedger/accounts الحقيقية القادمة من bootstrap
+//  (راجع تعليق normalizeBootstrap في core/normalize.js: journal/goldLedger
+//  تمرّان بلا تحويل من الباك إند بنفس الشكل الذي تتوقّعه هذه الدالة
+//  بالضبط — e.at/e.ref/e.opType/e.lines[{account,debit,credit}]/e.createdBy/
+//  e.reversed لـjournal، g.at/g.ref/g.opType/g.karat/g.weight/g.accountCode/
+//  g.type لـgoldLedger). accounts هنا CHART_OF_ACCOUNTS الحقيقي (code/name)
+//  لا شجرة المرجع، لكن نفس حقلي code/name المستخدَمين في runQuery بالضبط.
+//
+//  ⚠ كل تقريرٍ جاهز يُجيب سؤالًا صمّمه أحدٌ سلفًا. والمحاسب يسأل ما لم
+//  يخطر ببال أحد.
+// ═══════════════════════════════════════════════════════════════════════
+function runQuery({ journal = [], goldLedger = [], accounts = [],
+  filters = {}, from, to, unit = "both", displayKarat = 21 }) {
+  const t0 = from ? new Date(from).getTime() : -Infinity;
+  const t1 = to ? new Date(`${String(to).slice(0, 10)}T23:59:59.999`).getTime() : Infinity;
+
+  // ⚠ الحساب يشمل فروعه: من رشّح حسابًا أبًا يريد فروعه تحته أيضًا —
+  // نطابق كل حسابٍ ظهر فعليًا في الدفتر لا في الشجرة وحدها، فحسابٌ
+  // يُستعمل ولم يُسجَّل بدقة في CHART_OF_ACCOUNTS لا يختفي من الاستعلام.
+  const wanted = new Set();
+  if (filters.account?.value) {
+    const root = String(filters.account.value);
+    const seen = new Set(accounts.map((a) => a.code));
+    for (const e of journal) for (const l of e.lines || []) if (l.account) seen.add(l.account);
+    for (const g of goldLedger) if (g.accountCode) seen.add(g.accountCode);
+    for (const c of seen) {
+      if (c === root || String(c).startsWith(root)) wanted.add(c);
+    }
+    if (!wanted.size) wanted.add(root);
+  }
+
+  const cmp = (op, v, a, b) => {
+    const n = Number(v) || 0;
+    if (op === "gt") return n > Number(a);
+    if (op === "lt") return n < Number(a);
+    if (op === "between") return n >= Number(a) && n <= Number(b);
+    return Math.abs(n - Number(a)) < 0.005;
+  };
+  const txt = (op, v, a) => {
+    const s = String(v || "").toLowerCase();
+    const q = String(a || "").toLowerCase();
+    if (!q) return true;
+    return op === "not" ? !s.includes(q) : s.includes(q);
+  };
+
+  const rows = [];
+
+  if (unit !== "weight") {
+    for (const e of journal) {
+      const t = new Date(e.at || e.date).getTime();
+      if (!(t >= t0 && t <= t1)) continue;
+      if (filters.journal?.value && (e.journalId || journalOf(e.opType)) !== filters.journal.value) continue;
+      if (filters.opType?.value && !txt(filters.opType.op, e.opType, filters.opType.value)) continue;
+      if (filters.by?.value && !txt(filters.by.op, e.createdBy, filters.by.value)) continue;
+      if (filters.ref?.value && !txt(filters.ref.op, `${e.ref} ${e.refDoc || ""}`, filters.ref.value)) continue;
+      if (filters.note?.value && !txt(filters.note.op, `${e.note || ""} ${e.label || ""}`, filters.note.value)) continue;
+      if (filters.noDoc?.value && (e.refDoc || e.refId)) continue;
+      if (filters.reversed?.value && !e.reversed) continue;
+
+      for (const l of e.lines || []) {
+        if (wanted.size && !wanted.has(l.account)) continue;
+        const amt = (Number(l.debit) || 0) + (Number(l.credit) || 0);
+        // ⚠ خانةٌ فُتحت ولم تُملأ لا تُرشّح: Number("") === 0 يجعل "أكبر
+        // من (فارغ)" تعني "أكبر من صفر" — فتُسقط كل قيدٍ دائن.
+        const amtOn = filters.amount?.value !== undefined && String(filters.amount.value).trim() !== "";
+        if (amtOn && !cmp(filters.amount.op, amt, filters.amount.value, filters.amount.value2)) continue;
+        rows.push({
+          kind: "money", at: e.at || e.date, ref: e.ref, refDoc: e.refDoc || null,
+          entryId: e.id, opType: e.opType, label: e.label,
+          journal: JOURNALS.find((j) => j.id === (e.journalId || journalOf(e.opType)))?.label || "",
+          account: l.account,
+          accountName: accounts.find((a) => a.code === l.account)?.name || l.account,
+          debit: Number(l.debit) || 0, credit: Number(l.credit) || 0,
+          by: e.createdBy || "", note: e.note || "", reversed: !!e.reversed,
+        });
+      }
+    }
+  }
+
+  if (unit !== "money") {
+    for (const g of goldLedger) {
+      const t = new Date(g.at || g.date).getTime();
+      if (!(t >= t0 && t <= t1)) continue;
+      if (wanted.size && !wanted.has(g.accountCode)) continue;
+      if (filters.journal?.value && journalOf(g.opType) !== filters.journal.value) continue;
+      if (filters.opType?.value && !txt(filters.opType.op, g.opType, filters.opType.value)) continue;
+      const fine = roundW((Number(g.weight) || 0) * (Number(g.karat) || 24) / 24);
+      const wOn = filters.weight?.value !== undefined && String(filters.weight.value).trim() !== "";
+      if (wOn) {
+        // ⚠ المرشّح بعيار العرض لا بالصافي: من كتب "أكثر من 100 جم21"
+        // يقصد 100 بعيار 21 — ومقارنتُها بالصافي تُسقط ما بين 87 و100.
+        const shown = fineToKarat(fine, displayKarat);
+        if (!cmp(filters.weight.op, shown, filters.weight.value, filters.weight.value2)) continue;
+      }
+      rows.push({
+        kind: "weight", at: g.at || g.date, ref: g.ref || g.refId || "", refDoc: g.refId || null,
+        entryId: g.id, opType: g.opType, label: g.opType,
+        journal: JOURNALS.find((j) => j.id === journalOf(g.opType))?.label || "",
+        account: g.accountCode,
+        accountName: accounts.find((a) => a.code === g.accountCode)?.name || g.accountCode,
+        karat: Number(g.karat) || 24, weight: Number(g.weight) || 0,
+        fine, dir: g.type, by: g.createdBy || g.by || "", note: g.note || "",
+      });
+    }
+  }
+
+  rows.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  const money = rows.filter((r) => r.kind === "money");
+  const wt = rows.filter((r) => r.kind === "weight");
+  return {
+    rows,
+    count: rows.length,
+    totals: {
+      debit: fromHalalas(money.reduce((a, r) => a + halalas(r.debit), 0)),
+      credit: fromHalalas(money.reduce((a, r) => a + halalas(r.credit), 0)),
+      fineIn: roundW(wt.filter((r) => r.dir === "in").reduce((a, r) => a + r.fine, 0)),
+      fineOut: roundW(wt.filter((r) => r.dir !== "in").reduce((a, r) => a + r.fine, 0)),
+    },
+    // ⚠ عددُ القيود غير عدد السطور: خمسةُ أسطرٍ من قيدٍ واحد ليست خمس
+    // عمليات — ومن عدّها كذلك ظنّ النشاط خمسة أضعافه.
+    entries: new Set(rows.map((r) => r.entryId)).size,
+  };
+}
+
+/// وصفٌ عربيّ للاستعلام — يُطبع مع النتيجة، ليعرف من يستلمها بأي شرطٍ
+/// استُخرجت (QUERY_FIELDS/QUERY_OPS من core/constants.js).
+function describeQuery({ filters = {}, from, to, unit, accounts = [], displayKarat = 21 }) {
+  const parts = [];
+  if (from || to) parts.push(`من ${from || "البداية"} إلى ${to || "اليوم"}`);
+  parts.push(unit === "weight" ? "الدفتر الوزني" : unit === "money" ? "الدفتر النقدي" : "الدفترين معًا");
+  const opLabel = (o) => QUERY_OPS.find((x) => x.id === o)?.label || "يساوي";
+  for (const f of QUERY_FIELDS) {
+    const v = filters[f.id];
+    if (!v || v.value === "" || v.value === undefined || v.value === false) continue;
+    if (f.kind === "bool") { parts.push(f.label); continue; }
+    if (f.id === "account") {
+      const a = accounts.find((x) => x.code === v.value);
+      parts.push(`الحساب ${v.value}${a ? ` — ${a.name}` : ""} وما تحته`);
+      continue;
+    }
+    const suffix = f.unit === "weight" ? ` جم${displayKarat}` : "";
+    parts.push(`${f.label} ${opLabel(v.op)} ${v.value}${v.op === "between" ? ` و${v.value2}` : ""}${suffix}`);
+  }
+  return parts.join(" · ");
+}
+
 function goldProfit(opening, closing) {
   if (!opening || !closing) return null;
   const grams = Math.round((closing.net - opening.net) * 1000) / 1000;
@@ -3176,4 +3340,4 @@ function generateRecoveryCode() {
   return Array.from({ length: 4 }, () => Array.from({ length: 4 }, pick).join("")).join("-");
 }
 
-export { accountForCategory, accountGroup, accountLabel, accountPath, aiAllowedFor, aiAllowedForRole, aiScope, askReportAi, attachmentByteSize, b32Decode, b32Encode, balancesAt, bleWriteChunked, branchDataKey, branchSnapshotKey, btSupported, bundleById, bundledPages, canvasToTsplBitmap, cardFeeOf, cashAccountFor, cashTrialBalance, categoryById, categoryLabel, childrenOf, cleanToken, codeCounter, codeToEpcHex, compressImage, contentWidth, createNhrFileAssembler, dayEnd, dayStart, detectColumns, detectTraceTopic, diffDatasets, drawCode128, drawQr, emptyRow, exchangeKind, expenseAccountFor, exportLedgerXlsx, exportTablesPdf, fetchAiAuditNarrative, fetchAiBusinessInsights, fetchAiChatReply, fetchAiReportSpec, fetchGoldPriceSAR, fetchLiveGram24, fineAt, fmtWeight, fromGram, fundingSourceLabel, generateRecoveryCode, generateUnitCode, goldDestLabel, goldProfit, guessScreens, hiddenNumbersScan, inPeriod, inputStyle, isBundle, isGoldCogs, isLiveScrap, isPartial, isUnder, issueBranchCode, issueLicense, itemLabel, journalTrialBalance, loadAttachment, lotAllocatedPieces, lotAllocatedWeight, lotReconcile, marginFor, mgrFeeBreakdown, mgrFeeEnabled, mgrFeeOn, mgrFeeRate, migrateLegacyKeys, modeAllowsAction, modeAllowsPage, modeAllowsTab, nameExists, navPerRow, nhrClassify, nhrCommand, nhrCommands, nhrCrc32, nhrHex, nhrIsLiveFrame, nhrParseBatchFile, nhrParseJson, nhrParseLiveFrame, normHeader, normalizeArabicQuery, normalizeFundingSource, normalizeName, normalizeRecovery, onlineBlockReason, openAttachment, openWhatsApp, ounceHash, periodRange, prettyPhone, prettyToken, priceBreakdown, printLabelToDevice, printedCount, qrEccBytes, qrGaloisTables, qrMatrix, qrMul, qrRS, r2, r3, readFileAsDataUrl, readKeyOrNull, remainingQty, renderLabelCanvas, reportFactsText, reportFindings, resolveCompare, resolveRange, rfidSettingsFor, runAuditChecks, saleModeOf, saleProfitOf, saleProfitSplit, saveAttachment, scrapPrice24, sellPrice24, sendRawToPrinter, setRuntimeCategories, splitCsvLine, statementDigest, streamBase, toCsv, toGram, toIntlPhone, toLatinDigits, trustBalance, tsplCalibrateBytes, tsplJobBytes, unitById, unitCostBasis, unitCurrentValue, usbPrint, useDebounced, useNhrReader, useViewport, useVoice, useWedgeScanner, vendorChallenge, vendorResponse, weekStart, weightTrialBalance };
+export { accountForCategory, accountGroup, accountLabel, accountPath, aiAllowedFor, aiAllowedForRole, aiScope, askReportAi, attachmentByteSize, b32Decode, b32Encode, balancesAt, bleWriteChunked, branchDataKey, branchSnapshotKey, btSupported, bundleById, bundledPages, canvasToTsplBitmap, cardFeeOf, cashAccountFor, cashTrialBalance, categoryById, categoryLabel, childrenOf, cleanToken, codeCounter, codeToEpcHex, compressImage, contentWidth, createNhrFileAssembler, dayEnd, dayStart, detectColumns, detectTraceTopic, describeQuery, diffDatasets, drawCode128, drawQr, emptyRow, exchangeKind, expenseAccountFor, exportLedgerXlsx, exportTablesPdf, fetchAiAuditNarrative, fetchAiBusinessInsights, fetchAiChatReply, fetchAiReportSpec, fetchGoldPriceSAR, fetchLiveGram24, fineAt, fmtWeight, fineToKarat, fromGram, fundingSourceLabel, generateRecoveryCode, generateUnitCode, goldDestLabel, goldProfit, guessScreens, hiddenNumbersScan, inPeriod, inputStyle, isBundle, isGoldCogs, isLiveScrap, isPartial, isUnder, issueBranchCode, issueLicense, itemLabel, journalOf, journalTrialBalance, loadAttachment, lotAllocatedPieces, lotAllocatedWeight, lotReconcile, marginFor, mgrFeeBreakdown, mgrFeeEnabled, mgrFeeOn, mgrFeeRate, migrateLegacyKeys, modeAllowsAction, modeAllowsPage, modeAllowsTab, nameExists, navPerRow, nhrClassify, nhrCommand, nhrCommands, nhrCrc32, nhrHex, nhrIsLiveFrame, nhrParseBatchFile, nhrParseJson, nhrParseLiveFrame, normHeader, normalizeArabicQuery, normalizeFundingSource, normalizeName, normalizeRecovery, onlineBlockReason, openAttachment, openWhatsApp, ounceHash, periodRange, prettyPhone, prettyToken, priceBreakdown, printLabelToDevice, printedCount, qrEccBytes, qrGaloisTables, qrMatrix, qrMul, qrRS, r2, r3, readFileAsDataUrl, readKeyOrNull, remainingQty, renderLabelCanvas, reportFactsText, reportFindings, resolveCompare, resolveRange, rfidSettingsFor, runAuditChecks, runQuery, saleModeOf, saleProfitOf, saleProfitSplit, saveAttachment, scrapPrice24, sellPrice24, sendRawToPrinter, setRuntimeCategories, splitCsvLine, statementDigest, streamBase, toCsv, toGram, toIntlPhone, toLatinDigits, trustBalance, tsplCalibrateBytes, tsplJobBytes, unitById, unitCostBasis, unitCurrentValue, usbPrint, useDebounced, useNhrReader, useViewport, useVoice, useWedgeScanner, vendorChallenge, vendorResponse, weekStart, weightTrialBalance };
