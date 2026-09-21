@@ -14,7 +14,7 @@ import { PrintAfterEntry } from "../ui/PrintAfterEntry.jsx";
 import { QuickLotForm } from "../ui/QuickLotForm.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 
-function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions = [], onSetPrinted, onCreateSupplierLot, onDeleteItem, onBack }) {
+function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions = [], onSetPrinted, onCreateSupplierLot, onDeleteItem, onBack, flashToast }) {
   const [detailItem, setDetailItem] = useState(null);
   const [justEntered, setJustEntered] = useState(null); // الأصناف المُدخلة للتو، بانتظار الطباعة
   const [showSessions, setShowSessions] = useState(false);
@@ -66,23 +66,38 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
   const allRowsValid = rows.every(rowValid);
   const canSave = !!lotId && allRowsValid;
 
-  const handleSubmit = () => {
+  const [saving, setSaving] = useState(false);
+
+  // ⚠ onSave صار غير متزامن (يستدعي الباك إند فعليًا عبر
+  // api.createLotItems — راجع تعليق handleAddItems في GoldInventoryApp.jsx)
+  // — لازم انتظار النتيجة قبل الطباعة، وإلا كانت created كائن Promise لا
+  // مصفوفة الأصناف الفعلية، فتُفتح شاشة الطباعة فارغة أو تفشل بصمت.
+  const handleSubmit = async () => {
+    // ⚠ categoryId لا category: الباك إند يتحقق من category_id حقيقي في
+    // جدول categories — إرسال المفتاح القديم (category) كان سيُرفض
+    // برسالة category غير موجود مهما كانت القيمة صحيحة.
     const cleanRows = rows.map((r) => ({
-      category: r.category,
-      karat: selectedLot.karat,
-      weight: Number(r.weight),
+      categoryId: r.category,
       stonesWeight: Number(r.stonesWeight) || 0,
+      weight: Number(r.weight),
       quantity: Math.max(1, Number(r.quantity) || 1),
       costPerGram: selectedLot.costPerGram,
       workmanshipPerUnit: Number(r.workmanshipPerUnit) || 0,
       photoDataUrl: r.photoDataUrl,
+      isSet: r.category === "set",
+      setPieces: r.category === "set" ? (r.setPieces || []).filter((x) => (x || "").trim()) : [],
     }));
-    const created = onSave(lotId, cleanRows, distMode);
-    // الطباعة جزء من الإدخال لا صفحة منفصلة: الرقاقة تُلصق على القطعة
-    // فور إدخالها، وتأجيلها يعني قطعًا بلا رقاقة في الصندوق اليومي.
-    if (created && created.length) {
-      setJustEntered(created);
-      setRows([emptyRow()]);
+    setSaving(true);
+    try {
+      const created = await onSave(lotId, cleanRows, distMode);
+      // الطباعة جزء من الإدخال لا صفحة منفصلة: الرقاقة تُلصق على القطعة
+      // فور إدخالها، وتأجيلها يعني قطعًا بلا رقاقة في الصندوق اليومي.
+      if (created && created.length) {
+        setJustEntered(created);
+        setRows([emptyRow()]);
+      }
+    } finally {
+      setSaving(false);
     }
   };
 

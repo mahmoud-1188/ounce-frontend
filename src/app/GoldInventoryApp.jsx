@@ -139,6 +139,18 @@ function apiErrorMessage(err, fallback) {
   const code = err?.body?.error;
   return API_ERROR_MESSAGES[code] || fallback || "حدث خطأ غير متوقع";
 }
+
+function addItemsErrorMessage(err) {
+  const body = err?.body || {};
+  switch (body.error) {
+    case "missing_field": return `أدخل ${body.fieldLabel || "الحقل المطلوب"}`;
+    case "lot_not_found": return "الدفعة غير موجودة";
+    case "lot_not_open": return "الدفعة مقفلة، لا يمكن الإضافة إليها";
+    case "lot_missing_karat": return "الدفعة بلا عيار محدَّد";
+    case "category_not_found": return "تصنيف غير موجود";
+    default: return "تعذّرت إضافة الأصناف";
+  }
+}
 import { DEFAULT_THEME, applyTheme } from "../core/theme.js";
 import { FUNDING_SOURCES, SCRAP_STAGES } from "../core/workflow.js";
 import { auditHash } from "../domain/auditHash.js";
@@ -5081,68 +5093,56 @@ export default function GoldInventoryApp() {
   ]);
 
   // -------- handlers: inventory --------
-  const handleAddItems = (lotId, rows, distributionMode) => txn("handleAddItems", () => {
-    const now = new Date().toISOString();
+  /**
+   * ⚠ تحويل حقيقي: كانت هذه الدالة تبني الأصناف محليًا بالكامل (معرّفات
+   * عشوائية من المتصفح، توزيع أجرة من lot.workmanshipAllocated — حقل لا
+   * وجود له في قاعدة البيانات الحقيقية فيُقرأ NaN→0 دائمًا) وتكتبها إلى
+   * window.storage فقط (persistItems) — بلا أي استدعاء للباك إند إطلاقًا.
+   * النتيجة: كل صنفٍ يُكوَّد يختفي عند إعادة تحميل الصفحة أو من أي جهاز/
+   * فرع آخر، ولا يظهر أبدًا في bootstrap — تمامًا كحال المورّدين قبل
+   * إصلاح handleAddSupplier أعلاه، وتمامًا كحال ازدواج الأجرة الذي كان
+   * كامنًا هنا لو وُصل هذا المسار بالباك إند دون إصلاح مقابل هناك (راجع
+   * migration 028_lot_item_coding.sql وitems.routes.js في الباك إند).
+   *
+   * الآن: POST /api/lots/:id/items (عبر api.createLotItems) هو من يتحقق
+   * ويحسب فعليًا — التصنيفات، توزيع الأجرة المتبقي الحقيقي، أكواد الوحدات
+   * الفريدة. لا تحديث لأي حالة محلية إلا بعد نجاح الطلب، ولا حاجة لـtxn/
+   * rollback القديمة هنا لنفس سبب باقي التحويلات (createLotCore،
+   * handlePartialSale).
+   */
+  const handleAddItems = async (lotId, rows, distributionMode) => {
     const lot = lots.find((l) => l.id === lotId);
-    // Spread the lot's total labour charge across the pieces being entered,
-    // using the mode chosen at purchase time. Each row gets a per-unit share
-    // folded into its workmanship, so cost basis (and therefore profit) is
-    // accurate per piece rather than leaving the charge unallocated.
-    // ميزانية الأجور المتبقية من الدفعة، لا إجماليها: الإدخال قد يتم على
-    // دفعات، فتوزيع الإجمالي كل مرة كان سيحمّل القطع أجورًا مكررة.
-    const lotWorkmanship = Math.max(0, (Number(lot?.workmanshipTotal) || 0) - (Number(lot?.workmanshipAllocated) || 0));
-    const mode = distributionMode || "per_gram";
-    const rowWeightQty = (r) => (Number(r.weight) || 0) * Math.max(1, Number(r.quantity) || 1);
-    const rowQty = (r) => Math.max(1, Number(r.quantity) || 1);
-    const rowFine = (r) => rowWeightQty(r) * (PURITY[r.karat] || (Number(r.karat) || 0) / 24);
-    let denom = 0;
-    if (lotWorkmanship > 0) {
-      if (mode === "per_item") denom = rows.reduce((a, r) => a + rowQty(r), 0);
-      else if (mode === "by_karat") denom = rows.reduce((a, r) => a + rowFine(r), 0);
-      else denom = rows.reduce((a, r) => a + rowWeightQty(r), 0);
+    let res;
+    try {
+      res = await api.createLotItems(lotId, rows, distributionMode);
+    } catch (err) {
+      flashToast(addItemsErrorMessage(err));
+      return null;
     }
-    const shareForRow = (r) => {
-      if (lotWorkmanship <= 0 || denom <= 0) return 0;
-      const numer = mode === "per_item" ? rowQty(r) : mode === "by_karat" ? rowFine(r) : rowWeightQty(r);
-      return (lotWorkmanship * numer) / denom / rowQty(r); // per single unit
-    };
-
-    const newItems = rows.map((row) => {
-      const quantity = Math.max(1, Number(row.quantity) || 1);
-      const units = [];
-      for (let i = 0; i < quantity; i++) units.push({ code: generateUnitCode(), printed: false, sold: false });
-      const allocatedWorkmanship = shareForRow(row);
-      return {
-        id: Date.now().toString() + Math.random().toString(36).slice(2, 6),
-        // ⚠ إصلاح محلي: كان الحقل هنا `category`، بينما كل شاشات القراءة
-        // (بيع بالوزن، تعديل القطع، التصنيفات، الجرد بتصنيف...) تقرأ
-        // `categoryId` — فلا تجد له قيمة أبدًا لأي صنف حقيقي مُضاف عبر
-        // التكويد. وحّدنا الاسم إلى categoryId، مع ترحيل تلقائي عند
-        // التحميل للأصناف القديمة المحفوظة بحقل category فقط.
-        categoryId: row.category,
-        karat: row.karat,
-        weight: row.weight,
-        stonesWeight: row.stonesWeight || 0,
-        quantity,
-        costPerGram: row.costPerGram,
-        workmanshipPerUnit: (Number(row.workmanshipPerUnit) || 0) + allocatedWorkmanship,
-        lotWorkmanshipShare: allocatedWorkmanship,
-        photoDataUrl: row.photoDataUrl || null,
-        lotId,
-        units,
-        // ⚠ الوسيط اسمه row لا r — كان يُسقط التكويد كليًا عند الحفظ.
-        isSet: row.category === "set",
-        setPieces: row.category === "set" ? (row.setPieces || []).filter((x) => (x || "").trim()) : [],
-        dateAdded: now,
-      };
-    });
+    const newItems = res.items.map((it) => ({
+      id: it.id,
+      ref: it.ref,
+      lotId: it.lotId,
+      categoryId: it.categoryId,
+      karat: it.karat,
+      weight: it.weight,
+      stonesWeight: it.stonesWeight || 0,
+      costPerGram: it.costPerGram,
+      workmanshipPerUnit: it.workmanship,
+      lotWorkmanshipShare: it.lotWorkmanshipShare,
+      photoDataUrl: null,
+      units: it.units,
+      fromScrap: false,
+      dateAdded: it.dateAdded,
+      createdBy: currentUser?.name || "",
+    }));
     persistItems([...newItems, ...items]);
 
-    // راكم ما وُزِّع فعلًا على الدفعة، ليظهر المتبقي أو الفائض في الإدخال التالي.
+    // راكم ما وُزِّع فعلًا على الدفعة محليًا للعرض الفوري — الباك إند هو
+    // مصدر الحقيقة الفعلي لـworkmanship_allocated (حُدِّث هناك فعلًا ضمن
+    // نفس المعاملة أعلاه)، وهذا فقط يطابقه في الحالة المحلية فورًا بلا
+    // انتظار إعادة تحميل bootstrap.
     const allocatedNow = newItems.reduce((a, it) => a + (Number(it.lotWorkmanshipShare) || 0) * it.units.length, 0);
-    // الوزن المُدخل يُراكم كذلك. الفرق بينه وبين وزن الدفعة المشتراة هو
-    // الهالك أو الفائض — ذهب حقيقي يجب أن يُحاسَب، وإلا لن يتطابق الجرد
-    // مع المشتريات أبدًا.
     const weightNow = newItems.reduce((a, it) => a + (Number(it.weight) || 0) * it.units.length, 0);
     if (lot) {
       persistLots(
@@ -5159,8 +5159,10 @@ export default function GoldInventoryApp() {
       );
     }
 
-    // كل عملية إدخال تُسجَّل كجلسة مستقلة: تربط ما أُدخل بالمورد وبالدفعة
-    // وبمن أدخله. بدونها يصعب تتبّع «من أدخل ماذا ومتى» عند تدقيق فرق جرد.
+    // ⚠ جلسات الإدخال (entrySessions) تبقى محليةً بحتة عمدًا: لا جدول
+    // مقابل لها في الباك إند بعد، ولا طلب لبنائه — ميزة تتبّع تكميلية لا
+    // بيانات جوهرية (خلافًا لـitems/lots نفسها).
+    const now = new Date().toISOString();
     const lotRef = lots.find((l) => l.id === lotId);
     const session = {
       id: Date.now().toString() + "es",
@@ -5179,8 +5181,7 @@ export default function GoldInventoryApp() {
 
     flashToast(newItems.length > 1 ? `تمت إضافة ${newItems.length} أصناف` : "تمت إضافة الصنف");
     return newItems; // يعيدها ليتيح للمستدعي طباعة رقاقاتها فورًا
-  
-  });
+  };
   const handleDeleteItem = (id) => {
     persistItems(items.filter((i) => i.id !== id));
     flashToast("تم الحذف");
@@ -7169,6 +7170,7 @@ export default function GoldInventoryApp() {
             onCreateSupplierLot={handleQuickCreateLot}
             onDeleteItem={handleDeleteItem}
             onBack={() => setMorePage(null)}
+            flashToast={flashToast}
           />
         )}
         {morePage === "printing" && (

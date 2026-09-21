@@ -224,6 +224,20 @@ function createSupplier(payload) {
   return apiFetch("/suppliers", { method: "POST", body: payload });
 }
 
+// ⚠ إصلاح فجوة حقيقية: التكويد (إضافة أصناف جديدة من دفعة/lot مفتوحة)
+// كان لا يزال يكتب محليًا فقط (persistItems → window.storage) بمعرّفات
+// عشوائية من المتصفح، بلا أي استدعاء للباك إند — تمامًا كحال المورّدين
+// قبل الإصلاح أعلاه. هذا يستدعي POST /api/lots/:id/items فعليًا (راجع
+// migration 028_lot_item_coding.sql وitems.routes.js في الباك إند
+// للسياق الكامل)، فتُكتب items/item_units حقيقية في Postgres وتظهر في
+// bootstrap لكل جهاز/جلسة من الآن فصاعدًا.
+function createLotItems(lotId, rows, distributionMode) {
+  return apiFetch(`/lots/${lotId}/items`, {
+    method: "POST",
+    body: { rows, distributionMode },
+  });
+}
+
 // ── قارئ RFID: ربط/فكّ بطاقة بوحدة (item_units.epc) ──
 //
 // القراءة الفعلية للبطاقة (بلوتوث NHR-10 أو قارئ HID) تجري بالكامل في
@@ -449,6 +463,7 @@ export {
   createPartialSale,
   createPurchase,
   createSupplier,
+  createLotItems,
   rfid,
   scrap,
   safe,
