@@ -238,6 +238,17 @@ function createLotItems(lotId, rows, distributionMode) {
   });
 }
 
+// ⚠ إصلاح فجوة حقيقية: شاشة "التصنيفات وطرق البيع" (CategoriesPage.jsx)
+// كانت محلية بالكامل (persist → window.storage) بلا أي مسار خلفي —
+// إضافة/تعديل/حذف تصنيف كان يختفي عند إعادة التحميل. الشاشة ترسل
+// القائمة الكاملة المطلوبة دفعة واحدة (لا حدثًا لكل تغيير)، فالمسار
+// الخلفي (POST /api/categories/reconcile) يقارنها بالقاعدة الحقيقية:
+// يضيف الجديد (معرّفات محلية cat_* لم تُدرَج بعد)، يعدّل الموجود، ويحذف
+// ما غاب عن القائمة (برفض حقيقي إن كان لا يزال مستخدَمًا في items).
+function reconcileCategories(categories) {
+  return apiFetch("/categories/reconcile", { method: "POST", body: { categories } });
+}
+
 // ── قارئ RFID: ربط/فكّ بطاقة بوحدة (item_units.epc) ──
 //
 // القراءة الفعلية للبطاقة (بلوتوث NHR-10 أو قارئ HID) تجري بالكامل في
@@ -464,6 +475,7 @@ export {
   createPurchase,
   createSupplier,
   createLotItems,
+  reconcileCategories,
   rfid,
   scrap,
   safe,

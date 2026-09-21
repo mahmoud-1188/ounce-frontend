@@ -296,7 +296,19 @@ function normalizeTaskirOfficeTx(rows) {
 
 function normalizeCategories(rows) {
   return rows.map((c) => ({
-    id: c.id, name: c.name, saleMode: c.sale_mode, minSaleWeight: c.min_sale_weight == null ? null : Number(c.min_sale_weight),
+    id: c.id,
+    // ⚠ إصلاح حقيقي: كل شاشات القراءة (AddGoodsPage.jsx، CategoriesPage.jsx،
+    // ConversionsPage.jsx، ItemEditPage.jsx، StocktakeSubPage.jsx...) تقرأ
+    // `label` — نفس شكل DEFAULT_CATEGORIES الثابت في constants.js الذي
+    // تستبدله setRuntimeCategories بهذه القائمة عند كل bootstrap. `name`
+    // وحدها (شكل عمود القاعدة) كانت تُعرض حرفيًّا كـ`undefined` في كل
+    // قائمة اختيار تصنيف حقيقي قادم من الباك إند — الاختيار نفسه كان
+    // يعمل (القيمة id صحيحة)، لكن نص كل خيار كان فارغًا.
+    label: c.name,
+    name: c.name,
+    saleMode: c.sale_mode,
+    minSaleWeight: c.min_sale_weight == null ? null : Number(c.min_sale_weight),
+    sortOrder: c.sort_order == null ? 0 : Number(c.sort_order),
   }));
 }
 

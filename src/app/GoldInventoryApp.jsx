@@ -151,6 +151,17 @@ function addItemsErrorMessage(err) {
     default: return "تعذّرت إضافة الأصناف";
   }
 }
+
+function saveCategoriesErrorMessage(err) {
+  const body = err?.body || {};
+  switch (body.error) {
+    case "missing_field": return `أدخل ${body.fieldLabel || "الحقل المطلوب"}`;
+    case "invalid_sale_mode": return "طريقة بيع غير صالحة";
+    case "duplicate_label": return `التصنيف "${body.label || ""}" مكرَّر`;
+    case "category_in_use": return "لا يُحذف تصنيف مستخدم في المخزون";
+    default: return "تعذّر حفظ التصنيفات";
+  }
+}
 import { DEFAULT_THEME, applyTheme } from "../core/theme.js";
 import { FUNDING_SOURCES, SCRAP_STAGES } from "../core/workflow.js";
 import { auditHash } from "../domain/auditHash.js";
@@ -1470,10 +1481,30 @@ export default function GoldInventoryApp() {
   const handleSaveNavLayout = (next) => persistNavLayout(next);
   const handleSaveMenuOrder = (next) => persist(MENU_ORDER_KEY, next, setMenuOrder);
 
-  const handleSaveCategories = (next) => {
-    setRuntimeCategories(next);
-    persist(CATEGORIES_KEY, next, setCategories);
+  /**
+   * ⚠ تحويل حقيقي: كانت هذه الدالة تكتب القائمة محليًا فقط (persist →
+   * window.storage) بلا أي استدعاء للباك إند — كل إضافة/تعديل/حذف تصنيف
+   * كان يظهر فورًا ثم يختفي بصمت عند أول إعادة تحميل (categories في
+   * BACKEND_OWNED_FIELDS، تُستبدل كاملةً من bootstrap عند كل دخول). الآن
+   * POST /api/categories/reconcile (عبر api.reconcileCategories) هو من
+   * يتحقق ويكتب فعليًا — معرّفات cat_* المحلية القديمة تُستبدَل بمعرّفات
+   * UUID حقيقية في الاستجابة نفسها، فلا يبقى أي معرّف مؤقت بعد نجاح
+   * الحفظ. راجع categories.routes.js وmigration
+   * 029_categories_write.sql للسياق الكامل (بما فيه إصلاح RLS ذي صلة
+   * لصفوف التصنيفات المشتركة بين الفروع).
+   */
+  const handleSaveCategories = async (next) => {
+    let res;
+    try {
+      res = await api.reconcileCategories(next);
+    } catch (err) {
+      flashToast(saveCategoriesErrorMessage(err));
+      return false;
+    }
+    setRuntimeCategories(res.categories);
+    persist(CATEGORIES_KEY, res.categories, setCategories);
     flashToast("حُفظت التصنيفات");
+    return true;
   };
 
   // ⚠ لا يُحذف تصنيف مستخدم في المخزون: القطع تصير بلا اسم تصنيف

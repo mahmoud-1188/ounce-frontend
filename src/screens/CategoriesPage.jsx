@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { ChevronLeft } from "lucide-react";
 import { fmtW } from "../core/money.js";
 import { SALE_MODES } from "../core/workflow.js";
@@ -14,6 +14,33 @@ function CategoriesPage({ categories, items, inUse, onSave, onBack, flashToast }
   const [newLabel, setNewLabel] = useState("");
   const [newMode, setNewMode] = useState("whole");
   const [newMin, setNewMin] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  // ⚠ onSave صار غير متزامن (يستدعي الباك إند فعليًا عبر
+  // api.reconcileCategories — راجع تعليق handleSaveCategories في
+  // GoldInventoryApp.jsx). عند النجاح تُستبدل list بما يرجعه الخادم
+  // (معرّفات UUID حقيقية بدل cat_* المحلية)؛ عند الفشل تبقى list كما
+  // هي (dirty لا يزال true) ليحاول المستخدم مجددًا بدل أن يظهر الحفظ
+  // ناجحًا وهمًا بينما فشل فعليًا في الخادم.
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const ok = await onSave(list);
+      if (ok !== false) setEditing(null);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ⚠ مزامنة ضرورية بعد نجاح الحفظ: onSave (في GoldInventoryApp.jsx)
+  // يستبدل categories الأب بما يرجعه الخادم (معرّفات UUID حقيقية بدل
+  // cat_* المحلية) — بلا هذا كانت list المحلية هنا تبقى بمعرّفاتها
+  // المؤقتة القديمة، فيفشل أي تعديل/حذف لاحق لأنها لم تعد موجودة فعليًا
+  // في القاعدة بهذا الشكل.
+  useEffect(() => {
+    if (!saving) setList(categories);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categories]);
 
   const countOf = (id) => items.filter((it) => it.categoryId === id && (it.units || []).some((u) => !u.sold)).length;
   const dirty = JSON.stringify(list) !== JSON.stringify(categories);
@@ -231,10 +258,10 @@ function CategoriesPage({ categories, items, inUse, onSave, onBack, flashToast }
               style={{ background: "var(--panel)", color: "var(--text2)", border: "1px solid var(--line)" }}>
               تراجع
             </button>
-            <button onClick={() => { onSave(list); setEditing(null); }}
+            <button onClick={handleSave} disabled={saving}
               className="py-3 rounded-xl text-xs font-bold"
-              style={{ background: "linear-gradient(135deg,var(--gradFrom),var(--gradTo))", color: "var(--panel)" }}>
-              حفظ التغييرات
+              style={{ background: "linear-gradient(135deg,var(--gradFrom),var(--gradTo))", color: "var(--panel)", opacity: saving ? 0.7 : 1 }}>
+              {saving ? "جارِ الحفظ…" : "حفظ التغييرات"}
             </button>
           </div>
         )}
