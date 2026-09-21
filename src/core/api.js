@@ -421,6 +421,16 @@ const priceFixApi = {
   create: (payload) => apiFetch("/price-fix", { method: "POST", body: payload }),
 };
 
+// ── معاملات الإدارة (hqDocs — migration 027) ──
+// طلبات/تحويلات حقيقية بين الفرع والمركزي، لا رموزًا تُلصق يدويًّا كما
+// في المرجع (راجع تعليق الهجرة). الفرع يبدأ خمسة أنواع، ويستلم اثنين
+// فقط (goods_from_hq, send_for_coding) بعد اعتماد الإدارة أو مباشرةً.
+const hqTransactionsApi = {
+  list: () => apiFetch("/branch/hq-transactions"),
+  create: (payload) => apiFetch("/branch/hq-transactions", { method: "POST", body: payload }),
+  receive: (id) => apiFetch(`/branch/hq-transactions/${id}/receive`, { method: "POST" }),
+};
+
 export {
   ApiError,
   getAuthToken,
@@ -458,4 +468,5 @@ export {
   payrollApi,
   hqApi,
   priceFixApi,
+  hqTransactionsApi,
 };

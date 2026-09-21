@@ -207,6 +207,7 @@ import { FixedAssetsPage } from "../screens/FixedAssetsPage.jsx";
 import { PayrollPage } from "../screens/PayrollPage.jsx";
 import { AttendanceHrPage } from "../screens/AttendanceHrPage.jsx";
 import { HqReportPage } from "../screens/HqReportPage.jsx";
+import { HqTransactionsPage } from "../screens/HqTransactionsPage.jsx";
 import { FullStatementsPage } from "../screens/FullStatementsPage.jsx";
 import { AnyStatementPage } from "../screens/AnyStatementPage.jsx";
 import { GeneralLedgerPage } from "../screens/GeneralLedgerPage.jsx";
@@ -7831,6 +7832,13 @@ export default function GoldInventoryApp() {
         )}
         {morePage === "hqReports" && (
           <HqReportPage
+            currency={priceData.currency}
+            onBack={() => setMorePage(null)}
+            flashToast={flashToast}
+          />
+        )}
+        {morePage === "hqDocs" && (
+          <HqTransactionsPage
             currency={priceData.currency}
             onBack={() => setMorePage(null)}
             flashToast={flashToast}

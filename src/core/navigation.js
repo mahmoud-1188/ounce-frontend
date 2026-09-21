@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Barcode, BarChart3, BookmarkCheck, Building2, CalendarCheck, ClipboardCheck, Coins, Database, FileMinus, FileText, Flame, Grid, Handshake, Landmark, LayoutGrid, Lock, PiggyBank, Plus, Printer, Receipt, RefreshCw, RotateCcw, Scale, Search, Send, Settings, ShieldCheck, ShoppingCart, Sparkles, Sun, Truck, UserRound, Users, Wallet, Warehouse, Wrench } from "lucide-react";
+import { ArrowLeftRight, Barcode, BarChart3, BookmarkCheck, Building2, CalendarCheck, ClipboardCheck, ClipboardList, Coins, Database, FileMinus, FileText, Flame, Grid, Handshake, Landmark, LayoutGrid, Lock, PiggyBank, Plus, Printer, Receipt, RefreshCw, RotateCcw, Scale, Search, Send, Settings, ShieldCheck, ShoppingCart, Sparkles, Sun, Truck, UserRound, Users, Wallet, Warehouse, Wrench } from "lucide-react";
 import { ROLES } from "./constants.js";
 
 const TAB_KIND_IDS = ["inventory", "sales", "cash", "expenses", "stocktake"];
@@ -63,6 +63,7 @@ const NAV_REGISTRY = [
   { id: "payroll", label: "الرواتب", icon: Users },
   { id: "attendanceHr", label: "الحضور والإجازات", icon: CalendarCheck },
   { id: "hqReports", label: "تقرير الفروع", icon: Building2 },
+  { id: "hqDocs", label: "معاملات الإدارة", icon: ClipboardList },
   { id: "priceFix", label: "التثبيت ذهب ↔ نقد", icon: ArrowLeftRight },
   { id: "generalLedger", label: "الأستاذ العام", icon: FileText },
   { id: "masterReport", label: "التقارير الموحّدة", icon: LayoutGrid },
