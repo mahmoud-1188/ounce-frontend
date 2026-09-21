@@ -301,7 +301,7 @@ function PriceLoginScreen({ priceData, autoUpdating, autoError, lastAutoFetch, o
                 />
                 {refError && (
                   <p style={{ color: "var(--bad)" }} className="text-xs text-center mb-3">
-                    رمز غير صحيح
+                    رقم سري غير صحيح
                   </p>
                 )}
                 <button
