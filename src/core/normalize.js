@@ -324,6 +324,11 @@ function normalizeLots(rows) {
     costPerGram: l.cost_per_gram == null ? 0 : Number(l.cost_per_gram),
     goldCost: toMoney(l.gold_cost),
     workmanshipTotal: toMoney(l.workmanship_total),
+    // ⚠ عمود حقيقي منذ migration 028_lot_item_coding.sql — بدونه كانت
+    // شاشة AddGoodsPage.jsx تقرأ selectedLot.workmanshipAllocated دائمًا
+    // undefined (NaN→0)، فيُعاد توزيع كامل workmanshipTotal من الصفر عند
+    // كل تحميل صفحة جديد حتى لو كُوِّدت الدفعة جزئيًّا من قبل.
+    workmanshipAllocated: toMoney(l.workmanship_allocated),
     totalCost: toMoney(l.total_cost),
     status: l.status || "open",
     enteredWeight: l.entered_weight == null ? null : toWeight(l.entered_weight),
