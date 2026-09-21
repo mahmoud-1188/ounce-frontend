@@ -6768,7 +6768,7 @@ export default function GoldInventoryApp() {
           paddingInline: vp.size === "sm" ? 0 : 12,
         }}
       >
-        <div className="flex items-center justify-between px-4 pt-2 pb-1">
+        <div className="flex items-center justify-between px-4 pt-2 pb-1 relative">
           <div className="flex items-center gap-2">
             <div
               className="flex items-center justify-center flex-shrink-0"
@@ -6787,6 +6787,20 @@ export default function GoldInventoryApp() {
               </span>
             </div>
           </div>
+          {/* ⚠ اسم الفرع في المنتصف (طلب المستخدم صراحةً): مفيدٌ تحديدًا
+              لصاحب أكثر من فرع يتنقّل بين أجهزتها فيلتبس عليه أي فرعٍ
+              يفتحه الآن — position: absolute + تمركز أفقي كامل العرض،
+              لا flex-1 عادي، حتى لا يزاحم عمودي الطرفين عند اسمٍ طويل
+              (كلاهما محتوىً حقيقي ثابت العرض تقريبًا، فالتمركز المطلق
+              أضمن من توزيع مساحة قد يضيق أحد الطرفين). */}
+          {branchLink?.branchName && (
+            <span
+              className="absolute left-1/2 -translate-x-1/2 text-xs font-bold truncate px-2"
+              style={{ color: "var(--text2)", maxWidth: "40%", fontFamily: "'Cairo', sans-serif" }}
+            >
+              {branchLink.branchName}
+            </span>
+          )}
           <div className="flex items-center gap-2">
             {/* القائمة الكاملة انتقلت للأعلى: الشريط السفلي للأدوات اليومية
                 وحدها، فلا يزاحمها زر لا يُستخدم كثيرًا. */}
