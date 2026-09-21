@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Barcode, BarChart3, BookmarkCheck, Building2, CalendarCheck, ClipboardCheck, ClipboardList, Coins, Database, FileMinus, FileText, Flame, Grid, Handshake, Landmark, LayoutGrid, Lock, PiggyBank, Plus, Printer, Receipt, RefreshCw, RotateCcw, Scale, Search, Send, Settings, ShieldCheck, ShoppingCart, Sparkles, Sun, Truck, UserRound, Users, Wallet, Warehouse, Wrench } from "lucide-react";
+import { ArrowLeftRight, Barcode, BarChart3, BookmarkCheck, Building2, CalendarCheck, ClipboardCheck, ClipboardList, Coins, Database, FileMinus, FileText, Flame, Grid, Handshake, Landmark, LayoutGrid, Lock, PiggyBank, Plus, Printer, Receipt, RefreshCw, RotateCcw, Scale, Search, Send, Settings, ShieldCheck, ShoppingCart, Sparkles, Sun, Tag, Truck, UserRound, Users, Wallet, Warehouse, Wrench } from "lucide-react";
 import { ROLES } from "./constants.js";
 
 const TAB_KIND_IDS = ["inventory", "sales", "cash", "expenses", "stocktake"];
@@ -64,6 +64,7 @@ const NAV_REGISTRY = [
   { id: "attendanceHr", label: "الحضور والإجازات", icon: CalendarCheck },
   { id: "hqReports", label: "تقرير الفروع", icon: Building2 },
   { id: "hqDocs", label: "معاملات الإدارة", icon: ClipboardList },
+  { id: "codingReport", label: "تقرير التكويد", icon: Tag },
   { id: "priceFix", label: "التثبيت ذهب ↔ نقد", icon: ArrowLeftRight },
   { id: "generalLedger", label: "الأستاذ العام", icon: FileText },
   { id: "masterReport", label: "التقارير الموحّدة", icon: LayoutGrid },
@@ -225,6 +226,7 @@ const SHORTCUT_HINTS = {
   payroll: ["رواتب", "راتب", "تأمينات", "عمولة", "عمولات", "نهاية خدمة", "مسير رواتب"],
   attendanceHr: ["حضور", "غياب", "اجازة", "إجازة", "اجازات", "إجازات", "بصمة"],
   hqReports: ["فروع", "الفروع", "ادارة", "إدارة", "تقرير الفروع", "hq"],
+  codingReport: ["تكويد", "التكويد", "تقرير التكويد", "اضافة بضاعة", "إضافة بضاعة", "أصناف جديدة"],
   priceFix: ["تثبيت", "تسبيك", "ذهب نقد", "تحويل ذهب"],
   generalLedger: ["استاذ", "أستاذ", "الاستاذ العام", "الأستاذ العام"],
   masterReport: ["تقرير موحد", "تقارير موحدة", "تقرير شامل"],
@@ -252,7 +254,7 @@ const MENU_GROUPS = [
     label: "المخزون والتكويد",
     hint: "التكويد · الطباعة · التحويلات",
     icon: Warehouse,
-    items: ["addGoods", "categories", "printing", "printerSetup", "rfidReader", "rfidSettings", "itemEdit", "conversions"],
+    items: ["addGoods", "codingReport", "categories", "printing", "printerSetup", "rfidReader", "rfidSettings", "itemEdit", "conversions"],
   },
   {
     id: "purchasing",

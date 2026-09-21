@@ -231,6 +231,7 @@ import { PayrollPage } from "../screens/PayrollPage.jsx";
 import { AttendanceHrPage } from "../screens/AttendanceHrPage.jsx";
 import { HqReportPage } from "../screens/HqReportPage.jsx";
 import { HqTransactionsPage } from "../screens/HqTransactionsPage.jsx";
+import { CodingReportPage } from "../screens/CodingReportPage.jsx";
 import { FullStatementsPage } from "../screens/FullStatementsPage.jsx";
 import { AnyStatementPage } from "../screens/AnyStatementPage.jsx";
 import { GeneralLedgerPage } from "../screens/GeneralLedgerPage.jsx";
@@ -7875,6 +7876,17 @@ export default function GoldInventoryApp() {
             currency={priceData.currency}
             onBack={() => setMorePage(null)}
             flashToast={flashToast}
+          />
+        )}
+        {morePage === "codingReport" && (
+          <CodingReportPage
+            items={items}
+            lots={lots}
+            categories={categories}
+            suppliers={suppliers}
+            users={users}
+            currency={priceData.currency}
+            onBack={() => setMorePage(null)}
           />
         )}
         {morePage === "priceFix" && (
