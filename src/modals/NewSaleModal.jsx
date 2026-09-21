@@ -5,16 +5,18 @@ import { CARD_NETWORKS, PAYMENT_METHODS } from "../core/money-rules.js";
 import { cardFeeOf, categoryLabel, inputStyle, isPartial, itemLabel, onlineBlockReason, remainingQty, unitCurrentValue } from "../domain/helpers.js";
 import { sanitizeNumeric } from "../domain/sanitizeNumeric.js";
 import { tradeInValue } from "../domain/tradeInValue.js";
+import { BindEpcSheet } from "./BindEpcSheet.jsx";
 import { Card } from "../ui/Card.jsx";
 import { Field } from "../ui/Field.jsx";
 import { Hallmark } from "../ui/Hallmark.jsx";
 import { ModalShell } from "../ui/ModalShell.jsx";
 import { NumericInput } from "../ui/NumericInput.jsx";
+import { ScanField } from "../ui/ScanField.jsx";
 
 function NewSaleModal({ activeItems, priceData,
   // ⚠ العملة كانت غائبة عن التوقيع: البدل يستخدمها فيسقط بـ
   // «currency is not defined» — والنافذة تُفرَغ بلا رسالة.
-  currency = "ر.س", initialItemId, taxEnabled, taxRate, settings = {}, role, customers = [], dailyCash = null, onClose, onConfirm }) {
+  currency = "ر.س", initialItemId, taxEnabled, taxRate, settings = {}, role, customers = [], dailyCash = null, onClose, onConfirm, onBindEpc }) {
   const [customerId, setCustomerId] = useState("");
   const [scanCode, setScanCode] = useState("");
   // ── تجميد السعر ──
@@ -38,6 +40,7 @@ function NewSaleModal({ activeItems, priceData,
   const [cashPart, setCashPart] = useState("");
   const [cardNetwork, setCardNetwork] = useState("mada");
   const [scanMsg, setScanMsg] = useState("");
+  const [bindFor, setBindFor] = useState(null); // EPC غير معروف بانتظار الربط
   const [selection, setSelection] = useState(() => {
     if (initialItemId) {
       const item = activeItems.find((i) => i.id === initialItemId);
@@ -163,24 +166,32 @@ function NewSaleModal({ activeItems, priceData,
         </p>
       </Card>
 
-      {/* مسح الرقاقة: الماسح يعمل كلوحة مفاتيح ويُنهي بـEnter، فالحقل
-          يلتقط الكود ويضيف القطعة فورًا دون بحث يدوي — أكثر عملية تتكرر. */}
+      {/* مسح الرقاقة: ScanField يقبل قارئ RFID/باركود (يعمل كلوحة مفاتيح)
+          أو الكاميرا أو الكتابة اليدوية معًا — يضيف القطعة فورًا دون بحث
+          يدوي. المطابقة بالكود المطبوع أو بـEPC الحقيقي المربوط فعليًا
+          (item_units.epc — migration 014)، لا بالكود وحده كما كانت
+          سابقًا: بطاقة RFID تحمل EPC مختلفًا عن الكود المطبوع غالبًا،
+          فمسحها كان يفشل بصمت («لا توجد قطعة بهذا الكود») رغم أنها
+          مربوطة فعليًا بقطعة حقيقية. */}
       <Field label="مسح الرقاقة">
-        <input
-          style={inputStyle}
+        <ScanField
           value={scanCode}
-          autoFocus
-          onChange={(e) => {
-            setScanCode(e.target.value);
-            setScanMsg("");
-          }}
-          onKeyDown={(e) => {
-            if (e.key !== "Enter") return;
-            e.preventDefault();
-            const code = scanCode.trim();
+          onChange={(v) => { setScanCode(v); setScanMsg(""); }}
+          onSubmit={(raw, source) => {
+            const code = String(raw || "").trim();
             if (!code) return;
-            const hit = activeItems.find((it) => (it.units || []).some((u) => !u.sold && u.code === code));
+            const upper = code.toUpperCase();
+            const hit = activeItems.find((it) => (it.units || []).some((u) => !u.sold &&
+              (u.code === code || (u.epc && u.epc.toUpperCase() === upper))));
             if (!hit) {
+              // ⚠ بطاقة RFID فعلية غير مربوطة بأي قطعة بعد — تُعرض فقط حين
+              // جاءت من قارئ/كاميرا، لا من كتابة يدوية (طباعة خاطئة لا تفتح
+              // شاشة ربط بلا داعٍ).
+              if (source !== "manual" && /^[0-9A-F]{8,}$/i.test(code)) {
+                setBindFor(upper);
+                setScanCode("");
+                return;
+              }
               setScanMsg("لا توجد قطعة متاحة بهذا الكود");
               setScanCode("");
               return;
@@ -190,8 +201,10 @@ function NewSaleModal({ activeItems, priceData,
               setScanCode("");
               return;
             }
+            const matchedUnit = (hit.units || []).find((u) => !u.sold &&
+              (u.code === code || (u.epc && u.epc.toUpperCase() === upper)));
             // حارس المتجر: القطعة الملتزَم بها أونلاين لا تُباع في المحل.
-            const onlineBlock = onlineBlockReason(hit, code);
+            const onlineBlock = onlineBlockReason(hit, matchedUnit?.code || code);
             if (onlineBlock) {
               setScanMsg(onlineBlock);
               setScanCode("");
@@ -230,6 +243,17 @@ function NewSaleModal({ activeItems, priceData,
         <p style={{ color: scanMsg.startsWith("أُضيفت") ? "var(--goodSolid)" : "var(--bad)" }} className="text-[11px] mb-3">
           {scanMsg}
         </p>
+      )}
+      {bindFor && (
+        <BindEpcSheet epc={bindFor} items={activeItems} onCancel={() => setBindFor(null)}
+          onBind={async (unitId) => {
+            const unit = await onBindEpc?.(unitId, bindFor);
+            if (unit) {
+              setBindFor(null);
+              setScanMsg(`رُبطت البطاقة بـ${unit.code} — امسحها مرة أخرى لإضافتها`);
+            }
+            return !!unit;
+          }} />
       )}
 
       {customers.length > 0 && (

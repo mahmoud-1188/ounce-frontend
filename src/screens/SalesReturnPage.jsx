@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Check, RotateCcw } from "lucide-react";
 import { fmtMoney, fmtW } from "../core/money.js";
 import { REFUND_TARGETS, RETURN_REASONS } from "../core/workflow.js";
@@ -11,6 +11,7 @@ import { validateReturnRequest } from "../domain/validateReturnRequest.js";
 import { Card } from "../ui/Card.jsx";
 import { EmptyState } from "../ui/EmptyState.jsx";
 import { Field } from "../ui/Field.jsx";
+import { ScanField } from "../ui/ScanField.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 
 function SalesReturnPage({
@@ -25,20 +26,33 @@ function SalesReturnPage({
   const [note, setNote] = useState("");
   const [err, setErr] = useState([]);
 
-  const scanRef = useRef(null);
-  // ⚠ الحقل يبقى مركَّزًا: قارئ الباركود يكتب فيه كلوحة مفاتيح، وفقدان
-  // التركيز يجعل المسح يذهب لا مكان — والبائع يمسح مرارًا ولا يفهم.
-  useEffect(() => {
-    const t = setTimeout(() => scanRef.current?.focus(), 200);
-    return () => clearTimeout(t);
-  }, [hit]);
+  // ⚠ لا حاجة لتركيز يدوي بعد: ScanField يستخدم useWedgeScanner
+  // (استماعٌ على مستوى الصفحة كلها لدفقات لوحة المفاتيح السريعة من
+  // القارئ)، فمسح البطاقة يعمل بصرف النظر عن أي عنصرٍ يحمل التركيز
+  // فعليًا — بعكس الحقل الخام السابق الذي كان يفقد المسح بفقدانه.
+
+  // ⚠ بطاقة RFID تحمل EPC حقيقيًا مختلفًا عن الكود المطبوع على الفاتورة
+  // (item_units.epc — migration 014) — findSoldUnit يقارن بالكود لا
+  // بـEPC، فمسح البطاقة مباشرةً كان يفشل بصمت. هنا: إن كان النص EPC
+  // مربوطًا فعليًا بوحدة، نستبدله بكود تلك الوحدة (نفس ما تحمله الفاتورة)
+  // قبل البحث — لا تغيير على findSoldUnit نفسه.
+  const codeForEpc = (raw) => {
+    const upper = String(raw || "").trim().toUpperCase();
+    if (!upper) return null;
+    for (const it of items) {
+      const u = (it.units || []).find((x) => x.epc && x.epc.toUpperCase() === upper);
+      if (u) return u.code;
+    }
+    return null;
+  };
 
   const search = (q) => {
     setErr([]);
-    const r = findSoldUnit(q, { sales, items });
+    const resolvedCode = codeForEpc(q);
+    const r = findSoldUnit(resolvedCode || q, { sales, items });
     if (!r.found) {
       setHit(null);
-      setErr([r.why]);
+      setErr([resolvedCode ? `لم تُباع القطعة ${resolvedCode} (البطاقة مربوطة بها لكن لا فاتورة مطابقة)` : r.why]);
       return;
     }
     setHit(r);
@@ -83,18 +97,21 @@ function SalesReturnPage({
             امسح القطعة أو اكتب رقم الفاتورة
           </p>
           <div className="flex items-stretch gap-2">
-            <input
-              ref={scanRef}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") search(query); }}
-              placeholder="الرمز التسلسلي · الباركود · INV-100"
-              style={{ ...inputStyle, flex: 1 }}
-            />
+            {/* ScanField يقبل قارئ RFID/باركود (لوحة مفاتيح) أو الكاميرا أو
+                الكتابة معًا — نفس مكوّن شاشة البيع بالضبط، بدل حقلٍ خام هنا
+                كان يفوّت مسح الكاميرا ولا يطابق EPC الحقيقي إطلاقًا. */}
+            <div style={{ flex: 1 }}>
+              <ScanField
+                value={query}
+                onChange={setQuery}
+                onSubmit={(code) => search(code)}
+                placeholder="الرمز التسلسلي · الباركود · INV-100"
+              />
+            </div>
             <button
               onClick={() => search(query)}
               disabled={!query.trim()}
-              className="px-5 rounded-xl text-xs font-bold"
+              className="px-5 rounded-xl text-xs font-bold self-start"
               style={{
                 background: query.trim() ? "var(--accentBg)" : "var(--field)",
                 color: query.trim() ? "var(--accent)" : "var(--text3)",

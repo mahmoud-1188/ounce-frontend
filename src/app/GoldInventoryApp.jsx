@@ -8333,6 +8333,7 @@ export default function GoldInventoryApp() {
             setQuickSaleItemId(null);
           }}
           onConfirm={handleCreateSale}
+          onBindEpc={handleBindEpc}
         />
       )}
       {viewingSale && (
