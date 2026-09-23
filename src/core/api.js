@@ -220,6 +220,16 @@ function createPurchase(payload) {
 // لا وجود له في جدول suppliers الحقيقي، ويختفي المورد والشراء معًا عند
 // أي refresh لأن loadBootstrap يستبدل suppliers بالكامل بما يرجعه
 // الخادم. هذا يضيف المورد فعليًا في قاعدة البيانات (POST /api/suppliers).
+// POST /stocktake/apply — اعتماد الجرد وقيد فروقاته
+function applyStocktake(entries, price24) {
+  return apiFetch("/stocktake/apply", { method: "POST", body: { entries, price24 } });
+}
+
+// GET /suppliers/statements — مصادر كشف المورد كاملةً (بلا قصّ bootstrap)
+function fetchSupplierStatements() {
+  return apiFetch("/suppliers/statements");
+}
+
 function createSupplier(payload) {
   return apiFetch("/suppliers", { method: "POST", body: payload });
 }
@@ -484,6 +494,8 @@ export {
   createPartialSale,
   createPurchase,
   createSupplier,
+  fetchSupplierStatements,
+  applyStocktake,
   createLotItems,
   reconcileCategories,
   rfid,

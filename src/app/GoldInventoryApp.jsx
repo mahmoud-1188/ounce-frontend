@@ -415,6 +415,8 @@ export default function GoldInventoryApp() {
   const [showAiChat, setShowAiChat] = useState(false);
   const [showPartialSale, setShowPartialSale] = useState(false);
   const [openBundle, setOpenBundle] = useState(null);
+  // فاتورةٌ فُتح منها «مرتجع/استبدال» — تُحدَّد سلفًا في شاشتهما
+  const [returnPreset, setReturnPreset] = useState(null);
   const [showAiSheet, setShowAiSheet] = useState(false);
   // ⚠ يُستهلك فورًا في AiChatTab عبر onVoiceConsumed كي لا يُعاد الترحيب
   // الصوتي مع كل فتحٍ لاحق لشاشة المساعد من غير الضغطة المطوّلة.
@@ -6409,32 +6411,34 @@ export default function GoldInventoryApp() {
   };
 
   // -------- handlers: stocktake --------
-  const handleSaveAudit = (entries, applyReconcile) => {
+  // ⚠ اعتماد الجرد صار على الخادم (POST /stocktake/apply): كان يُعدّل
+  //   القطع محليًا فقط فيضيع عند أول تحميل، ولا يمرّ فرقه بالدفترين.
+  //   الخادم يُخرج الناقص ويُضيف الزائد ويقيّد الفرق بتكلفة الشراء
+  //   (وسعر اليوم بديلٌ مُعلَن لصنفٍ بلا تكلفة) — ثم نُعيد التحميل.
+  const handleSaveAudit = async (entries, applyReconcile) => {
     const audit = { id: Date.now().toString(), date: new Date().toISOString(), entries, applied: applyReconcile, createdBy: currentUser?.name || "", ...dayStamp() };
-    persistAudits([audit, ...audits]);
     if (applyReconcile) {
-      const updated = items.map((it) => {
-        const e = entries.find((en) => en.itemId === it.id);
-        if (!e) return it;
-        const currentRemaining = remainingQty(it);
-        const diff = e.countedQty - currentRemaining;
-        let units = [...(it.units || [])];
-        if (diff > 0) {
-          for (let i = 0; i < diff; i++) units.push({ code: generateUnitCode(), printed: false, sold: false });
-        } else if (diff < 0) {
-          let toRemove = -diff;
-          units = units.map((u) => {
-            if (toRemove > 0 && !u.sold) {
-              toRemove -= 1;
-              return { ...u, sold: true };
-            }
-            return u;
-          });
-        }
-        return { ...it, weight: e.countedWeight, units };
-      });
-      persistItems(updated);
+      try {
+        const res = await api.applyStocktake(
+          entries.map((e) => ({ itemId: e.itemId, countedQty: Number(e.countedQty) || 0, countedWeight: Number(e.countedWeight) || null })),
+          priceData.current
+        );
+        audit.missingValue = res.missingValue;
+        audit.surplusValue = res.surplusValue;
+        audit.pricedAtMarket = res.pricedAtMarket;
+        await loadBootstrap(currentUser).catch(() => {});
+        flashToast(
+          res.missingValue || res.surplusValue
+            ? `اعتُمد الجرد — عجز ${fmtMoney(res.missingValue)} · زيادة ${fmtMoney(res.surplusValue)}${res.pricedAtMarket ? ` · ${res.pricedAtMarket} صنف بسعر اليوم` : ""}`
+            : "اعتُمد الجرد — لا فروقات"
+        );
+      } catch (err) {
+        flashToast(apiErrorMessage(err, "تعذّر اعتماد الجرد"));
+        return null;
+      }
     }
+    persistAudits([audit, ...audits]);
+    return audit;
   };
 
   // -------- handlers: stocktake session (لا تُفقد عند التنقل) --------
@@ -6478,23 +6482,22 @@ export default function GoldInventoryApp() {
     });
   };
   const entryHasVariance = (e) => e.countedQty !== e.systemQty || e.countedWeight !== e.systemWeight;
+  // ⚠ الحفظ خارج مُحدِّث الحالة: نداء الخادم أثرٌ جانبي لا يُكرَّر.
   const handleStocktakeFinishSection = (applyReconcile) => {
-    setStocktake((prev) => {
-      const catId = prev.activeCategory;
-      const entries = prev.sectionalEntries[catId];
-      const hasMissing = entries.some(entryHasVariance);
-      handleSaveAudit(entries, applyReconcile);
-      return {
-        ...prev,
-        activeCategory: null,
-        sectionalStatus: { ...prev.sectionalStatus, [catId]: hasMissing ? "missing" : "ok" },
-      };
-    });
-    flashToast("تم حفظ جرد القسم");
+    const catId = stocktake.activeCategory;
+    const entries = stocktake.sectionalEntries[catId] || [];
+    const hasMissing = entries.some(entryHasVariance);
+    handleSaveAudit(entries, applyReconcile);
+    setStocktake((prev) => ({
+      ...prev,
+      activeCategory: null,
+      sectionalStatus: { ...prev.sectionalStatus, [catId]: hasMissing ? "missing" : "ok" },
+    }));
+    if (!applyReconcile) flashToast("تم حفظ جرد القسم");
   };
   const handleStocktakeFinishGeneral = (applyReconcile) => {
     handleSaveAudit(stocktake.generalEntries, applyReconcile);
-    flashToast("تم حفظ الجرد العام");
+    if (!applyReconcile) flashToast("تم حفظ الجرد العام");
     setStocktake({ scope: null, activeCategory: null, sectionalStatus: {}, sectionalEntries: {}, generalEntries: null });
   };
   const handleStocktakeEndSectional = () => {
@@ -7713,6 +7716,10 @@ export default function GoldInventoryApp() {
         )}
         {morePage === "salesReturn" && (
           <SalesReturnPage
+            key={returnPreset ? `${returnPreset.saleId}_${returnPreset.mode}` : "plain"}
+            initialSaleId={returnPreset?.saleId || null}
+            initialMode={returnPreset?.mode || "return"}
+            appSettings={appSettings}
             sales={sales}
             returns={returns}
             items={items}
@@ -7723,7 +7730,7 @@ export default function GoldInventoryApp() {
             price24={priceData.current}
             onProcess={processSalesReturn}
             onExchange={processExchange}
-            onBack={() => setMorePage(null)}
+            onBack={() => { setReturnPreset(null); setMorePage(null); }}
           />
         )}
         {morePage === "officeLedger" && (
@@ -7747,8 +7754,19 @@ export default function GoldInventoryApp() {
             lots={lots}
             cashTx={cashTx}
             safeTx={safeTx}
-            scrapEntries={scrapEntries}
-            taskirOfficeTx={taskirOfficeTx}
+            safeGoldTx={safeGoldTx}
+            taskirEntries={taskirEntries}
+            onFetchStatements={async () => {
+              const r = await api.fetchSupplierStatements();
+              return {
+                lots: normalizeLots(r.lots || []),
+                taskirEntries: normalizeTaskirEntries(r.taskirEntries || []),
+                safeGoldTx: normalizeSafeGoldTx(r.safeGoldTx || []),
+                feeCashTx: (r.feeCashTx || []).map(normalizeCashTxRow),
+                ledger: r.ledger || [],
+                taskirFeesSettled: r.taskirFeesSettled || {},
+              };
+            }}
             currency={priceData.currency}
             price24={priceData.current}
             branchName={branchIdentity?.name}
@@ -8543,8 +8561,11 @@ export default function GoldInventoryApp() {
           sale={viewingSale}
           currency={priceData.currency}
           returns={returns}
-          canReturn={effectivePerms(role, currentUser).allowedMore.includes("salesHistory") || role === "manager"}
-          onReturn={handleReturnSale}
+          items={items}
+          lots={lots}
+          suppliers={suppliers}
+          canReturn={(permsNow.allowedMore || []).includes("salesReturn")}
+          onReturn={(saleId, mode) => { setReturnPreset({ saleId, mode }); setViewingSale(null); openPage("salesReturn"); }}
           onClose={() => setViewingSale(null)}
         />
       )}

@@ -7,7 +7,8 @@ import { buildReturnJournal } from "../domain/buildReturnJournal.js";
 import { computeExchangeAmounts } from "../domain/computeExchangeAmounts.js";
 import { computeReturnAmounts } from "../domain/computeReturnAmounts.js";
 import { findSoldUnit } from "../domain/findSoldUnit.js";
-import { inputStyle, itemLabel, unitCurrentValue } from "../domain/helpers.js";
+import { inputStyle, itemLabel } from "../domain/helpers.js";
+import { suggestedUnitPrice } from "../domain/suggestedUnitPrice.js";
 import { validateExchangeRequest } from "../domain/validateExchangeRequest.js";
 import { validateReturnRequest } from "../domain/validateReturnRequest.js";
 import { Card } from "../ui/Card.jsx";
@@ -19,11 +20,16 @@ import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 
 function SalesReturnPage({
   sales = [], returns = [], items = [], openDay, stocktakeLock,
-  currency, taxRate = 0, price24 = 0, onProcess, onExchange = null, onBack,
+  currency, taxRate = 0, price24 = 0, appSettings = {}, onProcess, onExchange = null, onBack,
+  initialSaleId = null, initialMode = "return",
 }) {
-  const [mode, setMode] = useState("return");   // "return" | "exchange"
+  const [mode, setMode] = useState(initialMode === "exchange" ? "exchange" : "return");   // "return" | "exchange"
   const [query, setQuery] = useState("");
-  const [hit, setHit] = useState(null);          // نتيجة البحث
+  // الباب الرابع: من تفاصيل الفاتورة في سجل المبيعات — الفاتورة محدَّدة سلفًا
+  const [hit, setHit] = useState(() => {
+    const sale0 = initialSaleId ? sales.find((x) => x.id === initialSaleId) : null;
+    return sale0 ? { found: true, sale: sale0, lineIndex: null } : null;
+  });
   // ⚠ الزبون قد يعود بلا ملصقٍ وبلا فاتورة، والبائع يعرف اسمه أو يومه —
   //   فالفاتورة تُختار أيضًا من قائمة المبيعات.
   const [browse, setBrowse] = useState("");
@@ -71,7 +77,7 @@ function SalesReturnPage({
     const add = (it, unitCode) => {
       setNewLines((p) => [...p, {
         itemId: it.id, unitCode, name: itemLabel(it), karat: it.karat, weight: it.weight,
-        unitPrice: unitCurrentValue(it, price24).toFixed(2), quantity: 1,
+        unitPrice: suggestedUnitPrice(it, price24, appSettings).toFixed(2), quantity: 1,
       }]);
       setNewQuery("");
     };
@@ -416,7 +422,7 @@ function SalesReturnPage({
                   />
                   {newLines.length === 0 && (
                     <p style={{ color: "var(--text3)" }} className="text-[11px] mt-1.5">
-                      ⚖ السعر يبدأ بقيمة القطعة بسعر اليوم — والبائع يقرّر.
+                      ⚖ السعر يبدأ إرشاديًّا (معدنٌ بسعر اليوم + أجور + هامش العيار) — والبائع يقرّر.
                     </p>
                   )}
                 </Card>

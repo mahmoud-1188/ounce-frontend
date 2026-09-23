@@ -642,6 +642,29 @@ function lotReconcile(lot, items) {
   };
 }
 
+/// ⚖ من أين جاءت القطعة، وبكم كان جرام 24 يوم شرائها ويوم بيعها.
+/// سعر الشراء من التكلفة المحفوظة (تكلفة الجرام ÷ النقاء) لا من سجل الأسعار،
+/// وسعر البيع من لقطة الفاتورة.
+function saleLineProvenance(line, sale, { items = [], lots = [], suppliers = [] } = {}) {
+  const item = items.find((i) => i.id === line?.itemId) || null;
+  const lot = item ? lots.find((l) => l.id === item.lotId) || null : null;
+  const supplier = lot?.supplierId ? suppliers.find((x) => x.id === lot.supplierId) || null : null;
+  const k = Number(line?.karatSnapshot) || Number(item?.karat) || 21;
+  const purity = PURITY[k] || k / 24;
+  const costPerGram = Number(line?.costPerGramSnapshot) || Number(item?.costPerGram) || 0;
+  const buyPrice24 = purity > 0 ? Math.round((costPerGram / purity) * 100) / 100 : 0;
+  const sellPrice24 = Number(line?.price24Snapshot) || Number(sale?.price24Snapshot) || 0;
+  return {
+    item, lot, supplier,
+    sourceLabel: lot ? (lot.source === "opening" ? (lot.costRef === "market" ? "رصيد افتتاحي (مُقيَّم بالسعر العالمي)" : "رصيد افتتاحي") : supplier?.name || "مورد غير مسجّل") : "—",
+    costRef: lot?.costRef || "purchase",
+    lotRef: lot?.ref || null,
+    purchasedAt: lot?.date || item?.dateAdded || null,
+    buyPrice24, sellPrice24,
+    metalMove: buyPrice24 > 0 && sellPrice24 > 0 ? Math.round((sellPrice24 - buyPrice24) * 100) / 100 : null,
+  };
+}
+
 function categoryLabel(id) {
   // ⚠ لا نُعيد المعرّف حين لا نجده: `id` قد يكون undefined، فتظهر
   // كلمة «undefined» في تسمية القطعة أمام البائع.
@@ -3340,4 +3363,4 @@ function generateRecoveryCode() {
   return Array.from({ length: 4 }, () => Array.from({ length: 4 }, pick).join("")).join("-");
 }
 
-export { accountForCategory, accountGroup, accountLabel, accountPath, aiAllowedFor, aiAllowedForRole, aiScope, askReportAi, attachmentByteSize, b32Decode, b32Encode, balancesAt, bleWriteChunked, branchDataKey, branchSnapshotKey, btSupported, bundleById, bundledPages, canvasToTsplBitmap, cardFeeOf, cashAccountFor, cashTrialBalance, categoryById, categoryLabel, childrenOf, cleanToken, codeCounter, codeToEpcHex, compressImage, contentWidth, createNhrFileAssembler, dayEnd, dayStart, detectColumns, detectTraceTopic, describeQuery, diffDatasets, drawCode128, drawQr, emptyRow, exchangeKind, expenseAccountFor, exportLedgerXlsx, exportTablesPdf, fetchAiAuditNarrative, fetchAiBusinessInsights, fetchAiChatReply, fetchAiReportSpec, fetchGoldPriceSAR, fetchLiveGram24, fineAt, fmtWeight, fineToKarat, fromGram, fundingSourceLabel, generateRecoveryCode, generateUnitCode, goldDestLabel, goldProfit, guessScreens, hiddenNumbersScan, inPeriod, inputStyle, isBundle, isGoldCogs, isLiveScrap, isPartial, isUnder, issueBranchCode, issueLicense, itemLabel, journalOf, journalTrialBalance, loadAttachment, lotAllocatedPieces, lotAllocatedWeight, lotReconcile, marginFor, mgrFeeBreakdown, mgrFeeEnabled, mgrFeeOn, mgrFeeRate, migrateLegacyKeys, modeAllowsAction, modeAllowsPage, modeAllowsTab, nameExists, navPerRow, nhrClassify, nhrCommand, nhrCommands, nhrCrc32, nhrHex, nhrIsLiveFrame, nhrParseBatchFile, nhrParseJson, nhrParseLiveFrame, normHeader, normalizeArabicQuery, normalizeFundingSource, normalizeName, normalizeRecovery, onlineBlockReason, openAttachment, openWhatsApp, ounceHash, periodRange, prettyPhone, prettyToken, priceBreakdown, printLabelToDevice, printedCount, qrEccBytes, qrGaloisTables, qrMatrix, qrMul, qrRS, r2, r3, readFileAsDataUrl, readKeyOrNull, remainingQty, renderLabelCanvas, reportFactsText, reportFindings, resolveCompare, resolveRange, rfidSettingsFor, runAuditChecks, runQuery, saleModeOf, saleProfitOf, saleProfitSplit, saveAttachment, scrapPrice24, sellPrice24, sendRawToPrinter, setRuntimeCategories, splitCsvLine, statementDigest, streamBase, toCsv, toGram, toIntlPhone, toLatinDigits, trustBalance, tsplCalibrateBytes, tsplJobBytes, unitById, unitCostBasis, unitCurrentValue, usbPrint, useDebounced, useNhrReader, useViewport, useVoice, useWedgeScanner, vendorChallenge, vendorResponse, weekStart, weightTrialBalance };
+export { accountForCategory, accountGroup, accountLabel, accountPath, aiAllowedFor, aiAllowedForRole, aiScope, askReportAi, attachmentByteSize, b32Decode, b32Encode, balancesAt, bleWriteChunked, branchDataKey, branchSnapshotKey, btSupported, bundleById, bundledPages, canvasToTsplBitmap, cardFeeOf, cashAccountFor, cashTrialBalance, categoryById, categoryLabel, childrenOf, cleanToken, codeCounter, codeToEpcHex, compressImage, contentWidth, createNhrFileAssembler, dayEnd, dayStart, detectColumns, detectTraceTopic, describeQuery, diffDatasets, drawCode128, drawQr, emptyRow, exchangeKind, expenseAccountFor, exportLedgerXlsx, exportTablesPdf, fetchAiAuditNarrative, fetchAiBusinessInsights, fetchAiChatReply, fetchAiReportSpec, fetchGoldPriceSAR, fetchLiveGram24, fineAt, fmtWeight, fineToKarat, fromGram, fundingSourceLabel, generateRecoveryCode, generateUnitCode, goldDestLabel, goldProfit, guessScreens, hiddenNumbersScan, inPeriod, inputStyle, isBundle, isGoldCogs, isLiveScrap, isPartial, isUnder, issueBranchCode, issueLicense, itemLabel, journalOf, journalTrialBalance, loadAttachment, lotAllocatedPieces, lotAllocatedWeight, lotReconcile, marginFor, mgrFeeBreakdown, mgrFeeEnabled, mgrFeeOn, mgrFeeRate, migrateLegacyKeys, modeAllowsAction, modeAllowsPage, modeAllowsTab, nameExists, navPerRow, nhrClassify, nhrCommand, nhrCommands, nhrCrc32, nhrHex, nhrIsLiveFrame, nhrParseBatchFile, nhrParseJson, nhrParseLiveFrame, normHeader, normalizeArabicQuery, normalizeFundingSource, normalizeName, normalizeRecovery, onlineBlockReason, openAttachment, openWhatsApp, ounceHash, periodRange, prettyPhone, prettyToken, priceBreakdown, printLabelToDevice, printedCount, qrEccBytes, qrGaloisTables, qrMatrix, qrMul, qrRS, r2, r3, readFileAsDataUrl, readKeyOrNull, remainingQty, renderLabelCanvas, reportFactsText, reportFindings, resolveCompare, resolveRange, rfidSettingsFor, runAuditChecks, runQuery, saleLineProvenance, saleModeOf, saleProfitOf, saleProfitSplit, saveAttachment, scrapPrice24, sellPrice24, sendRawToPrinter, setRuntimeCategories, splitCsvLine, statementDigest, streamBase, toCsv, toGram, toIntlPhone, toLatinDigits, trustBalance, tsplCalibrateBytes, tsplJobBytes, unitById, unitCostBasis, unitCurrentValue, usbPrint, useDebounced, useNhrReader, useViewport, useVoice, useWedgeScanner, vendorChallenge, vendorResponse, weekStart, weightTrialBalance };

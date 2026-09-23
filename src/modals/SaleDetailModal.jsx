@@ -1,22 +1,13 @@
-import React, { useMemo, useState } from "react";
-import { Check } from "lucide-react";
+import React, { useMemo } from "react";
+import { RefreshCw, RotateCcw } from "lucide-react";
 import { fmt, fmtW } from "../core/money.js";
-import { inputStyle } from "../domain/helpers.js";
+import { saleLineProvenance } from "../domain/helpers.js";
 import { Card } from "../ui/Card.jsx";
-import { Field } from "../ui/Field.jsx";
 import { ModalShell } from "../ui/ModalShell.jsx";
 
-function SaleDetailModal({ sale, currency, returns = [], canReturn, onReturn, onClose }) {
-  // ── الإرجاع من داخل الفاتورة ──
-  //
-  // مكانه الصحيح هنا لا في زر منفصل: الإرجاع لا يبدأ من فراغ، بل من
-  // فاتورة تفتحها لتتأكّد ماذا بيع ولمن وبكم. زر «إرجاع» في القائمة
-  // يعني بحثًا عن الفاتورة مرتين.
-  const [mode, setMode] = useState(null);        // null | "pick"
-  const [picked, setPicked] = useState([]);      // فهارس الأسطر
-  const [source, setSource] = useState("daily"); // مصدر ردّ المبلغ
-  const [note, setNote] = useState("");
-
+function SaleDetailModal({ sale, currency, returns = [], items = [], lots = [], suppliers = [], canReturn, onReturn, onClose }) {
+  // ⚠ الإرجاع والاستبدال في شاشتهما الواحدة («المرتجعات والاستبدال»)
+  //   والفاتورة محدَّدة سلفًا — لا نموذج إرجاعٍ ثانٍ هنا بمحاسبةٍ مختلفة.
   const lines = sale?.lines || [];
 
   // ما أُرجع سابقًا من هذه الفاتورة — لا يُرجَع مرتين
@@ -30,13 +21,6 @@ function SaleDetailModal({ sale, currency, returns = [], canReturn, onReturn, on
 
   const available = lines.map((_, i) => i).filter((i) => !already.has(i));
   const allReturned = available.length === 0 && lines.length > 0;
-  const refund = picked.reduce(
-    (a, i) => a + (Number(lines[i]?.unitPrice) || 0) * (Number(lines[i]?.quantity) || 1), 0
-  );
-  const isFull = picked.length > 0 && picked.length === available.length;
-
-  const toggle = (i) =>
-    setPicked((p) => (p.includes(i) ? p.filter((x) => x !== i) : [...p, i]));
 
   if (!sale) return null;
 
@@ -51,7 +35,7 @@ function SaleDetailModal({ sale, currency, returns = [], canReturn, onReturn, on
           <span className="text-[10px] px-2 py-0.5 rounded-full"
             style={{ background: "var(--panel)", color: "var(--text2)", border: "1px solid var(--line)" }}>
             {sale.paymentMethod === "cash" ? "نقدي" : sale.paymentMethod === "card" ? "شبكة"
-              : sale.paymentMethod === "credit" ? "آجل" : "مقسّم"}
+              : sale.paymentMethod === "credit" ? "آجل" : sale.paymentMethod === "trade_in" ? "بدل بكسر" : "مقسّم"}
           </span>
         </div>
         <p style={{ color: "var(--text2)" }} className="text-[11px]">
@@ -67,51 +51,49 @@ function SaleDetailModal({ sale, currency, returns = [], canReturn, onReturn, on
       </Card>
 
       {/* الأسطر */}
-      <p style={{ color: "var(--text2)" }} className="text-[11px] mb-2">
-        {mode === "pick" ? "اختر ما تُرجعه" : `الأصناف (${lines.length})`}
-      </p>
+      <p style={{ color: "var(--text2)" }} className="text-[11px] mb-2">{`الأصناف (${lines.length})`}</p>
       <div className="flex flex-col gap-2 mb-3">
         {lines.map((l, i) => {
           const done = already.has(i);
-          const on = picked.includes(i);
-          const clickable = mode === "pick" && !done;
+          const pv = saleLineProvenance(l, sale, { items, lots, suppliers });
           return (
-            <button key={i} onClick={() => clickable && toggle(i)} disabled={!clickable}
-              className="w-full text-right">
-              <Card style={{
-                padding: 11,
-                border: `1px solid ${done ? "var(--line)" : on ? "var(--accentLine)" : "var(--line)"}`,
-                opacity: done ? 0.55 : 1,
-              }}>
-                <div className="flex items-center gap-2">
-                  {clickable && (
-                    <div style={{
-                      width: 17, height: 17, borderRadius: 5, flexShrink: 0,
-                      background: on ? "var(--accent)" : "transparent",
-                      border: `1px solid ${on ? "var(--accent)" : "var(--edge)"}`,
-                      display: "grid", placeItems: "center",
-                    }}>
-                      {on && <Check size={11} color="var(--bg)" />}
-                    </div>
-                  )}
-                  <span style={{ color: done ? "var(--text3)" : "var(--text)" }} className="text-xs flex-1">
-                    عيار {l.karatSnapshot} · {fmtW(l.weightSnapshot)} جم
-                    {(Number(l.quantity) || 1) > 1 ? ` × ${l.quantity}` : ""}
-                    {l.partial ? " (بيع بالوزن)" : ""}
+            <Card key={i} style={{ padding: 11, border: "1px solid var(--line)", opacity: done ? 0.55 : 1 }}>
+              <div className="flex items-center gap-2">
+                <span style={{ color: done ? "var(--text3)" : "var(--text)" }} className="text-xs flex-1">
+                  عيار {l.karatSnapshot} · {fmtW(l.weightSnapshot)} جم
+                  {(Number(l.quantity) || 1) > 1 ? ` × ${l.quantity}` : ""}
+                  {l.partial ? " (بيع بالوزن)" : ""}
+                </span>
+                {done ? (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full"
+                    style={{ background: "var(--panel)", color: "var(--bad)", border: "1px solid var(--badLine)" }}>
+                    مُرجَع
                   </span>
-                  {done ? (
-                    <span className="text-[10px] px-2 py-0.5 rounded-full"
-                      style={{ background: "var(--panel)", color: "var(--bad)", border: "1px solid var(--badLine)" }}>
-                      مُرجَع
-                    </span>
-                  ) : (
-                    <span style={{ color: "var(--text2)" }} className="text-[11px] whitespace-nowrap">
-                      {currency}{fmt((Number(l.unitPrice) || 0) * (Number(l.quantity) || 1), 2)}
+                ) : (
+                  <span style={{ color: "var(--text2)" }} className="text-[11px] whitespace-nowrap">
+                    {currency}{fmt((Number(l.unitPrice) || 0) * (Number(l.quantity) || 1), 2)}
+                  </span>
+                )}
+              </div>
+              {/* ⚖ من أين جاءت القطعة وبكم كان المعدن يوم شرائها ويوم بيعها */}
+              <div className="mt-1.5 pt-1.5" style={{ borderTop: "1px solid var(--line)" }}>
+                <p style={{ color: "var(--text3)", margin: 0 }} className="text-[10px]">
+                  {pv.item?.ref ? <span style={{ fontFamily: "monospace" }}>{pv.item.ref} · </span> : null}
+                  المصدر: <span style={{ color: "var(--text2)" }}>{pv.sourceLabel}</span>
+                  {pv.lotRef ? ` (${pv.lotRef})` : ""}
+                  {pv.purchasedAt ? ` · اشتُريت ${new Date(pv.purchasedAt).toLocaleDateString("en-GB")}` : ""}
+                </p>
+                <p style={{ color: "var(--text3)", margin: 0 }} className="text-[10px]">
+                  سعر جم24 وقت الشراء: <span style={{ color: "var(--text2)" }}>{pv.buyPrice24 > 0 ? `${currency}${fmt(pv.buyPrice24, 2)}` : "—"}</span>
+                  {" · "}وقت البيع: <span style={{ color: "var(--text2)" }}>{pv.sellPrice24 > 0 ? `${currency}${fmt(pv.sellPrice24, 2)}` : "—"}</span>
+                  {pv.metalMove != null && (
+                    <span style={{ color: pv.metalMove >= 0 ? "var(--good)" : "var(--bad)" }}>
+                      {" "}({pv.metalMove >= 0 ? "+" : ""}{fmt(pv.metalMove, 2)})
                     </span>
                   )}
-                </div>
-              </Card>
-            </button>
+                </p>
+              </div>
+            </Card>
           );
         })}
       </div>
@@ -125,98 +107,29 @@ function SaleDetailModal({ sale, currency, returns = [], canReturn, onReturn, on
         </Card>
       )}
 
-      {/* بدء الإرجاع */}
-      {canReturn && !allReturned && mode !== "pick" && (
-        <button
-          onClick={() => { setMode("pick"); setPicked([]); }}
-          className="w-full py-2.5 rounded-xl text-xs font-bold mb-2"
-          style={{ background: "var(--badBg)", color: "var(--bad)", border: "1px solid var(--badLine)" }}
-        >
-          إرجاع من هذه الفاتورة
-        </button>
-      )}
-
-      {/* نموذج الإرجاع */}
-      {mode === "pick" && (
-        <Card style={{ padding: 13, marginBottom: 12, border: "1px solid var(--badLine)" }}>
-          <div className="flex items-center gap-2 mb-2">
+      {/* الإرجاع أو الاستبدال — في شاشتهما الواحدة والفاتورة محدَّدة */}
+      {canReturn && !allReturned && (
+        <>
+          <div className="grid grid-cols-2 gap-2 mb-2">
             <button
-              onClick={() => setPicked(picked.length === available.length ? [] : available)}
-              className="text-[10px] px-2.5 py-1 rounded-full"
-              style={{ background: "var(--panel)", color: "var(--accentText)", border: "1px solid var(--line)" }}
+              onClick={() => { onReturn(sale.id, "return"); onClose(); }}
+              className="py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5"
+              style={{ background: "var(--badBg)", color: "var(--bad)", border: "1px solid var(--badLine)" }}
             >
-              {isFull ? "إلغاء الكل" : "الفاتورة كاملة"}
-            </button>
-            <span className="flex-1" />
-            {picked.length > 0 && (
-              <span style={{ color: "var(--bad)" }} className="text-xs font-bold">
-                {currency}{fmt(refund, 2)}
-              </span>
-            )}
-          </div>
-
-          {picked.length > 0 && (
-            <>
-              <p style={{ color: "var(--text2)" }} className="text-[11px] mb-2">
-                {isFull ? "إرجاع كامل" : `إرجاع جزئي — ${picked.length} من ${lines.length}`}
-                {" · "}تعود القطع للمخزون بتكلفتها الأصلية.
-              </p>
-
-              <Field label="من أين يُردّ المبلغ؟">
-                <div className="grid grid-cols-3 gap-1.5">
-                  {[
-                    { id: "daily", label: "الصندوق اليومي" },
-                    { id: "safe", label: "الخزنة" },
-                    { id: "credit", label: "خصم من دينه" },
-                  ].map((o) => (
-                    <button key={o.id} onClick={() => setSource(o.id)}
-                      className="py-2 rounded-xl text-[11px] font-bold"
-                      style={{
-                        background: source === o.id ? "var(--accentBg)" : "var(--panel)",
-                        color: source === o.id ? "var(--accent)" : "var(--text2)",
-                        border: "1px solid var(--line)",
-                      }}>
-                      {o.label}
-                    </button>
-                  ))}
-                </div>
-                {source === "credit" && !sale.customerId && (
-                  <p style={{ color: "var(--bad)" }} className="text-[10px] mt-1">
-                    ⚠ الفاتورة بلا عميل — لا يمكن الخصم من دين.
-                  </p>
-                )}
-              </Field>
-
-              <Field label="سبب الإرجاع">
-                <input style={inputStyle} value={note} onChange={(e) => setNote(e.target.value)}
-                  placeholder="عيب · مقاس · عدول العميل" />
-              </Field>
-            </>
-          )}
-
-          <div className="grid grid-cols-2 gap-2">
-            <button onClick={() => { setMode(null); setPicked([]); setNote(""); }}
-              className="py-2.5 rounded-xl text-xs font-bold"
-              style={{ background: "var(--panel)", color: "var(--text2)", border: "1px solid var(--line)" }}>
-              إلغاء
+              <RotateCcw size={14} /> مرتجع
             </button>
             <button
-              disabled={!picked.length || (source === "credit" && !sale.customerId)}
-              onClick={() => {
-                onReturn(sale.id, picked, source, note);
-                setMode(null); setPicked([]); setNote("");
-                onClose();
-              }}
-              className="py-2.5 rounded-xl text-xs font-bold"
-              style={{
-                background: picked.length && !(source === "credit" && !sale.customerId) ? "var(--bad)" : "var(--accentBg)",
-                color: picked.length && !(source === "credit" && !sale.customerId) ? "var(--bg)" : "var(--text3)",
-              }}
+              onClick={() => { onReturn(sale.id, "exchange"); onClose(); }}
+              className="py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5"
+              style={{ background: "var(--accentBg)", color: "var(--accent)", border: "1px solid var(--accentLine)" }}
             >
-              {isFull ? "إرجاع الفاتورة" : `إرجاع ${picked.length}`}
+              <RefreshCw size={14} /> استبدال
             </button>
           </div>
-        </Card>
+          <p style={{ color: "var(--text3)" }} className="text-[11px] mb-2">
+            قطعةٌ واحدة أو الفاتورة كاملة — تختارها في الشاشة التالية، والردّ بأسعار الفاتورة.
+          </p>
+        </>
       )}
     </ModalShell>
   );

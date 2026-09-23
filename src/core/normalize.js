@@ -40,6 +40,9 @@ function normalizeItems(itemRows, itemUnitRows) {
     stonesWeight: toWeight(it.stones_weight),
     costPerGram: it.cost_per_gram == null ? null : Number(it.cost_per_gram),
     workmanship: toMoney(it.workmanship),
+    // ⚠ القرّاء كلهم (unitCurrentValue · unitCostBasis · السعر المقترح · لقطة
+    //   البيع) يقرؤون workmanshipPerUnit — بدونه تسقط الأجرة بعد كل تحميل.
+    workmanshipPerUnit: toMoney(it.workmanship),
     lotWorkmanshipShare: toMoney(it.lot_workmanship_share),
     fromScrap: !!it.from_scrap,
     photoUrl: it.photo_url,

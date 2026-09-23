@@ -1,16 +1,17 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, FileSpreadsheet, FileText, Truck } from "lucide-react";
 import * as XLSX from "xlsx";
-import { fine24, fmt, fmtW } from "../core/money.js";
-import { accountLabel, inputStyle } from "../domain/helpers.js";
+import { fmt, fmtMoney, fmtW } from "../core/money.js";
+import { buildSupplierStatement } from "../domain/buildSupplierStatement.js";
+import { inputStyle } from "../domain/helpers.js";
 import { Card } from "../ui/Card.jsx";
 import { EmptyState } from "../ui/EmptyState.jsx";
 import { Field } from "../ui/Field.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 
 function SupplierLedgerPage({
-  suppliers = [], lots = [], cashTx = [], safeTx = [], scrapEntries = [],
-  taskirOfficeTx = [], currency, price24 = 0, branchName, onBack, flashToast,
+  suppliers = [], lots = [], cashTx = [], safeTx = [], safeGoldTx = [], taskirEntries = [],
+  currency, price24 = 0, branchName, onBack, flashToast, onFetchStatements = null,
 }) {
   const [pick, setPick] = useState(null);          // معرّف المورد
   const [from, setFrom] = useState(() => {
@@ -19,94 +20,27 @@ function SupplierLedgerPage({
   });
   const [to, setTo] = useState(() => new Date().toISOString().slice(0, 10));
 
-  const inRange = (d) => {
-    const x = String(d || "").slice(0, 10);
-    return x >= from && x <= to;
-  };
-  const before = (d) => String(d || "").slice(0, 10) < from;
-
-  // ── حساب كل مورد ──
-  //
-  // الدفعة الآجلة تُنشئ التزامًا؛ السداد يُنقصه. والأجور مسار مستقل.
-  const build = (sup) => {
-    const mine = lots.filter((l) => l.supplierId === sup.id);
-    const pays = [...cashTx, ...safeTx].filter(
-      (t) => t.supplierId === sup.id || (t.refId && mine.some((l) => l.id === t.refId))
-    );
-    const settleScrap = scrapEntries.filter(
-      (e) => e.supplierId === sup.id && (Number(e.weight) || 0) < 0
-    );
-
-    const goldUp = (arr) =>
-      arr.filter((l) => l.paymentMethod === "deferred")
-        .reduce((a, l) => a + fine24(l.weight, l.karat), 0);
-    const feesUp = (arr) =>
-      arr.filter((l) => l.paymentMethod === "deferred")
-        .reduce((a, l) => a + (Number(l.workmanship) || 0), 0);
-    const goldDown = (arr) => arr.reduce((a, e) => a + fine24(-e.weight, e.karat), 0);
-    const feesDown = (arr) =>
-      arr.filter((t) => t.type === "out" && /workmanship|supplier_fee/.test(t.category || ""))
-        .reduce((a, t) => a + (Number(t.amount) || 0), 0);
-
-    const past = {
-      gold: goldUp(mine.filter((l) => before(l.date))) - goldDown(settleScrap.filter((e) => before(e.date))),
-      fees: feesUp(mine.filter((l) => before(l.date))) - feesDown(pays.filter((t) => before(t.date))),
-    };
-    const nowLots = mine.filter((l) => inRange(l.date));
-    const nowScrap = settleScrap.filter((e) => inRange(e.date));
-    const nowPays = pays.filter((t) => inRange(t.date));
-    const move = {
-      goldUp: goldUp(nowLots), goldDown: goldDown(nowScrap),
-      feesUp: feesUp(nowLots), feesDown: feesDown(nowPays),
-      cashPaid: nowLots.filter((l) => l.paymentMethod !== "deferred")
-        .reduce((a, l) => a + (Number(l.goldCost) || 0) + (Number(l.workmanship) || 0), 0),
-      lots: nowLots.length,
-      fineIn: nowLots.reduce((a, l) => a + fine24(l.weight, l.karat), 0),
-    };
-
-    // الأوزان بالعيار — كما في اليومية
-    const byKarat = {};
-    nowLots.forEach((l) => {
-      const k = Number(l.karat) || 21;
-      byKarat[k] = byKarat[k] || { karat: k, weight: 0, fine: 0, lots: 0, deferred: 0 };
-      byKarat[k].weight += Number(l.weight) || 0;
-      byKarat[k].fine += fine24(l.weight, l.karat);
-      byKarat[k].lots += 1;
-      if (l.paymentMethod === "deferred") byKarat[k].deferred += fine24(l.weight, l.karat);
-    });
-
-    return {
-      sup, past, move,
-      karats: Object.values(byKarat).sort((a, b) => b.karat - a.karat),
-      now: {
-        gold: past.gold + move.goldUp - move.goldDown,
-        fees: past.fees + move.feesUp - move.feesDown,
-      },
-      docs: [
-        ...nowLots.map((l) => ({
-          id: l.id, ref: l.ref, date: l.date, kind: "شراء",
-          karat: l.karat, fine: fine24(l.weight, l.karat),
-          cash: l.paymentMethod === "deferred" ? 0 : (Number(l.goldCost) || 0) + (Number(l.workmanship) || 0),
-          deferred: l.paymentMethod === "deferred",
-          note: l.paymentMethod === "deferred" ? "آجل" : "مسدَّد",
-        })),
-        ...nowScrap.map((e) => ({
-          id: e.id, ref: e.ref, date: e.date, kind: "سداد بالكسر",
-          karat: e.karat, fine: fine24(-e.weight, e.karat), cash: 0, settle: true, note: "",
-        })),
-        ...nowPays.filter((t) => t.type === "out").map((t) => ({
-          id: t.id, ref: t.ref || t.id, date: t.date, kind: "سداد نقدي",
-          karat: null, fine: 0, cash: Number(t.amount) || 0, settle: true,
-          note: accountLabel(t.category),
-        })),
-      ].sort((a, b) => String(b.date).localeCompare(String(a.date))),
-    };
-  };
+  // ⚠ المصادر كاملةً من الخادم (bootstrap يقصّ الحركات القديمة، فيخطئ
+  //   الرصيد السابق). حتى تصل نعمل ببيانات bootstrap.
+  const [full, setFull] = useState(null);
+  useEffect(() => {
+    let live = true;
+    if (onFetchStatements) {
+      onFetchStatements().then((d) => { if (live && d) setFull(d); }).catch(() => {});
+    }
+    return () => { live = false; };
+  }, []);
+  const src = full || { lots, taskirEntries, safeGoldTx, feeCashTx: [...cashTx, ...safeTx], ledger: null };
 
   const all = useMemo(
-    () => suppliers.map(build).sort((a, b) => b.now.gold - a.now.gold),
-    [suppliers, lots, cashTx, safeTx, scrapEntries, from, to]
+    () => suppliers.map((sup) => buildSupplierStatement(sup, {
+      lots: src.lots, taskirEntries: src.taskirEntries, safeGoldTx: src.safeGoldTx,
+      cashTx: src.feeCashTx, taskirFeesSettled: src.taskirFeesSettled || null, from, to,
+    })).sort((a, b) => b.now.gold - a.now.gold),
+    [suppliers, src, from, to]
   );
+  // الرصيد الرسمي في دفتر الموردين على الخادم — للمطابقة مع الكشف
+  const ledgerOf = (id) => (src.ledger || []).find((x) => x.supplierId === id) || null;
   const A = pick ? all.find((x) => x.sup.id === pick) : null;
 
   const totals = useMemo(() => ({
@@ -130,15 +64,15 @@ function SupplierLedgerPage({
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sum), "الملخّص");
 
     all.forEach((x) => {
-      if (!x.docs.length) return;
-      const r = [[x.sup.name], [], ["رصيد سابق — ذهب", fmtW(x.past.gold)], ["رصيد سابق — أجور", fmt(x.past.fees, 2)], [],
-        ["التاريخ", "المرجع", "النوع", "العيار", "الوزن (جم24)", `النقد (${currency})`, "ملاحظة"]];
-      x.docs.forEach((d) =>
-        r.push([String(d.date).slice(0, 10), d.ref, d.kind, d.karat || "",
-          d.fine ? fmtW(d.fine) : "", d.cash ? fmt(d.cash, 2) : "", d.note]));
-      r.push([]);
-      r.push(["رصيد حالي — ذهب", fmtW(x.now.gold)]);
-      r.push(["رصيد حالي — أجور", fmt(x.now.fees, 2)]);
+      if (!x.lines.length && !x.now.gold && !x.now.fees) return;
+      const r = [[x.sup.name], [],
+        ["التاريخ", "المرجع", "البيان", "العيار", "الوزن", "ذهب ± (جم24)", `أجور ± (${currency})`, `نقد (${currency})`, "رصيد الذهب", "رصيد الأجور", "ملاحظة"],
+        ["", "", "رصيد سابق", "", "", "", "", "", fmtW(x.past.gold), fmt(x.past.fees, 2), ""]];
+      x.lines.forEach((d) =>
+        r.push([String(d.date).slice(0, 10), d.ref, d.kind, d.karat || "", d.weight ? fmtW(d.weight) : "",
+          d.gold ? fmtW(d.gold) : "", d.fees ? fmt(d.fees, 2) : "", d.cash ? fmt(d.cash, 2) : "",
+          fmtW(d.goldBal), fmt(d.feesBal, 2), d.note || ""]));
+      r.push(["", "", "الرصيد الختامي", "", "", "", "", "", fmtW(x.now.gold), fmt(x.now.fees, 2), ""]);
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(r), x.sup.name.slice(0, 28));
     });
     XLSX.writeFile(wb, `دفتر_الموردين_${to}.xlsx`);
@@ -147,15 +81,18 @@ function SupplierLedgerPage({
   const exportPdf = () => {
     const esc = (t) => String(t == null ? "" : t).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
     const rows = (x) =>
-      x.docs.map((d) =>
+      `<tr><td class="c">—</td><td class="c"></td><td class="r">رصيد سابق</td><td class="c"></td><td class="c"></td>` +
+      `<td class="c">${fmtW(x.past.gold)}</td><td class="c">${fmt(x.past.fees, 2)}</td></tr>` +
+      x.lines.map((d) =>
         `<tr><td class="c">${esc(String(d.date).slice(0, 10))}</td>` +
-        `<td class="c">${esc(d.ref)}</td><td class="r">${esc(d.kind)}${d.note ? ` — ${esc(d.note)}` : ""}</td>` +
-        `<td class="c">${d.karat || ""}</td>` +
-        `<td class="c">${d.fine ? (d.settle ? "−" : "+") + fmtW(d.fine) : ""}</td>` +
-        `<td class="c">${d.cash ? fmt(d.cash, 2) : ""}</td></tr>`
-      ).join("");
+        `<td class="c">${esc(d.ref)}</td><td class="r">${esc(d.kind)}${d.karat ? ` · ع${d.karat} ${fmtW(d.weight)} جم` : ""}${d.note ? ` — ${esc(d.note)}` : ""}</td>` +
+        `<td class="c">${d.gold ? (d.gold > 0 ? "+" : "−") + fmtW(Math.abs(d.gold)) : ""}</td>` +
+        `<td class="c">${d.fees ? (d.fees > 0 ? "+" : "−") + fmt(Math.abs(d.fees), 2) : ""}</td>` +
+        `<td class="c">${fmtW(d.goldBal)}</td><td class="c">${fmt(d.feesBal, 2)}</td></tr>`
+      ).join("") +
+      `<tr class="tot"><td colspan="5" class="r">الرصيد الختامي</td><td class="c">${fmtW(x.now.gold)}</td><td class="c">${fmt(x.now.fees, 2)}</td></tr>`;
 
-    const blocks = (A ? [A] : all).filter((x) => x.docs.length || x.now.gold || x.now.fees)
+    const blocks = (A ? [A] : all).filter((x) => x.lines.length || x.now.gold || x.now.fees)
       .map((x) => `
         <h2>${esc(x.sup.name)} <span class="ref">${esc(x.sup.ref || "")}</span></h2>
         <table class="bal"><tr>
@@ -170,10 +107,10 @@ function SupplierLedgerPage({
           <td>رصيد حالي — ذهب</td><td class="c">${fmtW(x.now.gold)} جم24</td>
           <td>رصيد حالي — أجور</td><td class="c">${fmt(x.now.fees, 2)}</td>
         </tr></table>
-        ${x.docs.length ? `<table><thead><tr>
-          <th>التاريخ</th><th>المرجع</th><th>البيان</th><th>العيار</th>
-          <th>الذهب (جم24)</th><th>النقد (${esc(currency)})</th>
-        </tr></thead><tbody>${rows(x)}</tbody></table>` : `<p class="none">لا حركة في الفترة</p>`}
+        <table><thead><tr>
+          <th>التاريخ</th><th>المرجع</th><th>البيان</th>
+          <th>ذهب ± (جم24)</th><th>أجور ± (${esc(currency)})</th><th>رصيد الذهب</th><th>رصيد الأجور</th>
+        </tr></thead><tbody>${rows(x)}</tbody></table>
       `).join("");
 
     const html = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
@@ -355,44 +292,83 @@ ${blocks}
               </>
             )}
 
-            {/* حركاته */}
+            {/* كشف الحساب — متسلسلٌ برصيدٍ جارٍ ببُعدين */}
             <p style={{ color: "var(--accent)" }} className="text-[11px] font-bold mb-1">
-              حركة الفترة ({A.docs.length})
+              كشف الحساب ({A.lines.length} حركة)
             </p>
-            {A.docs.length === 0 ? (
+            {A.lines.length === 0 ? (
               <Card style={{ padding: 11, marginBottom: 12 }}>
-                <p style={{ color: "var(--text3)" }} className="text-[11px]">لا حركة في هذه الفترة</p>
+                <p style={{ color: "var(--text3)" }} className="text-[11px]">لا حركة في هذه الفترة — الرصيد الختامي هو الرصيد السابق</p>
               </Card>
             ) : (
-              <div className="flex flex-col gap-2 mb-3">
-                {A.docs.map((d) => (
-                  <Card key={d.id} style={{ padding: 10 }}>
-                    <div className="flex items-center gap-2">
-                      <span style={{ color: "var(--accentText)", fontFamily: "monospace" }} className="text-[10px]">{d.ref}</span>
-                      <span style={{ color: "var(--text)" }} className="text-xs flex-1">
-                        {d.kind}
-                        {d.karat ? ` · عيار ${d.karat}` : ""}
-                      </span>
-                      {d.fine > 0 && (
-                        <span style={{ color: d.settle ? "var(--goodSolid)" : "var(--bad)" }} className="text-[11px]">
-                          {d.settle ? "−" : "+"}{fmtW(d.fine)} جم
-                        </span>
-                      )}
-                      {d.cash > 0 && (
-                        <span style={{ color: "var(--text2)" }} className="text-[11px]">
-                          {currency}{fmt(d.cash, 0)}
-                        </span>
-                      )}
-                    </div>
-                    <p style={{ color: "var(--text3)" }} className="text-[10px] mt-0.5">
-                      {new Date(d.date).toLocaleDateString("en-GB")}
-                      {d.note ? ` · ${d.note}` : ""}
-                      {d.deferred ? " · لا نقد — التزام" : ""}
-                    </p>
-                  </Card>
-                ))}
+              <div style={{ overflowX: "auto", marginBottom: 12 }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 520 }}>
+                  <thead>
+                    <tr>
+                      <th style={head}>التاريخ</th>
+                      <th style={head}>البيان</th>
+                      <th style={head}>ذهب ± (جم24)</th>
+                      <th style={head}>أجور ± ({currency})</th>
+                      <th style={head}>رصيد الذهب</th>
+                      <th style={head}>رصيد الأجور</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td style={{ ...cell, color: "var(--text3)" }}>—</td>
+                      <td style={{ ...cell, color: "var(--text2)" }}>رصيد سابق</td>
+                      <td style={cell} />
+                      <td style={cell} />
+                      <td style={{ ...cell, color: "var(--text2)", textAlign: "center" }}>{fmtW(A.past.gold)}</td>
+                      <td style={{ ...cell, color: "var(--text2)", textAlign: "center" }}>{fmt(A.past.fees, 2)}</td>
+                    </tr>
+                    {A.lines.map((d) => (
+                      <tr key={d.id}>
+                        <td style={{ ...cell, color: "var(--text3)" }}>{new Date(d.date).toLocaleDateString("en-GB")}</td>
+                        <td style={{ ...cell, color: "var(--text)" }}>
+                          <span style={{ color: "var(--accentText)", fontFamily: "monospace" }}>{d.ref}</span> {d.kind}
+                          {d.karat ? ` · ع${d.karat} ${fmtW(d.weight)} جم` : ""}
+                          {d.cash ? ` · ${currency}${fmt(d.cash, 0)}` : ""}
+                        </td>
+                        <td style={{ ...cell, textAlign: "center", color: d.gold > 0 ? "var(--bad)" : d.gold < 0 ? "var(--goodSolid)" : "var(--text3)" }}>
+                          {d.gold > 0 ? `+${fmtW(d.gold)}` : d.gold < 0 ? `−${fmtW(-d.gold)}` : "—"}
+                        </td>
+                        <td style={{ ...cell, textAlign: "center", color: d.fees > 0 ? "var(--bad)" : d.fees < 0 ? "var(--goodSolid)" : "var(--text3)" }}>
+                          {d.fees > 0 ? `+${fmt(d.fees, 0)}` : d.fees < 0 ? `−${fmt(-d.fees, 0)}` : "—"}
+                        </td>
+                        <td style={{ ...cell, textAlign: "center", color: "var(--text)", fontWeight: 700 }}>{fmtW(d.goldBal)}</td>
+                        <td style={{ ...cell, textAlign: "center", color: "var(--text)", fontWeight: 700 }}>{fmt(d.feesBal, 2)}</td>
+                      </tr>
+                    ))}
+                    <tr>
+                      <td style={{ ...cell, background: "var(--panel)" }} colSpan={2}>
+                        <span style={{ color: "var(--text)", fontWeight: 700 }}>الرصيد الختامي</span>
+                        <span style={{ color: "var(--text3)" }}> — ما يُطالبك به المورد اليوم</span>
+                      </td>
+                      <td style={{ ...cell, background: "var(--panel)" }} colSpan={2} />
+                      <td style={{ ...cell, background: "var(--panel)", textAlign: "center", color: "var(--accent)", fontWeight: 800 }}>{fmtW(A.now.gold)}</td>
+                      <td style={{ ...cell, background: "var(--panel)", textAlign: "center", color: "var(--accent)", fontWeight: 800 }}>{fmt(A.now.fees, 2)}</td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             )}
+            <p style={{ color: "var(--text3)" }} className="text-[11px] mb-3">
+              ⚖ + يزيد ما عليك للمورد · − سداد. ذهبٌ بالجرام 24 وأجورٌ بالعملة — لا يُجمعان.
+              {A.move.cashPaid > 0 ? ` · نقدٌ دُفع في الفترة ${currency}${fmtMoney(A.move.cashPaid)}` : ""}
+            </p>
+            {(() => {
+              const L = ledgerOf(A.sup.id);
+              if (!L || to < new Date().toISOString().slice(0, 10)) return null;
+              const off = Math.abs(L.gold - A.now.gold) > 0.001 || Math.abs(L.fees - A.now.fees) > 0.01;
+              return off ? (
+                <Card style={{ padding: 10, marginBottom: 12, border: "1px solid var(--badLine)" }}>
+                  <p style={{ color: "var(--bad)" }} className="text-[11px]">
+                    ⚠ دفتر الموردين على الخادم: ذهب {fmtW(L.gold)} جم24 · أجور {currency}{fmt(L.fees, 2)} — يختلف عن الكشف. راجع الحركات.
+                  </p>
+                </Card>
+              ) : null;
+            })()}
           </>
         )}
 
