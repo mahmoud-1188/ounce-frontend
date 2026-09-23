@@ -303,6 +303,13 @@ const custody = {
 // كلاهما كان يُفرض فعليًا من السيرفر على المبيعات/الكسر لكن لا يوجد أي
 // مسار لكتابته — هذا كان يعني أن تغيير الضريبة أو فتح/قفل الجرد من
 // الواجهة لا يصل إطلاقًا للسيرفر الذي يطبّقهما فعلًا.
+// ── وضع الافتتاح (migration 035) — دفعات بلا مورد تُكوَّد رصيدًا افتتاحيًا ──
+const openingApi = {
+  setMode: (on) => apiFetch("/opening/mode", { method: "POST", body: { on } }),
+  createLot: (payload) => apiFetch("/opening/lots", { method: "POST", body: payload }),
+  finish: () => apiFetch("/opening/finish", { method: "POST", body: {} }),
+};
+
 const settingsApi = {
   updateBranch: (payload) => apiFetch("/settings/branch", { method: "PATCH", body: payload }),
   setStocktakeLock: (locked) => apiFetch("/settings/stocktake-lock", { method: "POST", body: { locked } }),
@@ -485,6 +492,7 @@ export {
   day,
   custody,
   settingsApi,
+  openingApi,
   expensesApi,
   taskirApi,
   issueOut,

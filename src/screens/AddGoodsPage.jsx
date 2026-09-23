@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Barcode, Camera, Check, Loader2, Plus, Trash2, Truck } from "lucide-react";
+import { Barcode, Camera, Check, Landmark, Loader2, Plus, Trash2, Truck } from "lucide-react";
 import { CATEGORY_STATE } from "../core/constants.js";
 import { fmt, fmtW, roundW } from "../core/money.js";
 import { SET_PIECE_PRESETS } from "../core/workflow.js";
@@ -11,10 +11,12 @@ import { Card } from "../ui/Card.jsx";
 import { Field } from "../ui/Field.jsx";
 import { Hallmark } from "../ui/Hallmark.jsx";
 import { PrintAfterEntry } from "../ui/PrintAfterEntry.jsx";
+import { OpeningLotForm } from "../ui/OpeningLotForm.jsx";
 import { QuickLotForm } from "../ui/QuickLotForm.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 
-function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions = [], onSetPrinted, onCreateSupplierLot, onDeleteItem, onBack, flashToast }) {
+function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions = [], onSetPrinted, onCreateSupplierLot, onDeleteItem, onBack, flashToast,
+  openingMode = false, onCreateOpeningLot = null, currency = "ر.س", price24 = 0 }) {
   const [detailItem, setDetailItem] = useState(null);
   const [justEntered, setJustEntered] = useState(null); // الأصناف المُدخلة للتو، بانتظار الطباعة
   const [showSessions, setShowSessions] = useState(false);
@@ -26,8 +28,12 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
   const [savingPhotoKey, setSavingPhotoKey] = useState(null);
 
   const allLots = [...localLots, ...lots];
-  const openLots = allLots.filter((l) => l.status === "open");
+  // ⚠ وضع الافتتاح يرى الدفعات الافتتاحية وحدها، والوضع العادي يرى دفعات
+  //   الموردين وحدها — فلا يُكوَّد شراءٌ على أنه افتتاحي ولا العكس.
+  const openLots = allLots.filter((l) => l.status === "open" && (openingMode ? l.source === "opening" : l.source !== "opening"));
   const supplierName = (id) => suppliers.find((s) => s.id === id)?.name || "مورد";
+  const isOpeningLot = (l) => l?.source === "opening";
+  const lotLabel = (l) => (isOpeningLot(l) ? `رصيد افتتاحي ${l.ref || ""}`.trim() : supplierName(l?.supplierId));
   const selectedLot = allLots.find((l) => l.id === lotId);
   const activeItems = items.filter((i) => remainingQty(i) > 0);
 
@@ -54,7 +60,7 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
     // ⚠ onCreateSupplierLot صار غير متزامن (يستدعي الباك إند فعليًا) —
     // لازم انتظار النتيجة قبل استخدامها، وإلا كان lot كائن Promise لا
     // الدفعة الفعلية.
-    const lot = await onCreateSupplierLot(draft);
+    const lot = openingMode && onCreateOpeningLot ? await onCreateOpeningLot(draft) : await onCreateSupplierLot(draft);
     if (lot) {
       setLocalLots((prev) => [lot, ...prev]);
       setLotId(lot.id);
@@ -105,7 +111,7 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
     return (
       <PrintAfterEntry
         newItems={justEntered}
-        supplierLabel={selectedLot ? supplierName(selectedLot.supplierId) : ""}
+        supplierLabel={selectedLot ? lotLabel(selectedLot) : ""}
         onSetPrinted={onSetPrinted}
         onDone={() => setJustEntered(null)}
         onExit={() => {
@@ -172,17 +178,46 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
             )}
           </>
         )}
-        <Field label="المورد / الدفعة (إجباري)">
+        {openingMode && (
+          <Card style={{ padding: 12, marginBottom: 12, border: "1px solid var(--accentLine)", background: "var(--accentBg)" }}>
+            <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-1">وضع الافتتاح</p>
+            <p style={{ color: "var(--text2)" }} className="text-[11px]">
+              ما تُكوّده الآن رصيدٌ افتتاحي لا شراءٌ من مورد: يدخل المخزون مقابل رأس المال، ولا يُستحقّ عليه شيء لأحد.
+              حين تنتهي من إدخال البضاعة القائمة اضغط «إنهاء الافتتاح والبدء» في صفحة الرصيد الافتتاحي.
+            </p>
+          </Card>
+        )}
+        <Field label={openingMode ? "الدفعة الافتتاحية (إجباري)" : "المورد / الدفعة (إجباري)"}>
           <select style={inputStyle} value={lotId} onChange={(e) => setLotId(e.target.value)}>
             <option value="">اختر دفعة...</option>
             {openLots.map((l) => (
               <option key={l.id} value={l.id}>
-                {supplierName(l.supplierId)} · عيار {l.karat} · {new Date(l.date).toLocaleDateString("en-GB")}
+                {lotLabel(l)} · عيار {l.karat} · {new Date(l.date).toLocaleDateString("en-GB")}
               </option>
             ))}
           </select>
         </Field>
-        {selectedLot && (
+        {selectedLot && isOpeningLot(selectedLot) && (
+          <Card style={{ padding: 12, marginBottom: 12, border: "1px solid var(--accentLine)" }}>
+            <p style={{ color: "var(--text2)" }} className="text-xs mb-2">دفعة افتتاحية {selectedLot.ref} · عيار {selectedLot.karat}</p>
+            <div className="flex items-center justify-between py-1">
+              <span style={{ color: "var(--text2)" }} className="text-[11px]">{selectedLot.costRef === "market" ? "تقييم الجرام — بالسعر العالمي" : "تكلفة الجرام — تكلفة شراء"}</span>
+              <span style={{ color: "var(--text)" }} className="text-xs font-bold">{currency}{fmt(Number(selectedLot.costPerGram) || 0, 2)}</span>
+            </div>
+            <div className="flex items-center justify-between py-1">
+              <span style={{ color: "var(--text2)" }} className="text-[11px]">أُدخل فيها</span>
+              <span style={{ color: "var(--text)" }} className="text-xs font-bold">{fmt(lotWeight)} جم</span>
+            </div>
+            {wDraft > 0 && (
+              <div className="flex items-center justify-between py-1">
+                <span style={{ color: "var(--text2)" }} className="text-[11px]">في الصفوف الحالية</span>
+                <span style={{ color: "var(--accentText)" }} className="text-xs font-bold">{fmt(wDraft)} جم</span>
+              </div>
+            )}
+            <p style={{ color: "var(--text3)" }} className="text-[11px] mt-1">لا وزنَ مشترى يُقارن به — وزن الدفعة هو ما يُكوَّد فيها.</p>
+          </Card>
+        )}
+        {selectedLot && !isOpeningLot(selectedLot) && (
           <>
             <Card style={{ padding: 12, marginBottom: 10, border: "1px solid var(--accentLine)" }}>
               <p style={{ color: "var(--text2)" }} className="text-xs mb-2">
@@ -286,15 +321,19 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
             className="text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1 w-fit mb-4"
             style={{ background: "var(--accentBg)", color: "var(--accent)", border: "1px solid var(--accentLine)" }}
           >
-            <Truck size={13} /> مورد / دفعة جديدة
+            {openingMode ? <><Landmark size={13} /> دفعة افتتاحية جديدة</> : <><Truck size={13} /> مورد / دفعة جديدة</>}
           </button>
+        ) : openingMode ? (
+          <OpeningLotForm onCancel={() => setShowQuickLot(false)} onCreate={handleQuickLotCreated} price24={price24} currency={currency} />
         ) : (
           <QuickLotForm onCancel={() => setShowQuickLot(false)} onCreate={handleQuickLotCreated} suppliers={suppliers} />
         )}
 
         {!lotId && (
           <p style={{ color: "var(--bad)" }} className="text-xs mb-4">
-            لازم تختار أو تنشئ دفعة مورد قبل إضافة أي صنف — كل قطعة يجب أن تكون مرتبطة بمصدرها.
+            {openingMode
+              ? "اختر أو أنشئ دفعةً افتتاحية (عيار وتقييم) قبل إضافة أي صنف — كل قطعة تبقى مرتبطةً بدفعتها."
+              : "لازم تختار أو تنشئ دفعة مورد قبل إضافة أي صنف — كل قطعة يجب أن تكون مرتبطة بمصدرها."}
           </p>
         )}
 
@@ -427,7 +466,8 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
           const codedW = mine.reduce(
             (a, it) => a + (Number(it.weight) || 0) * ((it.units || []).length || 1), 0
           );
-          const remain = roundW((Number(selectedLot.weight) || 0) - codedW);
+          // الدفعة الافتتاحية لا وزنَ مشترى لها: وزنها هو ما كُوّد، فلا «بقي».
+          const remain = isOpeningLot(selectedLot) ? 0 : roundW((Number(selectedLot.weight) || 0) - codedW);
           return (
             <div>
               <div className="flex items-baseline justify-between mt-8 mb-2">
@@ -438,7 +478,7 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
                   style={{ color: remain > 0.0005 ? "var(--accent)" : "var(--goodSolid)" }}
                   className="text-xs font-bold"
                 >
-                  بقي {fmtW(Math.max(0, remain))} جم
+                  {isOpeningLot(selectedLot) ? `${fmtW(codedW)} جم` : `بقي ${fmtW(Math.max(0, remain))} جم`}
                 </span>
               </div>
               {mine.length === 0 ? (

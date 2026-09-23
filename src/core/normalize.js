@@ -329,6 +329,9 @@ function normalizeLots(rows) {
   return rows.map((l) => ({
     id: l.id,
     ref: l.ref,
+    // ⚠ migration 035: 'opening' = دفعة افتتاحية بلا مورد (وضع الافتتاح)
+    source: l.source === "opening" ? "opening" : "purchase",
+    costRef: l.cost_ref || null,
     purchaseId: l.purchase_id,
     supplierId: l.supplier_id,
     date: l.date,
@@ -684,6 +687,8 @@ function normalizeBootstrap(boot) {
           taxRate: Number(boot.settings.tax_rate) || 0,
           cardFees: boot.settings.card_fees || {},
           workdayMode: boot.settings.workday_mode === "off" ? "off" : "required",
+          openingMode: !!boot.settings.opening_mode,
+          openingFinishedAt: boot.settings.opening_finished_at || null,
         }
       : null,
     expenses: normalizeExpenses(boot.expenses || [], usersFullById),

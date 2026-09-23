@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { AlertTriangle, Plus, X } from "lucide-react";
-import { KARATS, PURITY, fmt, fmtW } from "../core/money.js";
+import { KARATS, PURITY, fmt, fmtMoney, fmtW } from "../core/money.js";
 import { inputStyle } from "../domain/helpers.js";
 import { FiscalClosePage } from "./FiscalClosePage.jsx";
 import { Card } from "../ui/Card.jsx";
@@ -11,6 +11,12 @@ import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 function OpeningBalancePage({
   openingBalance,
   onSave,
+  openingMode = false,
+  openingFinishedAt = null,
+  openingStats = null,
+  canFinishOpening = false,
+  onToggleOpeningMode = null,
+  onFinishOpening = null,
   currency,
   price24,
   goldEquivalent,
@@ -30,6 +36,9 @@ function OpeningBalancePage({
 }) {
   const [tab, setTab] = useState("opening"); // 'opening' | 'closing'
   const [confirmSave, setConfirmSave] = useState(false);
+  const [confirmFinish, setConfirmFinish] = useState(false);
+  const [openingBusy, setOpeningBusy] = useState(false);
+  const runOpening = async (fn) => { setOpeningBusy(true); try { await fn(); } finally { setOpeningBusy(false); setConfirmFinish(false); } };
   const [form, setForm] = useState({ ...openingBalance, partnersCapitalByPartner: { ...(openingBalance.partnersCapitalByPartner || {}) } });
   const set = (field, val) => setForm((prev) => ({ ...prev, [field]: val }));
   // While editing, numeric fields hold the RAW STRING. Coercing on every
@@ -144,6 +153,77 @@ function OpeningBalancePage({
         <p style={{ color: "var(--text2)" }} className="text-xs mb-4">
           أدخل كل شي كان موجود عندك يوم بدأت العمل بالتطبيق — نقدية، ذهب، مخزون، رأس مال شركاء. من هذه اللحظة، كل التقارير والقوائم المالية تحسب أداءك بالمقارنة مع هذا الرصيد.
         </p>
+
+        {/* ── وضع الافتتاح: البضاعة القائمة تُكوَّد قطعةً قطعة بلا مورد ── */}
+        {onToggleOpeningMode && (
+          <Card style={{ padding: 14, marginBottom: 12, border: `1px solid ${openingMode ? "var(--accentLine)" : "var(--line)"}` }}>
+            <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">وضع الافتتاح — تكويد البضاعة القائمة</p>
+            <div className="flex items-center justify-between mb-1">
+              <span style={{ color: "var(--text)" }} className="text-sm font-bold">
+                {openingMode ? "يعمل: التكويد يُدخل رصيدًا افتتاحيًّا" : "مطفأ: التكويد من دفعات الموردين"}
+              </span>
+              <button
+                aria-label="وضع الافتتاح"
+                disabled={openingBusy}
+                onClick={() => runOpening(() => onToggleOpeningMode(!openingMode))}
+                style={{ width: 46, height: 25, borderRadius: 13, position: "relative", flexShrink: 0,
+                  background: openingMode ? "var(--goodSolid)" : "var(--edge)", transition: "background .2s" }}
+              >
+                <div style={{ width: 19, height: 19, borderRadius: "50%", background: "var(--text)",
+                  position: "absolute", top: 3, right: openingMode ? 24 : 3, transition: "right .2s" }} />
+              </button>
+            </div>
+            <p style={{ color: "var(--text2)" }} className="text-[11px]">
+              {openingMode
+                ? "كل قطعةٍ تُكوَّد الآن تدخل دفعةً افتتاحية (عيار + تقييم/جم) وتُقيَّد مخزونًا مقابل رأس المال. المخزون المجمّع أدناه للبضاعة التي لن تُكوَّد."
+                : "للمحل الجديد: فعّله لتُدخل البضاعة الموجودة عندك قطعةً قطعة بلا مورد، ثم اضغط «إنهاء الافتتاح والبدء»."}
+            </p>
+          </Card>
+        )}
+        {openingStats && (openingMode || openingStats.lots > 0) && (
+          <Card style={{ padding: 12, marginBottom: 14, border: "1px solid var(--accentLine)" }}>
+            <p style={{ color: "var(--text2)" }} className="text-xs mb-2">المخزون الافتتاحي المكوَّد</p>
+            <div className="grid grid-cols-3 gap-2 mb-2">
+              {[["قطعة", String(openingStats.pieces)], ["جم", fmtW(openingStats.weight)], [currency, fmtMoney(openingStats.value)]].map(([u, v], i) => (
+                <div key={i} style={{ background: "var(--field)", borderRadius: 10, padding: "8px 6px", textAlign: "center" }}>
+                  <p style={{ color: "var(--text)", fontFamily: "'Cairo', sans-serif", margin: 0 }} className="text-sm font-extrabold">{v}</p>
+                  <p style={{ color: "var(--text3)", margin: 0 }} className="text-[11px]">{u}</p>
+                </div>
+              ))}
+            </div>
+            <p style={{ color: "var(--text3)" }} className="text-[11px] mb-2">
+              {openingStats.lots} دفعة افتتاحية{openingStats.openLots ? ` · ${openingStats.openLots} مفتوحة` : " · كلّها مقفلة"}
+              {openingFinishedAt ? ` · أُنهي الافتتاح ${new Date(openingFinishedAt).toLocaleDateString("en-GB")}` : ""}
+            </p>
+            {openingMode && onFinishOpening && (
+              confirmFinish ? (
+                <div className="grid grid-cols-2 gap-2">
+                  <button onClick={() => setConfirmFinish(false)} className="py-2.5 rounded-xl text-xs font-bold"
+                    style={{ background: "var(--panel)", color: "var(--text2)", border: "1px solid var(--line)" }}>تراجع</button>
+                  <button disabled={openingBusy} onClick={() => runOpening(onFinishOpening)} className="py-2.5 rounded-xl text-xs font-bold"
+                    style={{ background: "linear-gradient(135deg, var(--gradFrom), var(--gradTo))", color: "var(--bg)" }}>
+                    {openingBusy ? "جارٍ…" : `تأكيد — تُقفل ${openingStats.openLots} دفعة`}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  disabled={!canFinishOpening}
+                  onClick={() => setConfirmFinish(true)}
+                  className="w-full py-2.5 rounded-xl text-xs font-bold"
+                  style={{ background: canFinishOpening ? "linear-gradient(135deg, var(--gradFrom), var(--gradTo))" : "var(--field)",
+                    color: canFinishOpening ? "var(--bg)" : "var(--text3)" }}
+                >
+                  إنهاء الافتتاح والبدء
+                </button>
+              )
+            )}
+            {openingMode && confirmFinish && (
+              <p style={{ color: "var(--text3)" }} className="text-[11px] mt-1.5">
+                تُقفل الدفعات الافتتاحية ويعود التكويد إلى الموردين — ولا يُعاد تفعيل الوضع بعد أول بيع.
+              </p>
+            )}
+          </Card>
+        )}
 
         {openingBalance.date && (
           <Card style={{ padding: 12, marginBottom: 14, border: "1px solid var(--accentLine)" }}>

@@ -9,7 +9,7 @@ import { CARD_NETWORKS } from "../core/money-rules.js";
 import { DEFAULT_NAV_LAYOUT, MAIN_TAB_IDS, NAV_REGISTRY, TAB_KIND_IDS } from "../core/navigation.js";
 import { installStorageGuard, layoutIds, loadAllStores, normalizeOpeningBalance, normalizeRoleLayout, validateStore } from "../core/stores.js";
 import * as api from "../core/api.js";
-import { normalizeBootstrap, normalizeCashTxRow, normalizeSafeGoldTx, normalizeSafeAudits, normalizeBusinessDays, normalizeDailyCustody, normalizeTaskirEntries, normalizeTaskirOfficeTx, normalizeFixedAssets, normalizeDepreciationSchedule } from "../core/normalize.js";
+import { normalizeBootstrap, normalizeCashTxRow, normalizeLots, normalizeSafeGoldTx, normalizeSafeAudits, normalizeBusinessDays, normalizeDailyCustody, normalizeTaskirEntries, normalizeTaskirOfficeTx, normalizeFixedAssets, normalizeDepreciationSchedule } from "../core/normalize.js";
 // ⚠ الحجوزات/الإصلاحات/المرتجعات: normalize.js يُطبِّع القيم فعليًا (راجع
 // normalizeReservations/normalizeRepairs/normalizeReturns/normalizeReceipts)
 // لكن استدعاءها هنا يمر عبر n.reservations/n.repairs/... من normalizeBootstrap
@@ -60,6 +60,11 @@ const API_ERROR_MESSAGES = {
   invalid_exchange_settle: "اختر طريقة تسوية الفرق",
   credit_settle_requires_customer: "التسوية على الحساب تحتاج فاتورةً بعميل",
   insufficient_daily_cash: "الصندوق اليومي لا يكفي لردّ الفرق نقدًا",
+  // وضع الافتتاح
+  branch_has_sales: "المحل يبيع فعلًا — وضع الافتتاح للمحل الجديد قبل أول بيع",
+  opening_mode_off: "وضع الافتتاح مطفأ — فعّله من الرصيد الافتتاحي",
+  invalid_karat: "اختر العيار",
+  invalid_cost_per_gram: "أدخل تكلفة الجرام",
   insufficient_weight: "الوزن غير متوفر",
   below_min_sale_weight: "أقل من الحد الأدنى للبيع لهذا التصنيف",
   item_not_found: "الصنف غير موجود",
@@ -164,6 +169,7 @@ function addItemsErrorMessage(err) {
     case "missing_field": return `أدخل ${body.fieldLabel || "الحقل المطلوب"}`;
     case "lot_not_found": return "الدفعة غير موجودة";
     case "lot_not_open": return "الدفعة مقفلة، لا يمكن الإضافة إليها";
+    case "opening_mode_off": return "وضع الافتتاح مطفأ — لا تكويد على دفعة افتتاحية";
     case "lot_missing_karat": return "الدفعة بلا عيار محدَّد";
     case "category_not_found": return "تصنيف غير موجود";
     default: return "تعذّرت إضافة الأصناف";
@@ -4235,7 +4241,7 @@ export default function GoldInventoryApp() {
       // ⚠ دمج لا استبدال: appSettings يحمل أيضًا تفضيلات محلية بحتة
       // (الثيم، طباعة، requirePin...) لا وجود لها في الباك إند بعد —
       // استبدال الكائن كاملًا كان سيمحوها.
-      setAppSettings((prev) => ({ ...prev, taxEnabled: n.appSettings.taxEnabled, taxRate: n.appSettings.taxRate, cardFees: n.appSettings.cardFees, workdayMode: n.appSettings.workdayMode }));
+      setAppSettings((prev) => ({ ...prev, taxEnabled: n.appSettings.taxEnabled, taxRate: n.appSettings.taxRate, cardFees: n.appSettings.cardFees, workdayMode: n.appSettings.workdayMode, openingMode: n.appSettings.openingMode, openingFinishedAt: n.appSettings.openingFinishedAt }));
     }
   };
 
@@ -5262,6 +5268,12 @@ export default function GoldInventoryApp() {
                 workmanshipAllocated: (Number(l.workmanshipAllocated) || 0) + allocatedNow,
                 enteredWeight: (Number(l.enteredWeight) || 0) + weightNow,
                 enteredPieces: (Number(l.enteredPieces) || 0) + newItems.reduce((a, it) => a + it.units.length, 0),
+                // الدفعة الافتتاحية تنمو بما يُكوَّد — أرقامها من الخادم
+                ...(res.opening?.lot ? {
+                  weight: res.opening.lot.weight,
+                  goldCost: res.opening.lot.goldCost,
+                  totalCost: res.opening.lot.totalCost,
+                } : {}),
               }
             : l
         )
@@ -6651,6 +6663,67 @@ export default function GoldInventoryApp() {
     await createLotCore(draft);
     setShowAddPurchase(false);
   };
+  // ══ وضع الافتتاح — محلٌّ جديد يُكوّد بضاعته القائمة بلا مورد ══
+  //
+  // ⚠ الدفعة الافتتاحية دفعةٌ حقيقية على الخادم (lots.source = 'opening')
+  //   بلا مورد ولا وزنٍ مشترى ولا سداد. التكويد فيها يُرحّل الوزن إلى
+  //   1210 والقيمة 1210/3100 لحظته (POST /lots/:id/items)، والإنهاء يُقفلها
+  //   ويُطفئ الوضع. الخادم يفرض: لا تفعيل لفرعٍ باع، ولا تكويد افتتاحي
+  //   والوضع مطفأ.
+  const openingLots = useMemo(() => lots.filter((l) => l.source === "opening"), [lots]);
+  const openingStats = useMemo(() => {
+    const ids = new Set(openingLots.map((l) => l.id));
+    const its = items.filter((it) => ids.has(it.lotId));
+    const pieces = its.reduce((a, it) => a + (it.units || []).length, 0);
+    const weight = its.reduce((a, it) => a + (Number(it.weight) || 0) * (it.units || []).length, 0);
+    // ⚠ الأجرة: `workmanshipPerUnit` لما كُوّد في الجلسة، و`workmanship` لما جاء من bootstrap.
+    const value = its.reduce((a, it) => a + (weightTimesPrice(Number(it.weight) || 0, Number(it.costPerGram) || 0) + (Number(it.workmanshipPerUnit ?? it.workmanship) || 0)) * (it.units || []).length, 0);
+    return { lots: openingLots.length, openLots: openingLots.filter((l) => l.status === "open").length, pieces, weight: roundW(weight), value: sumMoney([value]) };
+  }, [openingLots, items]);
+  const handleToggleOpeningMode = async (on) => {
+    if (on && sales.length) { flashToast("المحل يبيع فعلًا — وضع الافتتاح للمحل الجديد قبل أول بيع"); return null; }
+    try {
+      const res = await api.openingApi.setMode(!!on);
+      persistSettings({ ...appSettings, openingMode: !!res.openingMode });
+      flashToast(res.openingMode ? "وضع الافتتاح يعمل — التكويد الآن رصيدٌ افتتاحي" : "أُطفئ وضع الافتتاح");
+      return true;
+    } catch (err) {
+      flashToast(apiErrorMessage(err, "تعذّر تغيير وضع الافتتاح"));
+      return null;
+    }
+  };
+  const handleCreateOpeningLot = async ({ karat, costPerGram, costRef = "purchase" }) => {
+    try {
+      const res = await api.openingApi.createLot({ karat, costPerGram, costRef });
+      const lot = normalizeLots([res.lot])[0];
+      persistLots([lot, ...lots]);
+      flashToast(`دفعة افتتاحية ${lot.ref} — عيار ${lot.karat}${lot.costRef === "market" ? " — بالسعر العالمي" : ""}`);
+      return lot;
+    } catch (err) {
+      flashToast(apiErrorMessage(err, "تعذّر إنشاء الدفعة الافتتاحية"));
+      return null;
+    }
+  };
+  // إنهاء الافتتاح: الدفعات الافتتاحية تُقفل (بلا هالك — لا وزنَ مشترى يُقارن
+  // به)، ويعود التكويد إلى دفعات الموردين. لا يُرحَّل شيء هنا: كل قطعةٍ
+  // رُحّلت لحظة تكويدها.
+  const handleFinishOpening = async () => {
+    if (role !== "manager") { flashToast("إنهاء الافتتاح بيد المدير"); return null; }
+    try {
+      const res = await api.openingApi.finish();
+      const closedIds = new Set(res.closedLotIds || []);
+      const now = res.finishedAt || new Date().toISOString();
+      persistLots(lots.map((l) => (closedIds.has(l.id) ? { ...l, status: "closed", closedAt: now, enteredWeight: Number(l.weight) || 0 } : l)));
+      persistSettings({ ...appSettings, openingMode: false, openingFinishedAt: now });
+      const st = res.stats || openingStats;
+      flashToast(`انتهى الافتتاح — ${st.pieces} قطعة بقيمة ${fmtMoney(st.value)}. التكويد الآن من الموردين`);
+      return true;
+    } catch (err) {
+      flashToast(apiErrorMessage(err, "تعذّر إنهاء الافتتاح"));
+      return null;
+    }
+  };
+
   const handleQuickCreateLot = async (draft) => {
     const lot = await createLotCore(draft);
     if (lot) flashToast("تم إنشاء دفعة جديدة");
@@ -7285,6 +7358,10 @@ export default function GoldInventoryApp() {
             onSave={handleAddItems}
             onSetPrinted={handleSetPrinted}
             onCreateSupplierLot={handleQuickCreateLot}
+            openingMode={!!appSettings.openingMode}
+            onCreateOpeningLot={handleCreateOpeningLot}
+            currency={priceData.currency}
+            price24={priceData.current}
             onDeleteItem={handleDeleteItem}
             onBack={() => setMorePage(null)}
             flashToast={flashToast}
@@ -8113,6 +8190,12 @@ export default function GoldInventoryApp() {
           <OpeningBalancePage
             openingBalance={openingBalance}
             onSave={handleSaveOpeningBalance}
+            openingMode={!!appSettings.openingMode}
+            openingFinishedAt={appSettings.openingFinishedAt || null}
+            openingStats={openingStats}
+            canFinishOpening={role === "manager" && openingStats.pieces > 0}
+            onToggleOpeningMode={role === "manager" ? handleToggleOpeningMode : null}
+            onFinishOpening={handleFinishOpening}
             currency={priceData.currency}
             price24={priceData.current}
             goldEquivalent={goldEquivalent}
