@@ -43,6 +43,10 @@ function branchRefFromUrl() {
 // fallback عام بدل رمز الخطأ الخام (لا معنى لـ"insufficient_stock" لمستخدم
 // عادي، لكن الرسالة المطابقة له مفهومة).
 const API_ERROR_MESSAGES = {
+  // اشتراك المتجر (يفرضه الخادم على الفرع منذ migration 032 — لوحة الأدمن)
+  subscription_expired: "انتهى اشتراك المحل — تواصل مع مزوّد البرنامج لتجديده",
+  store_suspended: "اشتراك المحل موقوف — تواصل مع مزوّد البرنامج",
+  store_expired: "انتهى اشتراك المحل — تواصل مع مزوّد البرنامج لتجديده",
   insufficient_stock: "الكمية غير متوفرة",
   insufficient_weight: "الوزن غير متوفر",
   below_min_sale_weight: "أقل من الحد الأدنى للبيع لهذا التصنيف",
@@ -134,6 +138,8 @@ const API_ERROR_MESSAGES = {
   already_left: "الموظف منتهي الخدمة بالفعل",
   not_found: "غير موجود",
 };
+
+const SUBSCRIPTION_ERRORS = new Set(["subscription_expired", "store_suspended", "store_expired"]);
 
 function apiErrorMessage(err, fallback) {
   const code = err?.body?.error;
@@ -4243,6 +4249,10 @@ export default function GoldInventoryApp() {
         flashToast(`خمس محاولات فاشلة — قُفل ${Math.round(wait / 1000)} ثانية`);
       } else if (e instanceof api.ApiError && e.status === 401) {
         // رقم سري خاطئ — الرسالة الافتراضية في PriceLoginScreen تكفي.
+      } else if (e instanceof api.ApiError && SUBSCRIPTION_ERRORS.has(e.body?.error)) {
+        // الرقم صحيح لكن اشتراك المحل موقوف/منتهٍ — سببٌ واضح لا «رقم خاطئ».
+        failedTries.current = Math.max(0, failedTries.current - 1);
+        flashToast(apiErrorMessage(e));
       } else {
         flashToast("تعذّر الاتصال بالخادم — تحقّق من الشبكة وحاول مجددًا");
       }
@@ -4334,6 +4344,7 @@ export default function GoldInventoryApp() {
         if (myEpoch !== sessionEpoch.current) return;
         const isAuthFailure = e instanceof api.ApiError && (e.status === 401 || e.status === 403);
         if (isAuthFailure) {
+          if (SUBSCRIPTION_ERRORS.has(e.body?.error)) flashToast(apiErrorMessage(e));
           // توكن غائب/منتهِ/غير صالح فعليًا — نمسحه ونعرض شاشة الدخول
           // العادية. إن كنا عرضنا نسخة مخزّنة بالفعل، نفرّغ الشاشة.
           if (shownFromCache) {
@@ -6701,18 +6712,24 @@ export default function GoldInventoryApp() {
   }
 
   if (!role) {
+    // ⚠ Toast هنا أيضًا: شاشة الدخول تُرجَع قبل الشجرة الرئيسية، فكل
+    // flashToast أثناء الدخول (اشتراك موقوف، قفل المحاولات، انقطاع الخادم)
+    // كان يُضبط في الحالة ولا يظهر للمستخدم إطلاقًا.
     return (
-      <PriceLoginScreen
-        priceData={priceData}
-        autoUpdating={autoUpdating}
-        autoError={autoError}
-        lastAutoFetch={lastAutoFetch}
-        onRefreshNow={runAutoFetch}
-        onLogin={handleLogin}
-        requirePin={appSettings.requirePin !== false}
-        users={users}
-        onDirectLogin={handleDirectLogin}
-      />
+      <>
+        <PriceLoginScreen
+          priceData={priceData}
+          autoUpdating={autoUpdating}
+          autoError={autoError}
+          lastAutoFetch={lastAutoFetch}
+          onRefreshNow={runAutoFetch}
+          onLogin={handleLogin}
+          requirePin={appSettings.requirePin !== false}
+          users={users}
+          onDirectLogin={handleDirectLogin}
+        />
+        <Toast message={toast} />
+      </>
     );
   }
 
