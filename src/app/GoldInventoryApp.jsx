@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Banknote, ChevronUp, FileText, Handshake, Loader2, Lock, LogOut, Menu, Mic, Package, PackageMinus, Plus, Printer, Receipt, RotateCcw, Scale, Search, ShoppingCart, Truck, Wrench, X } from "lucide-react";
 import { CHART_OF_ACCOUNTS, POSTING_RULES } from "../core/chart.js";
-import { APP_MODES, CATEGORY_STATE, DEFAULT_APP_MODE, DEFAULT_CATEGORIES, DEFAULT_INTEGRATION, DEFAULT_OPENING_BALANCE, DEFAULT_PRINTER, DEFAULT_SETTINGS, DEFAULT_STORE, DEFAULT_USERS, EXPENSE_CATEGORIES, ISSUE_REASONS, MIGRATION_FLAG, PARTNER_REQUIRED, PUBLISH_CAP, RFID_DEFAULTS, ROLES, TRUST_MOVES } from "../core/constants.js";
+import { AUTO_WORKDAY, APP_MODES, CATEGORY_STATE, DEFAULT_APP_MODE, DEFAULT_CATEGORIES, DEFAULT_INTEGRATION, DEFAULT_OPENING_BALANCE, DEFAULT_PRINTER, DEFAULT_SETTINGS, DEFAULT_STORE, DEFAULT_USERS, EXPENSE_CATEGORIES, ISSUE_REASONS, MIGRATION_FLAG, PARTNER_REQUIRED, PUBLISH_CAP, RFID_DEFAULTS, ROLES, TRUST_MOVES } from "../core/constants.js";
 import { DEFAULT_COMMISSION } from "../core/erp.js";
 import { AUDIT_KEY, AUDIT_LOG_KEY, BANK_TX_KEY, BRANCH_IDENTITY_KEY, BRANCH_LINK_KEY, BUSINESS_DAYS_KEY, CASH_KEY, CATEGORIES_KEY, COMMISSIONS_KEY, CUSTOMERS_KEY, CUSTOM_GROUPS_KEY, DAILY_CUSTODY_KEY, ENTRY_SESSIONS_KEY, EXPENSES_KEY, EXPENSE_NAMES_KEY, EXT_INVOICES_KEY, FISCAL_CLOSURES_KEY, GOLD_LEDGER_KEY, HQ_PERMISSIONS_KEY, INTEGRATION_KEY, ITEMS_KEY, JOURNAL_KEY, LOTS_KEY, MENU_ORDER_KEY, NAV_LAYOUT_KEY, OPENING_BALANCE_KEY, SAVED_QUERIES_KEY, PARTNERS_KEY, PARTNER_TX_KEY, PRICE_KEY, PRINTER_KEY, RECEIPTS_KEY, REPAIRS_KEY, RESERVATIONS_KEY, RETURNS_KEY, RFID_KEY, SAFE_AUDITS_KEY, SAFE_GOLD_KEY, SAFE_KEY, SALES_KEY, SCRAP_CUSTODY_KEY, SCRAP_KEY, SCRAP_REQUESTS_KEY, SCRAP_SURPLUS_KEY, SETTINGS_KEY, SHORTCUTS_KEY, STOCKTAKE_LOCK_KEY, STORE_KEY, STORE_ORDERS_KEY, SUPPLIERS_KEY, TASKIR_KEY, TASKIR_OFFICES_KEY, TASKIR_OFFICE_TX_KEY, TRUST_ACCOUNTS_KEY, TRUST_GOLD_KEY, TRUST_LEDGER_KEY, USERS_KEY, WEIGHT_ADJ_KEY } from "../core/keys.js";
 import { PURITY, fine24, fmt, fmtMoney, fmtW, fromHalalas, halalas, pricePerGram, roundMoney2, roundW, sumMoney, weightTimesPrice } from "../core/money.js";
@@ -979,6 +979,7 @@ export default function GoldInventoryApp() {
     const taxOrFeesChanged =
       merged.taxEnabled !== appSettings.taxEnabled ||
       merged.taxRate !== appSettings.taxRate ||
+      (merged.workdayMode || "required") !== (appSettings.workdayMode || "required") ||
       JSON.stringify(merged.cardFees) !== JSON.stringify(appSettings.cardFees);
     if (!taxOrFeesChanged) {
       flashToast("تم حفظ الإعدادات");
@@ -990,17 +991,24 @@ export default function GoldInventoryApp() {
         taxEnabled: merged.taxEnabled,
         taxRate: merged.taxRate,
         cardFees: merged.cardFees,
+        workdayMode: merged.workdayMode || "required",
       });
       persistSettings({
         ...merged,
         taxEnabled: !!res.settings.tax_enabled,
         taxRate: Number(res.settings.tax_rate) || 0,
         cardFees: res.settings.card_fees || {},
+        workdayMode: res.settings.workday_mode || "required",
       });
       flashToast("تم حفظ الإعدادات");
       return true;
     } catch (err) {
-      flashToast(apiErrorMessage(err, "تعذّر حفظ الضريبة/الرسوم على السيرفر"));
+      // ⚠ يوم العمل يفرضه الخادم: قيمةٌ محلية تخالفه تفتح بيعًا يرفضه
+      //   أو تحجب بيعًا يقبله — فنعيدها لما كانت عند الفشل.
+      if ((merged.workdayMode || "required") !== (appSettings.workdayMode || "required")) {
+        persistSettings({ ...merged, workdayMode: appSettings.workdayMode || "required" });
+      }
+      flashToast(apiErrorMessage(err, "تعذّر حفظ الإعدادات على السيرفر"));
       return null;
     }
   };
@@ -1161,12 +1169,22 @@ export default function GoldInventoryApp() {
   };
 
   // ── يوم العمل ──
-  const openDay = useMemo(() => businessDays.find((d) => d.status === "open") || null, [businessDays]);
-  /// معرّف اليوم المفتوح — يُختم على كل حركة تُسجَّل الآن.
-  const currentDayId = openDay?.id || null;
+  const realOpenDay = useMemo(() => businessDays.find((d) => d.status === "open") || null, [businessDays]);
+  // ══ يوم العمل اختياري ══
+  //
+  // ⚠ بوّابات كثيرة تفحص `openDay` (بيع، مرتجع، سند، شراء…). محلٌّ لا يريد
+  //   فتح يومٍ وإقفاله كل صباحٍ ومساء كان يُوقَف عند كلٍّ منها. فحين يُطفأ
+  //   يوم العمل من الإعدادات (يحفظه الخادم في branch_settings.workday_mode
+  //   ويفرضه) يُشتقّ **يومٌ ظاهري** تمرّ به البوّابات، ولا يُختم به شيء —
+  //   فلا يظهر يومٌ لم يُفتح في أي إقفال. ويومٌ حقيقيّ مفتوح يبقى مقدَّمًا
+  //   حتى يُقفل.
+  const workdayOff = appSettings.workdayMode === "off";
+  const openDay = useMemo(() => (workdayOff && !realOpenDay ? AUTO_WORKDAY : realOpenDay), [workdayOff, realOpenDay]);
+  /// معرّف اليوم المفتوح — يُختم على كل حركة تُسجَّل الآن (لا يُختم الظاهري).
+  const currentDayId = realOpenDay?.id || null;
   /// ختم موحّد يُدمج في كل سجل جديد. تمريره من مكان واحد يمنع نسيانه
   /// في عملية، وحركة بلا يوم لا تظهر في إقفال أي يوم.
-  const dayStamp = () => ({ businessDayId: currentDayId, businessDayRef: openDay?.ref || null });
+  const dayStamp = () => ({ businessDayId: currentDayId, businessDayRef: realOpenDay?.ref || null });
 
   // ⚠ حُوِّلت للباك إند: POST /day/open يفتح اليوم + عهدة الصندوق اليومي +
   // عهدة الكسر في معاملة واحدة (نفس فلسفة الجمع في المرجع)، ويتحقق فعليًا
@@ -1206,7 +1224,7 @@ export default function GoldInventoryApp() {
   // المحلية. "الربح" وحده يبقى محسوبًا محليًا (يحتاج تكلفة كل صنف —
   // بيانات bootstrap لا الخادم — راجع تعليق normalizeBusinessDays).
   const handleCloseBusinessDay = async (note) => {
-    if (!openDay) {
+    if (!realOpenDay) {
       flashToast("لا يوجد يوم مفتوح");
       return null;
     }
@@ -1215,13 +1233,13 @@ export default function GoldInventoryApp() {
       const normalized = normalizeBusinessDays([res.day])[0];
       // الربح يُحسب محليًا من نفس بيانات bootstrap (sales+items) — لا
       // يأتي من الخادم (راجع تعليق normalizeBusinessDays).
-      const mine = (arr) => arr.filter((x) => x.businessDayId === openDay.id);
+      const mine = (arr) => arr.filter((x) => x.businessDayId === realOpenDay.id);
       const profit = mine(sales).reduce((a, x) => a + saleProfitOf(x), 0);
       if (normalized.snapshot) normalized.snapshot.profit = profit;
-      setBusinessDays((prev) => prev.map((d) => (d.id === openDay.id ? normalized : d)));
+      setBusinessDays((prev) => prev.map((d) => (d.id === realOpenDay.id ? normalized : d)));
       const sus = normalized.snapshot?.suspendedScrap;
       flashToast(
-        `أُقفل يوم العمل ${openDay.ref}` +
+        `أُقفل يوم العمل ${realOpenDay.ref}` +
         (sus ? ` · ⚠ ${sus.count} قطعة كسر معلّقة (${fmtW(sus.weight)} جم)` : "")
       );
       return res;
@@ -4217,7 +4235,7 @@ export default function GoldInventoryApp() {
       // ⚠ دمج لا استبدال: appSettings يحمل أيضًا تفضيلات محلية بحتة
       // (الثيم، طباعة، requirePin...) لا وجود لها في الباك إند بعد —
       // استبدال الكائن كاملًا كان سيمحوها.
-      setAppSettings((prev) => ({ ...prev, taxEnabled: n.appSettings.taxEnabled, taxRate: n.appSettings.taxRate, cardFees: n.appSettings.cardFees }));
+      setAppSettings((prev) => ({ ...prev, taxEnabled: n.appSettings.taxEnabled, taxRate: n.appSettings.taxRate, cardFees: n.appSettings.cardFees, workdayMode: n.appSettings.workdayMode }));
     }
   };
 
@@ -6960,7 +6978,8 @@ export default function GoldInventoryApp() {
           ولا كم مضى عليه — ويكتشف عند الإقفال أنه يعمل على يوم أمس. */}
       <DayControl
         compact
-        openDay={openDay}
+        openDay={realOpenDay}
+        workdayOff={workdayOff}
         businessDays={businessDays}
         cashBalance={cashBalance}
         safeBalance={safeBalance}
@@ -7321,7 +7340,7 @@ export default function GoldInventoryApp() {
             audits={audits}
             users={users}
             openingBalance={openingBalance}
-            openDay={openDay}
+            openDay={realOpenDay}
             onBack={() => setMorePage(null)}
           />
         )}
@@ -7793,7 +7812,8 @@ export default function GoldInventoryApp() {
         )}
         {morePage === "workday" && (
           <WorkDayPage
-            openDay={openDay}
+            openDay={realOpenDay}
+            workdayOff={workdayOff}
             businessDays={businessDays}
             lots={lots}
             onOpenDay={handleOpenBusinessDay}

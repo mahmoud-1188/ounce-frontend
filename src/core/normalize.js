@@ -679,7 +679,12 @@ function normalizeBootstrap(boot) {
         ? { startedAt: boot.stocktakeLock.locked_at, startedBy: null, startedById: boot.stocktakeLock.locked_by }
         : null,
     appSettings: boot.settings
-      ? { taxEnabled: !!boot.settings.tax_enabled, taxRate: Number(boot.settings.tax_rate) || 0, cardFees: boot.settings.card_fees || {} }
+      ? {
+          taxEnabled: !!boot.settings.tax_enabled,
+          taxRate: Number(boot.settings.tax_rate) || 0,
+          cardFees: boot.settings.card_fees || {},
+          workdayMode: boot.settings.workday_mode === "off" ? "off" : "required",
+        }
       : null,
     expenses: normalizeExpenses(boot.expenses || [], usersFullById),
     expenseNames: normalizeExpenseNames(boot.expenseNames || []),

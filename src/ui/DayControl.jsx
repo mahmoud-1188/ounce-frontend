@@ -11,7 +11,7 @@ import { NumericInput } from "./NumericInput.jsx";
 function DayControl({
   openDay, businessDays = [], cashBalance, safeBalance, custodyBalance,
   scrapEntries = [], sales = [], expenses = [], currency, role,
-  onOpen, onClose, onGoTo, compact = false,
+  onOpen, onClose, onGoTo, compact = false, workdayOff = false,
 }) {
   const [sheet, setSheet] = useState(null);      // "open" | "close" | null
   const [openCash, setOpenCash] = useState("");
@@ -147,6 +147,30 @@ function DayControl({
         : 0,
     };
   }, [openDay, sales, expenses]);
+
+  // ── يوم العمل مطفأ ولا يوم حقيقي مفتوح: شريطٌ هادئ لا إنذار ──
+  // الحركات تُسجَّل بلا يوم، وفتح يومٍ يبقى ممكنًا لمن أراد إقفالًا موثّقًا.
+  if (compact && workdayOff && !openDay) {
+    return (
+      <>
+        <button
+          disabled={!canManage}
+          onClick={() => { if (canManage) setSheet("open"); }}
+          className="w-full flex items-center gap-2 px-4 py-2"
+          style={{ background: "var(--panel)", borderBottom: "1px solid var(--line)" }}
+        >
+          <span style={{ width: 8, height: 8, borderRadius: 4, background: "var(--text3)", flexShrink: 0 }} />
+          <span style={{ color: "var(--text2)" }} className="text-[11px] font-bold flex-1 text-right">
+            يوم العمل مطفأ · الحركات بلا يوم
+          </span>
+          {canManage && (
+            <span style={{ color: "var(--text3)" }} className="text-[10px]">فتح يوم اختياري</span>
+          )}
+        </button>
+        {sheet && renderSheet()}
+      </>
+    );
+  }
 
   // ── الشريط المختصر ──
   if (compact) {

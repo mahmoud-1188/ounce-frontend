@@ -127,6 +127,38 @@ function AppSettingsPage({ settings, onSave, branchIdentity, onSaveBranch, hqPer
         </p>
 
         <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">
+          يوم العمل
+        </p>
+        <Card style={{ padding: 14, marginBottom: 12, border: `1px solid ${settings.workdayMode !== "off" ? "var(--goodLine)" : "var(--edge)"}` }}>
+          <div className="flex items-center justify-between mb-1">
+            <span style={{ color: "var(--text)" }} className="text-sm font-bold">
+              {settings.workdayMode !== "off" ? "مفعّل — يُفتح صباحًا ويُقفل مساءً" : "مطفأ — الحركات تُسجَّل بلا يوم"}
+            </span>
+            <button
+              aria-label="يوم العمل"
+              onClick={() => onSave({ ...settings, workdayMode: settings.workdayMode !== "off" ? "off" : "required" })}
+              style={{
+                width: 46, height: 25, borderRadius: 13, position: "relative", flexShrink: 0,
+                background: settings.workdayMode !== "off" ? "var(--goodSolid)" : "var(--edge)", transition: "background .2s",
+              }}
+            >
+              <div style={{ width: 19, height: 19, borderRadius: "50%", background: "var(--text)",
+                position: "absolute", top: 3, right: settings.workdayMode !== "off" ? 24 : 3, transition: "right .2s" }} />
+            </button>
+          </div>
+          <p style={{ color: "var(--text2)" }} className="text-[11px]">
+            {settings.workdayMode !== "off"
+              ? "كل بيعٍ وشراءٍ ومرتجع يحتاج يومًا مفتوحًا، وإقفال اليوم يُورّد الصندوق ويكتب لقطة أرقامه."
+              : "لا فتحَ ولا إقفال: البيع والشراء تعمل مباشرة. تفقد تقارير اليوم وتوريد الصندوق المسائي — الجرد والقوائم لا تتأثر."}
+          </p>
+          {settings.workdayMode === "off" && (
+            <p style={{ color: "var(--accentText)" }} className="text-[11px] mt-1.5">
+              ⚠ من لا يُقفل يومه لا يكتشف عجز الدرج في يومه — راجع الصندوق دوريًّا من جرد الخزنة.
+            </p>
+          )}
+        </Card>
+
+        <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">
           الحماية بالرقم السري
         </p>
         <Card style={{ padding: 14, marginBottom: 12, border: `1px solid ${settings.requirePin ? "var(--goodLine)" : "var(--edge)"}` }}>

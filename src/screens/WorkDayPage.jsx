@@ -11,7 +11,7 @@ import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 
 function WorkDayPage({
   priceData, cashBalance, safeBalance, openCustodySession, sales, expenses, items, lots = [],
-  openDay, businessDays = [], onOpenDay, onCloseDay2,
+  openDay, businessDays = [], onOpenDay, onCloseDay2, workdayOff = false,
   currency, onOpenCustody, onCloseCustody, onCloseDay, onGo, onBack,
 }) {
   const [form, setForm] = useState(null); // "open" | "close"
@@ -43,6 +43,15 @@ function WorkDayPage({
     <div>
       <SubPageHeader title="يوم العمل" onBack={onBack} />
       <div className="px-4 pt-2">
+        {workdayOff && !openDay && (
+          <Card style={{ padding: 14, marginBottom: 12, border: "1px solid var(--accentLine)", background: "var(--accentBg)" }}>
+            <p style={{ color: "var(--accent)" }} className="text-sm font-bold mb-1">يوم العمل مطفأ</p>
+            <p style={{ color: "var(--text2)" }} className="text-[11px]">
+              البيع والشراء والمرتجعات تعمل بلا فتحٍ وإقفال يوميّ، ولا تُنسب الحركات ليومٍ بعينه.
+              لتشغيله: الإعدادات ← يوم العمل. ويبقى فتح يومٍ من هنا ممكنًا متى أردت إقفالًا موثّقًا.
+            </p>
+          </Card>
+        )}
         {/* ── حالة يوم العمل ── */}
         {/* ⚠ عهدة معلّقة بلا يوم عمل حالة غير منطقية — نطلب إقفالها أولًا
             بدل عرض نموذجين معًا يبدوان تكرارًا. */}
