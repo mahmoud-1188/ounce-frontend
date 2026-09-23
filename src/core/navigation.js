@@ -1,7 +1,7 @@
-import { ArrowLeftRight, Barcode, BarChart3, BookmarkCheck, Building2, CalendarCheck, ClipboardCheck, ClipboardList, Coins, Database, FileMinus, FileText, Flame, Grid, Handshake, Landmark, LayoutGrid, Lock, PiggyBank, Plus, Printer, Receipt, RefreshCw, RotateCcw, Scale, Search, Send, Settings, ShieldCheck, ShoppingCart, Sparkles, Sun, SlidersHorizontal, Tag, Truck, UserRound, Users, Wallet, Warehouse, Wrench } from "lucide-react";
+import { ArrowLeftRight, Home, Barcode, BarChart3, BookmarkCheck, Building2, CalendarCheck, ClipboardCheck, ClipboardList, Coins, Database, FileMinus, FileText, Flame, Grid, Handshake, Landmark, LayoutGrid, Lock, PiggyBank, Plus, Printer, Receipt, RefreshCw, RotateCcw, Scale, Search, Send, Settings, ShieldCheck, ShoppingCart, Sparkles, Sun, SlidersHorizontal, Tag, Truck, UserRound, Users, Wallet, Warehouse, Wrench } from "lucide-react";
 import { ROLES } from "./constants.js";
 
-const TAB_KIND_IDS = ["inventory", "sales", "cash", "expenses", "stocktake"];
+const TAB_KIND_IDS = ["home", "inventory", "sales", "cash", "expenses", "stocktake"];
 
 // Master registry of every navigable page in the app, used to build both the
 // main bottom bar and the hamburger menu grid. Access is still governed by
@@ -11,6 +11,7 @@ const TAB_KIND_IDS = ["inventory", "sales", "cash", "expenses", "stocktake"];
 const MAIN_TAB_IDS = ["inventory", "sales", "cash", "expenses", "stocktake"];
 
 const NAV_REGISTRY = [
+  { id: "home", label: "الرئيسية", icon: Home },
   { id: "inventory", label: "المخزون", icon: Warehouse },
   { id: "sales", label: "المبيعات", icon: Receipt },
   { id: "cash", label: "النقد", icon: Wallet },

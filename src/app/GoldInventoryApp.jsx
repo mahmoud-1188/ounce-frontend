@@ -245,6 +245,7 @@ import { IssueOutPage } from "../screens/IssueOutPage.jsx";
 import { ItemEditPage } from "../screens/ItemEditPage.jsx";
 import { NavCustomizePage } from "../screens/NavCustomizePage.jsx";
 import { OpeningBalancePage } from "../screens/OpeningBalancePage.jsx";
+import { HomeScreen } from "../ui/HomeScreen.jsx";
 import { OpeningComparePage } from "../screens/OpeningComparePage.jsx";
 import { PartnersPage } from "../screens/PartnersPage.jsx";
 import { PriceTab } from "../screens/PriceTab.jsx";
@@ -316,9 +317,12 @@ export default function GoldInventoryApp() {
   // جلسة صالحة أصلًا.
   const [sessionChecking, setSessionChecking] = useState(true);
   // ⚠ من له صفحةٌ واحدة يُفتح عليها مباشرة — لا شريط ولا اختيار.
+  //
+  // ⚠ من له تبويبات يهبط على «الرئيسية» (ملخص الذهب والنقد وأفعال اليوم)،
+  //   وأزرارها تتبع صلاحيته.
   const landingFor = (r) => {
     const def = ROLES[r] || {};
-    if ((def.allowedTabs || []).length) return { tab: def.allowedTabs[0], more: null };
+    if ((def.allowedTabs || []).length) return { tab: "home", more: null };
     const first = (def.allowedMore || [])[0];
     return first ? { tab: null, more: first } : { tab: "sales", more: null };
   }; // null = show combined price+login screen
@@ -6959,7 +6963,14 @@ export default function GoldInventoryApp() {
         }}
       >
         <div className="flex items-center justify-between px-4 pt-2 pb-1 relative">
-          <div className="flex items-center gap-2">
+          {/* ⚠ الاسم زرّ الرئيسية: لا زرَّ لها في الشريط — هي الافتراضية */}
+          <button
+            type="button"
+            aria-label="الرئيسية"
+            onClick={() => { if ((ROLES[role]?.allowedTabs || []).length) openPage("home"); }}
+            className="flex items-center gap-2 text-right"
+            style={{ background: "none", border: 0, padding: 0 }}
+          >
             <div
               className="flex items-center justify-center flex-shrink-0"
               style={{ width: 30, height: 30, borderRadius: "50%", background: "linear-gradient(135deg,var(--gradFrom),var(--gradTo))", color: "var(--panel)" }}
@@ -6976,7 +6987,7 @@ export default function GoldInventoryApp() {
                 {ROLES[role].label}
               </span>
             </div>
-          </div>
+          </button>
           {/* ⚠ اسم الفرع في المنتصف (طلب المستخدم صراحةً): مفيدٌ تحديدًا
               لصاحب أكثر من فرع يتنقّل بين أجهزتها فيلتبس عليه أي فرعٍ
               يفتحه الآن — position: absolute + تمركز أفقي كامل العرض،
@@ -7048,7 +7059,9 @@ export default function GoldInventoryApp() {
       )}
       {/* ⚠ الشريط يظهر في الحالتين لا في حالة الغياب وحدها.
           إظهاره حين لا يوجد يومٌ فقط يعني أن البائع لا يرى متى فُتح
-          ولا كم مضى عليه — ويكتشف عند الإقفال أنه يعمل على يوم أمس. */}
+          ولا كم مضى عليه — ويكتشف عند الإقفال أنه يعمل على يوم أمس.
+          ⚠ على الرئيسية لا شريطَ لليوم المغلق: لها سطرها وزرّ البيع يوجّه لفتحه. */}
+      {!(tab === "home" && morePage === null && !openDay) && (
       <DayControl
         compact
         openDay={realOpenDay}
@@ -7080,6 +7093,7 @@ export default function GoldInventoryApp() {
         }}
         onGoTo={(page) => openPage(page)}
       />
+      )}
       {roleTamper && role === "manager" && (
         <div className="fixed left-0 right-0 z-50 px-4 py-2.5"
           style={{ top: 0, background: "var(--badBg)", borderBottom: "1px solid var(--badLine)" }}>
@@ -7203,6 +7217,28 @@ export default function GoldInventoryApp() {
               </div>
             </Card>
           </div>
+        )}
+        {morePage === null && tab === "home" && (
+          <HomeScreen
+            userName={currentUser?.name || ""}
+            totals={totals}
+            scrapTotals={scrapTotals}
+            safeGoldBalance={safeGoldBalance}
+            cashBalance={cashBalance}
+            safeBalance={safeBalance}
+            custodyBalance={scrapCustodyBalance}
+            priceData={priceData}
+            openDay={openDay}
+            permitted={[...(permsNow.allowedTabs || []), ...(permsNow.allowedMore || [])]}
+            onSell={() => {
+              if (!openDay) { openPage("sales"); return; }
+              if (stocktakeLock) { flashToast("المخزون مقفل للجرد"); return; }
+              setQuickSaleItemId(null);
+              setShowNewSale(true);
+            }}
+            onScrap={() => { setMorePage(null); setOpenBundle("grp_scrap_all"); }}
+            onGo={(id) => openPage(id)}
+          />
         )}
         {morePage === null && tab === "inventory" && (
           <InventorySummaryTab
@@ -7517,7 +7553,7 @@ export default function GoldInventoryApp() {
         {morePage === "access" && (
           <AccessSettingsPage
             users={users}
-            navRegistry={NAV_REGISTRY}
+            navRegistry={NAV_REGISTRY.filter((n) => n.id !== "home")}
             roles={ROLES}
             onAddUser={handleAddUser}
             onRenameUser={handleRenameUser}
