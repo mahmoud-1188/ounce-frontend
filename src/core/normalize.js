@@ -91,6 +91,7 @@ function normalizeSales(saleRows, saleLineRows) {
     taxAmount: toMoney(s.tax_amount),
     netAmount: toMoney(s.net_amount),
     tradeInValue: toMoney(s.trade_in_value),
+    exchangeOfSaleId: s.exchange_of_sale_id || null,
     sellerId: s.seller_id,
     sellerName: s.seller_name,
     createdBy: s.created_by,
@@ -607,6 +608,9 @@ function normalizeReturns(rows) {
     lines: r.lines || [],
     fullReturn: !!r.full_return,
     refundSource: r.refund_source,
+    exchangeSaleId: r.exchange_sale_id || null,
+    exchangeSettle: r.exchange_settle || null,
+    exchangeDiff: r.exchange_diff == null ? null : toMoney(r.exchange_diff),
     date: r.created_at,
     createdBy: r.created_by,
   }));

@@ -48,6 +48,18 @@ const API_ERROR_MESSAGES = {
   store_suspended: "اشتراك المحل موقوف — تواصل مع مزوّد البرنامج",
   store_expired: "انتهى اشتراك المحل — تواصل مع مزوّد البرنامج لتجديده",
   insufficient_stock: "الكمية غير متوفرة",
+  // المرتجع والاستبدال
+  sale_not_found: "الفاتورة غير موجودة",
+  line_already_returned: "هذا السطر مُرتجع سلفًا",
+  line_index_out_of_range: "السطر غير موجود في الفاتورة",
+  duplicate_line_index: "السطر مكرّر في الطلب",
+  unit_mismatch: "القطع المباعة من هذا الصنف لا تطابق الفاتورة",
+  credit_sale_requires_credit_refund: "الفاتورة آجلة — الردّ يُخصم من دَين العميل لا نقدًا",
+  zero_amount: "قيمة المرتجع صفر — راجع الأسطر",
+  no_new_lines: "اختر القطعة الجديدة",
+  invalid_exchange_settle: "اختر طريقة تسوية الفرق",
+  credit_settle_requires_customer: "التسوية على الحساب تحتاج فاتورةً بعميل",
+  insufficient_daily_cash: "الصندوق اليومي لا يكفي لردّ الفرق نقدًا",
   insufficient_weight: "الوزن غير متوفر",
   below_min_sale_weight: "أقل من الحد الأدنى للبيع لهذا التصنيف",
   item_not_found: "الصنف غير موجود",
@@ -1369,6 +1381,37 @@ export default function GoldInventoryApp() {
       return { ok: true, ref: record.ref, record, amounts: res.amounts };
     } catch (err) {
       const msg = apiErrorMessage(err, "تعذّر تسجيل المرتجع");
+      flashToast(msg);
+      return { ok: false, errors: [msg] };
+    }
+  };
+
+  // ══ الاستبدال — مرتجعٌ وفاتورةٌ جديدة في معاملةٍ واحدة على الخادم ══
+  //
+  // POST /sales/:id/exchange يكتب المستندين والقيدين وحركة الدرج بالفرق
+  // وحده في معاملة واحدة — لا مرتجعٌ بلا فاتورة ولا فاتورةٌ بلا مرتجع.
+  // بعد النجاح نعيد تحميل بيانات الفرع (bootstrap) في الخلفية: القطع
+  // والفواتير والقيود والدرج تتغيّر معًا، ونسخها يدويًا هنا يتباعد عن
+  // الخادم بسهولة. الاستبدال نادر، فكلفة التحميل مقبولة.
+  const processExchange = async (req) => {
+    try {
+      const res = await api.returnsApi.exchange(req.saleId, {
+        lineIndexes: req.lineIndexes,
+        reasonId: req.reasonId,
+        settle: req.settle,
+        note: req.note || null,
+        price24Snapshot: priceData.current,
+        newLines: req.newLines.map((l) => ({ itemId: l.itemId, quantity: Number(l.quantity) || 1, unitPrice: Number(l.unitPrice) || 0 })),
+      });
+      const x = res.amounts;
+      flashToast(
+        `استبدال ${res.return.ref} → ${res.sale.ref} · ` +
+        (x.diff > 0 ? `يدفع ${fmtMoney(x.diff)}` : x.diff < 0 ? `يُردّ ${fmtMoney(-x.diff)}` : "متعادل")
+      );
+      loadBootstrap(currentUser).catch((e) => console.warn("[أوقية] تعذّر تحديث البيانات بعد الاستبدال:", e));
+      return { ok: true, ref: res.return.ref, saleRef: res.sale.ref, amounts: x };
+    } catch (err) {
+      const msg = apiErrorMessage(err, "تعذّر تسجيل الاستبدال");
       flashToast(msg);
       return { ok: false, errors: [msg] };
     }
@@ -7133,6 +7176,7 @@ export default function GoldInventoryApp() {
               setQuickSaleItemId(null);
               setShowNewSale(true);
             }}
+            onReturns={(permsNow.allowedMore || []).includes("salesReturn") ? () => openPage("salesReturn") : null}
           />
         )}
 
@@ -7544,7 +7588,9 @@ export default function GoldInventoryApp() {
             stocktakeLock={stocktakeLock?.locked || stocktakeLock}
             currency={priceData.currency}
             taxRate={appSettings.taxRate || 0}
+            price24={priceData.current}
             onProcess={processSalesReturn}
+            onExchange={processExchange}
             onBack={() => setMorePage(null)}
           />
         )}

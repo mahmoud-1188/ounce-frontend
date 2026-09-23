@@ -15,13 +15,8 @@ function buildReturnJournal({ amounts, target, ref, saleRef, actor, date }) {
     lines.push({ account: target.account, debit: 0, credit: h(amounts.gross),
       memo: target.label });
 
-  // ② عكس التكلفة — التكلفة المستمرة
-  if (halalas(amounts.cost) > 0) {
-    lines.push({ account: "1200", debit: h(amounts.cost), credit: 0,
-      memo: "عودة المخزون بتكلفته" });
-    lines.push({ account: "5100", debit: 0, credit: h(amounts.cost),
-      memo: "عكس تكلفة البضاعة المباعة" });
-  }
+  // ⚠ لا سطر تكلفة (1200/5100): النظام دوري، وهما حسابا مجموعة —
+  //   مطابقةً لقيد الخادم في /sales/:id/return-full.
 
   const dr = lines.reduce((a, l) => a + halalas(l.debit), 0);
   const cr = lines.reduce((a, l) => a + halalas(l.credit), 0);

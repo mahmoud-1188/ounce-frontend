@@ -31,7 +31,7 @@ const NAV_REGISTRY = [
   { id: "bankRecon", label: "مطابقة البنك", icon: Landmark },
   { id: "supplierLedger", label: "تقارير المشتريات", icon: Truck },
   { id: "officeLedger", label: "مكاتب التسكير", icon: Building2 },
-  { id: "salesReturn", label: "استرجاع مبيعات", icon: RotateCcw },
+  { id: "salesReturn", label: "المرتجعات والاستبدال", icon: RotateCcw },
   { id: "search", label: "البحث الشامل", icon: Search },
   { id: "workday", label: "يوم العمل", icon: Sun },
   { id: "scrapIntake", label: "استلام الكسر", icon: Coins },

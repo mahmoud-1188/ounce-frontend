@@ -371,6 +371,9 @@ const returnsApi = {
   // المخصَّصة): ضريبة فعلية حقيقية + عكس تكلفة البضاعة المباعة + تمييز
   // تالف/متاح لإعادة التخزين. راجع misc.routes.js.
   createFull: (saleId, payload) => apiFetch(`/sales/${saleId}/return-full`, { method: "POST", body: payload }),
+  // POST /sales/:id/exchange — مرتجع + فاتورة جديدة في معاملة واحدة،
+  // والدرج بالفرق وحده. { lineIndexes, reasonId, newLines, settle, note }
+  exchange: (saleId, payload) => apiFetch(`/sales/${saleId}/exchange`, { method: "POST", body: payload }),
 };
 
 // ── سعر الذهب العالمي ──
