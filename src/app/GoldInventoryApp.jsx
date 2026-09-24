@@ -109,6 +109,7 @@ const API_ERROR_MESSAGES = {
   scrap_payment_requires_karat_and_weight: "السداد بالكسر يتطلب عيارًا ووزنًا",
   page_not_allowed: "لا تملك صلاحية هذه الشاشة",
   action_denied_by_hq: "منعت الإدارة المركزية هذه العملية",
+  settings_locked_by_hq: "هذه الإعدادات مُدارة من الإدارة المركزية — تُعدَّل من هناك",
   action_denied_for_role: "هذه العملية خارج صلاحيتك",
   invalid_or_expired_token: "انتهت الجلسة — سجّل الدخول مجددًا",
   name_taken: "يوجد موظف بهذا الاسم",
@@ -427,6 +428,7 @@ export default function GoldInventoryApp() {
   // ── قسم المحاسب والرقابة (migration 037) ──
   const [reviews, setReviews] = useState([]);           // أحكام المراجعة — من الخادم، تُضاف ولا تُعدَّل
   // ── تحكّم الإدارة (migration 038) ──
+  const [branchProvision, setBranchProvision] = useState(null); // تجهيز الإدارة: { profile, local, locked, at, by }
   const [hqPolicy, setHqPolicy] = useState(null); // سياسة الإدارة على الشاشات والعمليات: { byRole, branch }
   const [approvalRouting, setApprovalRouting] = useState({}); // من يعتمد ماذا — من الإدارة (hq|branch)
   const [pricePolicy, setPricePolicy] = useState(null); // { markup:{mode,value}|null, world24Manual, at, by }
@@ -1034,7 +1036,19 @@ export default function GoldInventoryApp() {
   // ضمنيًا. الحفظ المحلي فوري كسابقًا (لا ينتظر الشبكة)، والحقول
   // السيرفرية فقط تُرسَل للباك إند بالخلفية؛ فشل الشبكة لا يمنع الحفظ
   // المحلي — فقط يُنبّه ويترك القيمتين مختلفتين حتى نجاح لاحق.
-  const handleUpdateSettings = async (next) => {
+  // ⚠ الفرع المُدار (تجهيز الإدارة مقفول): ما تملكه الإدارة يُعاد من قيمته لا من الشاشة
+  const HQ_MANAGED_SETTING_KEYS = ["taxEnabled", "taxRate", "workdayMode", "marginByKarat", "scrapAssayMode"];
+  const handleUpdateSettings = async (next0) => {
+    let next = next0;
+    if (branchProvision?.locked) {
+      const touched = HQ_MANAGED_SETTING_KEYS.filter((k) => k in next0 && JSON.stringify(next0[k]) !== JSON.stringify(appSettings[k]));
+      if (touched.length) {
+        flashToast("هذه الإعدادات مُدارة من الإدارة المركزية — تُعدَّل من هناك");
+        next = { ...next0 };
+        touched.forEach((k) => { next[k] = appSettings[k]; });
+        if (Object.keys(next0).every((k) => touched.includes(k) || JSON.stringify(next0[k]) === JSON.stringify(appSettings[k]))) return null;
+      }
+    }
     const merged = { ...appSettings, ...next };
     audit("settings", { entity: "settings", before: appSettings, after: merged });
     persistSettings(merged);
@@ -4438,6 +4452,7 @@ export default function GoldInventoryApp() {
     setPricePolicy(n.pricePolicy);
     setApprovalRouting(n.approvalRouting || {});
     setHqPolicy(n.hqPolicy || null);
+    setBranchProvision(n.branchProvision || null);
     setHqNotices(n.notices);
     setFixedAssets(n.fixedAssets);
     setDepreciations(n.depreciationSchedule);
@@ -4456,6 +4471,21 @@ export default function GoldInventoryApp() {
       setAppSettings((prev) => ({ ...prev, taxEnabled: n.appSettings.taxEnabled, taxRate: n.appSettings.taxRate, cardFees: n.appSettings.cardFees, workdayMode: n.appSettings.workdayMode, openingMode: n.appSettings.openingMode, openingFinishedAt: n.appSettings.openingFinishedAt, approvalsEnabled: n.appSettings.approvalsEnabled, approvalThresholds: n.appSettings.approvalThresholds, periodLocks: n.appSettings.periodLocks }));
     }
   };
+
+  // ⚠ تجهيز الإدارة (migration 042): هوامش العيارات ومن يفحص الكسر واسم المحل —
+  //   تُطبَّق مرّةً لكل اعتمادٍ جديد، وعلى كل دخولٍ ما دام التجهيز مقفولًا.
+  useEffect(() => {
+    const p = branchProvision;
+    if (!p?.at) return;
+    if (!p.locked && appSettings?.hqProvisionAt === p.at) return;
+    const local = p.local || {};
+    const next = { ...appSettings, ...local, hqProvisionAt: p.at };
+    // الهوامش تُدمج عيارًا عيارًا — ما لم تضبطه الإدارة يبقى على قيمته
+    if (local.marginByKarat) next.marginByKarat = { ...(appSettings?.marginByKarat || {}), ...local.marginByKarat };
+    if (p.profile?.storeName) next.storeName = p.profile.storeName;
+    if (JSON.stringify(next) !== JSON.stringify(appSettings)) persistSettings(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branchProvision]);
 
   // جلب فعلي من الشبكة + تطبيق + تحديث النسخة المخزّنة محليًا.
   const loadBootstrap = async (user) => {
@@ -7864,6 +7894,7 @@ export default function GoldInventoryApp() {
             priceData={priceData}
             settings={appSettings} onSave={handleUpdateSettings} branchIdentity={branchIdentity} onSaveBranch={handleSaveBranchIdentity} hqPermissions={hqPermissions}
             canEditControls={role === "manager"} onSaveControls={handleSaveControls}
+            hqManaged={branchProvision?.locked ? { by: branchProvision.by, at: branchProvision.at } : null}
             onBack={() => setMorePage(null)} />
         )}
         {morePage === "openingCompare" && (
@@ -8416,6 +8447,7 @@ export default function GoldInventoryApp() {
             currency={priceData.currency}
             onBack={() => setMorePage(null)}
             flashToast={flashToast}
+            onCashReceived={() => loadBootstrap(currentUser).catch(() => {})}
           />
         )}
         {morePage === "codingReport" && (
@@ -8569,7 +8601,12 @@ export default function GoldInventoryApp() {
               items, customers, suppliers, scrapEntries, users,
               cashBalance, safeBalance, safeGoldBalance, totals,
               reservations, audits, cashTx, safeTx, partners, partnersTotals, taskirOffices, taskirEntries,
-              branchDoc: { name: branchIdentity?.name || appSettings?.storeName || "" },
+              branchDoc: {
+                name: branchProvision?.profile?.storeName || branchIdentity?.name || appSettings?.storeName || "",
+                legalName: branchProvision?.profile?.legalName, cr: branchProvision?.profile?.crNumber, vat: branchProvision?.profile?.vatNumber,
+                address: branchProvision?.profile?.address, city: branchProvision?.profile?.city, phone: branchProvision?.profile?.phone,
+                email: branchProvision?.profile?.email, logo: branchProvision?.profile?.logoDataUrl,
+              },
               taxRate: Number(appSettings?.taxRate) || 0.15,
             }}
             // ⚠ ضغطة صفٍّ تفتح تقريره — والتبويبات (المخزون/النقد/…) تُفتح بمعرّفها

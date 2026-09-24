@@ -16,7 +16,7 @@ import { NumericInput } from "../ui/NumericInput.jsx";
 import { RfidSettingsCard } from "../ui/RfidSettingsCard.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 
-function AppSettingsPage({ settings, onSave, branchIdentity, onSaveBranch, hqPermissions, priceData = {}, onBackfill, canEditControls = false, onSaveControls = null, onBack }) {
+function AppSettingsPage({ settings, onSave, branchIdentity, onSaveBranch, hqPermissions, priceData = {}, onBackfill, canEditControls = false, onSaveControls = null, hqManaged = null, onBack }) {
   const [newRecovery, setNewRecovery] = useState("");
   const [fees, setFees] = useState(() => ({ ...DEFAULT_CARD_FEES, ...(settings.cardFees || {}) }));
   const [margins, setMargins] = useState(() => ({ ...DEFAULT_MARGINS, ...(settings.marginByKarat || {}) }));
@@ -36,6 +36,13 @@ function AppSettingsPage({ settings, onSave, branchIdentity, onSaveBranch, hqPer
     <div>
       <SubPageHeader title="الإعدادات" onBack={onBack} />
       <div className="px-4 pt-3">
+        {hqManaged && (
+          <div className="rounded-xl px-3 py-2 mb-3 text-[11px] leading-6"
+            style={{ background: "var(--accentBg)", color: "var(--accentText)", border: "1px solid var(--accentLine)" }}>
+            🔒 فرعٌ مُدار — الضريبة ويوم العمل وحدود الاعتماد وهوامش العيارات وفحص الكسر تضبطها الإدارة المركزية
+            {hqManaged.by ? ` (${hqManaged.by}` : ""}{hqManaged.at ? `${hqManaged.by ? " · " : " ("}${new Date(hqManaged.at).toLocaleDateString("en-GB")})` : hqManaged.by ? ")" : ""}.
+          </div>
+        )}
 
         {/* ── وضع التطبيق ── */}
         <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">

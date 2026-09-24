@@ -724,6 +724,7 @@ function normalizeBootstrap(boot) {
     pricePolicy: boot.pricePolicy || null,
     approvalRouting: boot.approvalRouting || {},
     hqPolicy: boot.hqPolicy || null,
+    branchProvision: boot.branchProvision || null,
     notices: Array.isArray(boot.notices) ? boot.notices : [],
     assetClasses: normalizeAssetClasses(boot.assetClasses || []),
     fixedAssets: normalizeFixedAssets(boot.fixedAssets || []),

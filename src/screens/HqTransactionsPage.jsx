@@ -31,7 +31,9 @@ const BRANCH_INITIATED_FLOWS = {
 // نفس RECEIVER_SIDE في الباك إند (hqTransactions.js) — للعرض فقط، لا
 // فحصًا أمنيًّا (الخادم يرفض أي استلام لا يخصّ الفرع بغضّ النظر عمّا
 // تعرضه هذه الشاشة).
-const BRANCH_RECEIVES = new Set(["goods_from_hq", "send_for_coding"]);
+const BRANCH_RECEIVES = new Set(["goods_from_hq", "send_for_coding", "cash_from_hq"]);
+// ما تبدؤه الإدارة يُستلم مباشرةً بلا خطوة اعتماد
+const HQ_INITIATED = new Set(["goods_from_hq", "cash_from_hq"]);
 
 const STATUS_LABEL = {
   pending: { label: "بانتظار الإدارة", color: "var(--accent)" },
@@ -40,7 +42,7 @@ const STATUS_LABEL = {
   received: { label: "منفَّذ", color: "var(--text2)" },
 };
 
-function HqTransactionsPage({ currency = "ر.س", onBack, flashToast }) {
+function HqTransactionsPage({ currency = "ر.س", onBack, flashToast, onCashReceived }) {
   const [txns, setTxns] = useState(null);
   const [error, setError] = useState("");
   const [showCreate, setShowCreate] = useState(false);
@@ -61,8 +63,9 @@ function HqTransactionsPage({ currency = "ر.س", onBack, flashToast }) {
   async function handleReceive(id) {
     setBusyId(id);
     try {
-      await api.hqTransactionsApi.receive(id);
-      flashToast?.("تم تسجيل الاستلام");
+      const t = await api.hqTransactionsApi.receive(id);
+      flashToast?.(t?.flow === "cash_from_hq" ? "دخل المبلغ خزنتك نقدًا — ورُحّل قيده" : "تم تسجيل الاستلام");
+      if (t?.flow === "cash_from_hq") onCashReceived?.();
       await load();
     } catch (err) {
       flashToast?.(receiveErrorMessage(err));
@@ -117,7 +120,10 @@ function HqTransactionsPage({ currency = "ر.س", onBack, flashToast }) {
               {t.status === "rejected" && t.decisionNote && (
                 <p style={{ color: "var(--bad)" }} className="text-[11px] mt-1">سبب الرفض: {t.decisionNote}</p>
               )}
-              {BRANCH_RECEIVES.has(t.flow) && (t.status === "approved" || (t.flow === "goods_from_hq" && t.status === "pending")) && (
+              {t.flow === "cash_from_hq" && t.fromBranchName && (
+                <p style={{ color: "var(--text3)" }} className="text-[11px] mt-0.5">من خزنة {t.fromBranchName} — يدخل خزنتك نقدًا عند تأكيد الاستلام</p>
+              )}
+              {BRANCH_RECEIVES.has(t.flow) && (t.status === "approved" || (HQ_INITIATED.has(t.flow) && t.status === "pending")) && (
                 <button
                   onClick={() => handleReceive(t.id)}
                   disabled={busyId === t.id}
@@ -146,6 +152,8 @@ function receiveErrorMessage(err) {
   switch (err?.body?.error) {
     case "not_approved_yet": return "لم تعتمد الإدارة هذا الطلب بعد";
     case "not_branch_receivable": return "هذا النوع لا يُستلم من الفرع";
+    case "period_locked": return err.body.why || "الفترة مقفلة — لا قيود فيها";
+    case "already_received": return "استُلم من قبل";
     default: return "تعذّر تسجيل الاستلام";
   }
 }
