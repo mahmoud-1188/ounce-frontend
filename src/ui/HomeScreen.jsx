@@ -1,6 +1,7 @@
 import React from "react";
 import { ClipboardCheck, Flame, Plus, Receipt, RotateCcw } from "lucide-react";
 import { PURITY, fmtMoney, fmtW } from "../core/money.js";
+import { markupLabel } from "../domain/helpers.js";
 
 /// الرئيسية بعد الرقم السري — ما يحتاجه صاحب المحل صباحًا في نظرة:
 /// الذهب كلّه بمكافئ عيار 21، والنقد الآن، وثلاثة أفعال (بيع · كسر · جرد).
@@ -9,7 +10,7 @@ import { PURITY, fmtMoney, fmtW } from "../core/money.js";
 ///   تتبع الصلاحية: ما لا يملكه الدور لا يظهر.
 function HomeScreen({ userName = "", totals = {}, scrapTotals = {}, safeGoldBalance = {},
   cashBalance = {}, safeBalance = {}, custodyBalance = {}, priceData = {}, openDay = null,
-  permitted = [], onSell, onScrap = null, onGo }) {
+  permitted = [], onSell, onScrap = null, onGo, notices = [] }) {
   const currency = priceData.currency || "ر.س";
   const p21 = PURITY[21];
   const to21 = (fine) => (Number(fine) || 0) / p21;
@@ -47,9 +48,16 @@ function HomeScreen({ userName = "", totals = {}, scrapTotals = {}, safeGoldBala
       <div className="flex items-baseline justify-between mb-3">
         <p style={{ color: "var(--text)", margin: 0 }} className="text-base font-bold">{greet}{userName ? `، ${userName}` : ""}</p>
         <p style={{ color: "var(--text3)", margin: 0 }} className="text-[11px]">
-          جم24 {currency}{fmtMoney(priceData.current || 0)}
+          جم24 {currency}{fmtMoney(priceData.current || 0)}{priceData.markup?.value > 0 ? ` (عالمي + ${markupLabel(priceData.markup)})` : priceData.source === "hq" ? " · من الإدارة" : ""}
         </p>
       </div>
+
+      {/* ── إعلانات الإدارة — تظهر حتى تاريخ انتهائها ── */}
+      {(notices || []).filter((n) => n.until > new Date().toISOString()).slice(0, 3).map((n) => (
+        <div key={n.id} className="py-2 px-3 rounded-2xl text-[11px] mb-2" style={{ background: "var(--accentBg)", color: "var(--accentText)", border: "1px solid var(--accentLine)" }}>
+          📣 {n.text} <span style={{ color: "var(--text3)" }}>— {n.by || "الإدارة"} · {new Date(n.at).toLocaleDateString("en-GB")}</span>
+        </div>
+      ))}
 
       {/* ── الذهب ── */}
       <div style={{ ...soft, padding: "16px 16px 12px", marginBottom: 12 }}>

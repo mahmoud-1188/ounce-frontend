@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Check, Home, Barcode, BarChart3, BookmarkCheck, Building2, CalendarCheck, ClipboardCheck, ClipboardList, Coins, Database, FileMinus, FileText, Flame, Grid, Handshake, Landmark, LayoutGrid, Lock, PiggyBank, Plus, Printer, Receipt, RefreshCw, RotateCcw, Scale, Search, Send, Settings, ShieldCheck, ShoppingCart, Sparkles, Sun, SlidersHorizontal, Tag, Truck, UserRound, Users, Wallet, Warehouse, Wrench } from "lucide-react";
+import { ArrowLeftRight, Bot, Check, Home, Barcode, BarChart3, BookmarkCheck, Building2, CalendarCheck, ClipboardCheck, ClipboardList, Coins, Database, FileMinus, FileText, Flame, Grid, Handshake, Landmark, LayoutGrid, Lock, PiggyBank, Plus, Printer, Receipt, RefreshCw, RotateCcw, Scale, Search, Send, Settings, ShieldCheck, ShoppingCart, Sparkles, Sun, SlidersHorizontal, Tag, Truck, UserRound, Users, Wallet, Warehouse, Wrench } from "lucide-react";
 import { ROLES } from "./constants.js";
 
 const TAB_KIND_IDS = ["home", "inventory", "sales", "cash", "expenses", "stocktake"];
@@ -82,6 +82,7 @@ const NAV_REGISTRY = [
   { id: "bankFees", label: "تسوية عمولات البنك", icon: Landmark },
   { id: "showcase", label: "الاستعراض للزبون", icon: Sparkles },
   { id: "dashboard", label: "لوحة التحكم", icon: BarChart3 },
+  { id: "aiAccountant", label: "المساعد المحاسبي", icon: Bot },
 ];
 
 // Default arrangement: which of a role's permitted pages start out in the
@@ -134,7 +135,7 @@ const NAV_BUNDLES = [
     label: "التقارير",
     icon: BarChart3,
     hint: "كل التقارير واليومية",
-    items: ["reportsHub", "dashboard", "accountantReview", "approvals", "documents", "bankFees", "reports", "journal", "generalLedger", "salesReturn", "trialBalance", "fullStatements", "anyStatement", "masterReport", "supplierLedger", "officeLedger", "salesReturn", "bankRecon", "search",
+    items: ["reportsHub", "dashboard", "aiAccountant", "accountantReview", "approvals", "documents", "bankFees", "reports", "journal", "generalLedger", "salesReturn", "trialBalance", "fullStatements", "anyStatement", "masterReport", "supplierLedger", "officeLedger", "salesReturn", "bankRecon", "search",
             "inventory", "salesHistory", "sellerReports", "taxReport", "financials", "openingCompare"],
   },
   {
@@ -254,6 +255,7 @@ const SHORTCUT_HINTS = {
   bankFees: ["عمولة البنك", "عمولات الشبكة", "تسوية العمولة", "كشف البنك", "نسبة العمولة"],
   showcase: ["استعراض", "اعرض للزبون", "الكتالوج", "صور القطع", "عرض القطع"],
   dashboard: ["لوحة", "لوحة التحكم", "مؤشرات", "ملخص"],
+  aiAccountant: ["المساعد المحاسبي", "المحاسب الذكي", "اسأل المحاسب", "حلّل الدفاتر", "راجع القيود"],
 };
 
 /// يُعيد أفضل صفحة تطابق الطلب، أو null. لا يقترح ما هو خارج الصلاحية.
@@ -275,7 +277,7 @@ const MENU_GROUPS = [
     label: "التقارير",
     hint: "كل التقارير والقوائم",
     icon: BarChart3,
-    items: ["reportsHub", "dashboard", "accountantReview", "approvals", "documents", "bankFees", "reports", "journal", "generalLedger", "trialBalance", "fullStatements", "anyStatement", "masterReport", "queryBuilder", "customerReport", "docCycle", "search", "bankRecon", "supplierLedger", "officeLedger", "taxReport", "financials"],
+    items: ["reportsHub", "dashboard", "aiAccountant", "accountantReview", "approvals", "documents", "bankFees", "reports", "journal", "generalLedger", "trialBalance", "fullStatements", "anyStatement", "masterReport", "queryBuilder", "customerReport", "docCycle", "search", "bankRecon", "supplierLedger", "officeLedger", "taxReport", "financials"],
   },
   {
     id: "inventory",

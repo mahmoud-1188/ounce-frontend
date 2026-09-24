@@ -43,6 +43,8 @@ function PriceTab({ priceData, onEdit, autoUpdating, autoError, lastAutoFetch, o
             prevPrice={last?.price}
             currency={priceData.currency}
             updatedAt={lastAutoFetch}
+            world24={priceData.world24}
+            markup={priceData.markup}
           />
           <p style={{ color: "var(--text3)" }} className="text-xs mt-2">
             سعر الأونصة العالمية: {priceData.currency}

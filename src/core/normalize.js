@@ -720,6 +720,9 @@ function normalizeBootstrap(boot) {
     // الاعتمادات تصل مُشكَّلةً من الخادم (shapeApproval) — مرورٌ مباشر
     approvals: Array.isArray(boot.approvals) ? boot.approvals : [],
     reviews: normalizeReviews(boot.reviews || []),
+    // زيادة الإدارة على السعر وإعلاناتها (migration 038) — مُشكَّلتان من الخادم
+    pricePolicy: boot.pricePolicy || null,
+    notices: Array.isArray(boot.notices) ? boot.notices : [],
     assetClasses: normalizeAssetClasses(boot.assetClasses || []),
     fixedAssets: normalizeFixedAssets(boot.fixedAssets || []),
     depreciationSchedule: normalizeDepreciationSchedule(boot.depreciationSchedule || []),

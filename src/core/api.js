@@ -421,6 +421,12 @@ const goldPriceApi = {
 const aiApi = {
   chat: (messages, maxTokens, model) =>
     apiFetch("/ai/chat", { method: "POST", body: { messages, max_tokens: maxTokens, model } }),
+  // المساعد المحاسبي (v197): الحلقة والأدوات على الخادم — الواجهة ترسل نصّ
+  // المحادثة وحده وتستلم الجواب وأثر الأدوات والمسودّات.
+  accountant: (messages) => apiFetch("/ai/accountant", { method: "POST", body: { messages } }),
+  proposals: () => apiFetch("/ai/proposals"),
+  approveProposal: (id, note) => apiFetch(`/ai/proposals/${id}/approve`, { method: "POST", body: { note } }),
+  rejectProposal: (id, note) => apiFetch(`/ai/proposals/${id}/reject`, { method: "POST", body: { note } }),
 };
 
 // ── الأصول الثابتة والإهلاك ──

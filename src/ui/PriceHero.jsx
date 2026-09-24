@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { fmt } from "../core/money.js";
 import { OqiyyahLogo } from "./OqiyyahLogo.jsx";
+import { markupLabel } from "../domain/helpers.js";
 
-function PriceHero({ chartData = [], price, prevPrice, currency, updatedAt, karat = 24, compact = false }) {
+function PriceHero({ chartData = [], price, prevPrice, currency, updatedAt, karat = 24, compact = false, world24 = 0, markup = null }) {
   const [shown, setShown] = useState(Number(price) || 0);
 
   // العدّ التصاعدي نحو القيمة الجديدة — قفزة الرقم المفاجئة لا تُلاحَظ.
@@ -131,6 +132,12 @@ function PriceHero({ chartData = [], price, prevPrice, currency, updatedAt, kara
             </span>
           )}
         </div>
+        {/* ⚖ سعر العمل = العالمي + زيادة الإدارة — يُعرض التركيب لا الرقم وحده */}
+        {markup && Number(markup.value) > 0 && Number(world24) > 0 && (
+          <p style={{ color: "var(--text3)", margin: "4px 0 0" }} className="text-[11px]">
+            عالمي {currency}{fmt(world24)} + زيادة الإدارة {markupLabel(markup)} = <span style={{ color: "var(--accent)" }}>{currency}{fmt(price)}</span>
+          </p>
+        )}
       </div>
     </div>
   );

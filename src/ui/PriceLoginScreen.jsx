@@ -138,6 +138,8 @@ function PriceLoginScreen({ priceData, autoUpdating, autoError, lastAutoFetch, o
                 prevPrice={last?.price}
                 currency={priceData.currency}
                 updatedAt={lastAutoFetch}
+                world24={priceData.world24}
+                markup={priceData.markup}
                 compact
               />
             </div>

@@ -1,12 +1,15 @@
 import React, { useState } from "react";
 import { Loader2, RefreshCw } from "lucide-react";
-import { fetchGoldPriceSAR, inputStyle } from "../domain/helpers.js";
+import { fmt } from "../core/money.js";
+import { applyHqMarkup, fetchGoldPriceSAR, inputStyle, markupLabel } from "../domain/helpers.js";
 import { sanitizeNumeric } from "../domain/sanitizeNumeric.js";
 import { Field } from "../ui/Field.jsx";
 import { ModalShell } from "../ui/ModalShell.jsx";
 
 function SetPriceModal({ current, onClose, onSave }) {
-  const [val, setVal] = useState(current.current || "");
+  // ⚠ ما يُدخل هنا هو **السعر العالمي**؛ زيادة الإدارة تُضاف آليًّا عند الحفظ
+  const [val, setVal] = useState(current.world24 || current.current || "");
+  const markup = current.markup && Number(current.markup.value) > 0 ? current.markup : null;
   const [currency, setCurrency] = useState(current.currency || "ر.س");
   const [fetching, setFetching] = useState(false);
   const [fetchError, setFetchError] = useState("");
@@ -30,9 +33,10 @@ function SetPriceModal({ current, onClose, onSave }) {
   };
 
   return (
-    <ModalShell title="تعديل السعر يدويًا" onClose={onClose}>
+    <ModalShell title="تعديل السعر العالمي يدويًا" onClose={onClose}>
       <p style={{ color: "var(--text2)" }} className="text-xs mb-3">
-        السعر مرتبط تلقائيًا بالسعر العالمي. استخدم هذا فقط إذا أردت تجاوزه بسعر مخصص أو تعديل العملة.
+        السعر مرتبط تلقائيًا بالسعر العالمي. استخدم هذا إن تعذّر الجلب.
+        {markup ? ` زيادة الإدارة ${markupLabel(markup)} تُضاف آليًّا: ${Number(val) > 0 ? `${fmt(Number(val))} → ${fmt(applyHqMarkup(val, markup))}` : ""}` : ""}
       </p>
       <button
         onClick={handleFetchLive}
@@ -53,7 +57,7 @@ function SetPriceModal({ current, onClose, onSave }) {
           آخر سعر عالمي بحسب المصدر: {asOf}
         </p>
       )}
-      <Field label="سعر جرام عيار 24">
+      <Field label={markup ? "سعر جرام عيار 24 العالمي" : "سعر جرام عيار 24"}>
         <input style={inputStyle} type="text" inputMode="decimal" value={val} onChange={(e) => setVal(sanitizeNumeric(e.target.value))} placeholder="0.00" />
       </Field>
       <Field label="رمز العملة">

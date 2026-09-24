@@ -45,6 +45,13 @@ function branchRefFromUrl() {
 const API_ERROR_MESSAGES = {
   // الرقابة وقسم المحاسب (migration 037)
   period_locked: "الفترة مقفلة — لا قيود فيها (أو المدير وحده يعدّل فيها)",
+  ai_not_configured: "المساعد غير مفعّل على الخادم — مفتاح الذكاء غير مضبوط",
+  ai_upstream_error: "تعذّر الوصول لخدمة الذكاء الآن — أعد المحاولة",
+  proposal_not_found: "المسودّة غير موجودة",
+  proposal_already_decided: "قُرِّرت هذه المسودّة سلفًا",
+  proposal_not_pending: "قُرِّرت هذه المسودّة سلفًا",
+  proposal_unbalanced: "المسودّة غير متوازنة — لا تُرحَّل",
+  invalid_account: "حسابٌ غير صالح في المسودّة",
   branch_locked: "الفرع مقفلٌ من الإدارة",
   approval_not_found: "طلب الاعتماد غير موجود",
   approval_already_executed: "نُفِّذ هذا الطلب سلفًا",
@@ -221,7 +228,7 @@ import { buildWeightEntries } from "../domain/buildWeightEntries.js";
 import { computeCommission } from "../domain/computeCommission.js";
 import { computeReturnAmounts } from "../domain/computeReturnAmounts.js";
 import { hashPin } from "../domain/hashPin.js";
-import { documentIndex, aiAllowedFor, aiScope, branchDataKey, branchSnapshotKey, bundleById, cardFeeOf, cashAccountFor, categoryLabel, contentWidth, exchangeKind, expenseAccountFor, exportTablesPdf, fetchGoldPriceSAR, generateUnitCode, goldDestLabel, goldProfit, inPeriod, isBundle, isLiveScrap, itemLabel, lotAllocatedWeight, migrateLegacyKeys, modeAllowsAction, modeAllowsPage, modeAllowsTab, nameExists, navPerRow, normalizeFundingSource, normalizeName, r2, r3, remainingQty, saleProfitOf, saveAttachment, setRuntimeCategories, streamBase, trustBalance, unitCostBasis, unitCurrentValue, useViewport, weightTrialBalance } from "../domain/helpers.js";
+import { applyHqMarkup, markupLabel, documentIndex, aiAllowedFor, aiScope, branchDataKey, branchSnapshotKey, bundleById, cardFeeOf, cashAccountFor, categoryLabel, contentWidth, exchangeKind, expenseAccountFor, exportTablesPdf, fetchGoldPriceSAR, generateUnitCode, goldDestLabel, goldProfit, inPeriod, isBundle, isLiveScrap, itemLabel, lotAllocatedWeight, migrateLegacyKeys, modeAllowsAction, modeAllowsPage, modeAllowsTab, nameExists, navPerRow, normalizeFundingSource, normalizeName, r2, r3, remainingQty, saleProfitOf, saveAttachment, setRuntimeCategories, streamBase, trustBalance, unitCostBasis, unitCurrentValue, useViewport, weightTrialBalance } from "../domain/helpers.js";
 import { isPeriodClosed } from "../domain/isPeriodClosed.js";
 import { key } from "../domain/key.js";
 import { nextCashRef } from "../domain/nextCashRef.js";
@@ -247,6 +254,7 @@ import { SetPriceModal } from "../modals/SetPriceModal.jsx";
 import { VoiceSheet } from "../modals/VoiceSheet.jsx";
 import { AccessSettingsPage } from "../screens/AccessSettingsPage.jsx";
 import { AccountantReviewPage } from "../screens/AccountantReviewPage.jsx";
+import { AccountantAiPage } from "../screens/AccountantAiPage.jsx";
 import { ApprovalsPage } from "../screens/ApprovalsPage.jsx";
 import { BranchDashboardPage } from "../screens/BranchDashboardPage.jsx";
 import { ReportsHubPage } from "../screens/ReportsHubPage.jsx";
@@ -415,6 +423,9 @@ export default function GoldInventoryApp() {
   const [approvals, setApprovals] = useState([]);
   // ── قسم المحاسب والرقابة (migration 037) ──
   const [reviews, setReviews] = useState([]);           // أحكام المراجعة — من الخادم، تُضاف ولا تُعدَّل
+  // ── تحكّم الإدارة (migration 038) ──
+  const [pricePolicy, setPricePolicy] = useState(null); // { markup:{mode,value}|null, world24Manual, at, by }
+  const [hqNotices, setHqNotices] = useState([]);       // إعلانات الإدارة [{id, text, by, at, until}]
   const [branchLock, setBranchLock] = useState(null);   // { reason, lockedAt, lockedBy } — قفلٌ من الإدارة (423)
   const [enrollFor, setEnrollFor] = useState(null);     // المستخدم الذي يُصدَر له رمز ربط
   const [claiming, setClaiming] = useState(false);      // شاشة «عندي رمز ربط» على جهاز الموظّف
@@ -4398,6 +4409,8 @@ export default function GoldInventoryApp() {
     setReceipts(n.receipts);
     setApprovals(n.approvals);
     setReviews(n.reviews);
+    setPricePolicy(n.pricePolicy);
+    setHqNotices(n.notices);
     setFixedAssets(n.fixedAssets);
     setDepreciations(n.depreciationSchedule);
     // ⚠ إصلاح فجوة حقيقية (2026-09): journal/goldLedger كانتا محليتين
@@ -4688,10 +4701,15 @@ export default function GoldInventoryApp() {
     setAutoError("");
     try {
       const result = await fetchGoldPriceSAR();
-      const price = Number(result.perGram.toFixed(2));
+      // ⚠ الزيادة المعتمدة من الإدارة تُطبَّق آليًّا على كل جلبٍ للسعر العالمي —
+      //   والسياسة تصل مع السعر نفسه، فتغييرها يسري من الجلب التالي.
+      const world = Number(result.perGram.toFixed(2));
+      const markup = result.markup || null;
+      const price = applyHqMarkup(world, markup);
+      setPricePolicy((p) => ({ ...(p || {}), markup, at: result.policyAt || p?.at || null, by: result.policyBy || p?.by || null }));
       setPriceData((prev) => {
-        const history = [...prev.history, { date: new Date().toISOString(), price }].slice(-120);
-        const next = { ...prev, current: price, currency: "ر.س", history };
+        const history = [...prev.history, { date: new Date().toISOString(), price, world }].slice(-120);
+        const next = { ...prev, current: price, world24: world, currency: "ر.س", history, markup, source: result.source === "hq" ? "hq" : "auto", policyAt: result.policyAt || null };
         window.storage.set(PRICE_KEY, JSON.stringify(next), false).catch((e) => console.error(e));
         return next;
       });
@@ -4710,8 +4728,10 @@ export default function GoldInventoryApp() {
     // كل دقيقتين: الرسم يمتلئ أسرع، وسعر الذهب يتحرك فعلًا خلالها.
     const interval = setInterval(runAutoFetch, 2 * 60 * 1000);
     return () => clearInterval(interval);
+    // ⚠ ومع الدخول أيضًا: /gold-price يحتاج الجلسة، وسياسة الإدارة (الزيادة)
+    //   تصل معه — فجلبٌ قبل الدخول يفشل ويبقى «تعذّر الجلب» ظاهرًا دقيقتين.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading]);
+  }, [loading, currentUser?.id]);
 
   const activeItems = useMemo(() => items.filter((i) => remainingQty(i) > 0), [items]);
 
@@ -5481,12 +5501,29 @@ export default function GoldInventoryApp() {
     persistItems(items.filter((i) => i.id !== id));
     flashToast("تم الحذف");
   };
+  // ⚠ ما يُدخل هو السعر العالمي؛ سعر العمل = العالمي + زيادة الإدارة (إن وُجدت)
   const handleSetPrice = (val, currency) => {
-    const history = [...priceData.history, { date: new Date().toISOString(), price: val }].slice(-30);
-    persistPrice({ current: val, currency, history });
+    const markup = pricePolicy?.markup || null;
+    const current = applyHqMarkup(val, markup);
+    const history = [...priceData.history, { date: new Date().toISOString(), price: current, world: val }].slice(-30);
+    persistPrice({ ...priceData, current, world24: val, currency, history, markup, source: "manual" });
     setShowPrice(false);
-    flashToast("تم تحديث السعر");
+    flashToast(markup ? `السعر العالمي ${fmtMoney(val)} + زيادة الإدارة ${markupLabel(markup)} = ${fmtMoney(current)}` : "تم تحديث السعر");
   };
+
+  // ⚠ سياسةٌ جديدة من الإدارة تُطبَّق فورًا على آخر سعرٍ عالمي معروف — لا
+  //   تنتظر الجلب التالي، فلا يبيع الفرع دقيقتين بالزيادة القديمة.
+  useEffect(() => {
+    if (!pricePolicy?.at || pricePolicy.at === priceData.policyAt) return;
+    const world = Number(pricePolicy.world24Manual) > 0 ? Number(pricePolicy.world24Manual) : Number(priceData.world24) || 0;
+    if (!(world > 0)) return;
+    const markup = pricePolicy.markup || null;
+    const current = applyHqMarkup(world, markup);
+    persistPrice({ ...priceData, current, world24: world, markup, source: Number(pricePolicy.world24Manual) > 0 ? "hq" : (priceData.source || "auto"), policyAt: pricePolicy.at,
+      history: [...(priceData.history || []), { date: new Date().toISOString(), price: current, world, by: pricePolicy.by || "الإدارة" }].slice(-120) });
+    if (current !== priceData.current) flashToast(markup ? `زيادة الإدارة ${markupLabel(markup)} — السعر الآن ${fmtMoney(current)}` : `السعر من الإدارة: ${fmtMoney(current)}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pricePolicy?.at]);
 
   // -------- handlers: sales --------
   // ── بيع جزئي بالوزن ──
@@ -7445,6 +7482,7 @@ export default function GoldInventoryApp() {
         {morePage === null && tab === "home" && (
           <HomeScreen
             userName={currentUser?.name || ""}
+            notices={hqNotices}
             totals={totals}
             scrapTotals={scrapTotals}
             safeGoldBalance={safeGoldBalance}
@@ -8564,6 +8602,29 @@ export default function GoldInventoryApp() {
             periodLocks={appSettings?.periodLocks || null}
             onReview={handleAddReview}
             onGo={(page) => openPage(page)}
+            onBack={() => setMorePage(null)}
+          />
+        )}
+        {morePage === "aiAccountant" && (
+          <AccountantAiPage
+            canPost={role === "manager" || role === "accountant"}
+            onAsk={async (messages) => {
+              try { return await api.aiApi.accountant(messages); }
+              catch (err) { return { error: apiErrorMessage(err, "تعذّر الوصول للمساعد المحاسبي") }; }
+            }}
+            onLoadProposals={async () => (await api.aiApi.proposals()).proposals || []}
+            onApprove={async (id) => {
+              try {
+                const r = await api.aiApi.approveProposal(id);
+                flashToast(`رُحّل القيد ${r.proposal?.journalRef || ""} باسمك`);
+                loadBootstrap(currentUser).catch(() => {});
+                return r;
+              } catch (err) { return { error: apiErrorMessage(err, "تعذّر ترحيل القيد") }; }
+            }}
+            onReject={async (id) => {
+              try { return await api.aiApi.rejectProposal(id); }
+              catch (err) { return { error: apiErrorMessage(err, "تعذّر رفض المسودّة") }; }
+            }}
             onBack={() => setMorePage(null)}
           />
         )}
