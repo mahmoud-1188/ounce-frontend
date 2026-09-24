@@ -58,6 +58,7 @@ const API_ERROR_MESSAGES = {
   approval_not_approved: "الطلب لم يُعتمد بعد",
   approval_amount_mismatch: "المبلغ يختلف عمّا اعتُمد — أرسل طلبًا جديدًا",
   approval_already_decided: "قُرِّر هذا الطلب سلفًا",
+  approval_requires_hq: "هذا الطلب تعتمده الإدارة — بانتظار قرارها",
   rejection_reason_required: "اكتب سبب الرفض",
   reviewer_role_required: "الحكم بيد المحاسب أو المدير",
   review_note_required: "اكتب السبب — «يحتاج تعديلًا» و«ملاحظة» بلا نصٍّ لا يُفيدان",
@@ -424,6 +425,7 @@ export default function GoldInventoryApp() {
   // ── قسم المحاسب والرقابة (migration 037) ──
   const [reviews, setReviews] = useState([]);           // أحكام المراجعة — من الخادم، تُضاف ولا تُعدَّل
   // ── تحكّم الإدارة (migration 038) ──
+  const [approvalRouting, setApprovalRouting] = useState({}); // من يعتمد ماذا — من الإدارة (hq|branch)
   const [pricePolicy, setPricePolicy] = useState(null); // { markup:{mode,value}|null, world24Manual, at, by }
   const [hqNotices, setHqNotices] = useState([]);       // إعلانات الإدارة [{id, text, by, at, until}]
   const [branchLock, setBranchLock] = useState(null);   // { reason, lockedAt, lockedBy } — قفلٌ من الإدارة (423)
@@ -1389,7 +1391,7 @@ export default function GoldInventoryApp() {
         refundTarget: req.refundTarget,
         note: req.note || null,
       });
-      if (res.approvalPending) { notePendingApproval(res.approvalPending); return { ok: false, pending: true, errors: [`فوق حدّ الاعتماد — أُرسل الطلب ${res.approvalPending.ref} للمدير`] }; }
+      if (res.approvalPending) { notePendingApproval(res.approvalPending); return { ok: false, pending: true, errors: [`فوق حدّ الاعتماد — أُرسل الطلب ${res.approvalPending.ref} ${res.approvalPending.approverKind === "hq" ? "للإدارة" : "للمدير"}`] }; }
       const r = res.return;
       const sale = sales.find((x) => x.id === req.saleId);
       const record = {
@@ -1507,7 +1509,7 @@ export default function GoldInventoryApp() {
   /// طلبٌ فوق حدّ الاعتماد: لم يُنفَّذ شيء، وحُفظ طلبًا بحمولته (202).
   const notePendingApproval = (ap) => {
     setApprovals((prev) => [ap, ...prev.filter((x) => x.id !== ap.id)]);
-    flashToast(`فوق حدّ الاعتماد — أُرسل الطلب ${ap.ref} (${fmtMoney(ap.amount)}) للمدير، ويُنفَّذ عند اعتماده`);
+    flashToast(`فوق حدّ الاعتماد — أُرسل الطلب ${ap.ref} (${fmtMoney(ap.amount)}) ${ap.approverKind === "hq" ? "للإدارة" : "للمدير"}، ويُنفَّذ عند اعتماده`);
   };
 
   /// تنفيذ طلبٍ معتمد — تُعاد العملية نفسها بحمولتها ومعها approvalId،
@@ -4410,6 +4412,7 @@ export default function GoldInventoryApp() {
     setApprovals(n.approvals);
     setReviews(n.reviews);
     setPricePolicy(n.pricePolicy);
+    setApprovalRouting(n.approvalRouting || {});
     setHqNotices(n.notices);
     setFixedAssets(n.fixedAssets);
     setDepreciations(n.depreciationSchedule);
@@ -8634,6 +8637,7 @@ export default function GoldInventoryApp() {
             currency={priceData.currency}
             canDecide={role === "manager"}
             settings={appSettings}
+            routing={approvalRouting}
             onDecide={handleDecideApproval}
             onExecute={executeApproval}
             onBack={() => setMorePage(null)}

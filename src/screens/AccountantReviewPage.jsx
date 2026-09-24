@@ -104,7 +104,7 @@ function AccountantReviewPage({ queue = [], reviews = [], audits = [], items = [
                     {it.lastReview && (
                       <p style={{ color: REVIEW_VERDICTS[it.lastReview.verdict]?.color || "var(--text2)" }} className="text-[11px] mt-1">
                         {it.changedSinceReview ? "⚠ تغيّرت بعد اعتمادها — " : ""}
-                        آخر حكم: {REVIEW_VERDICTS[it.lastReview.verdict]?.label} · {it.lastReview.reviewer}
+                        آخر حكم: {REVIEW_VERDICTS[it.lastReview.verdict]?.label} · {it.lastReview.reviewer}{it.lastReview.reviewerRole === "hq" ? " (الإدارة)" : ""}
                         {it.lastReview.note ? ` — ${it.lastReview.note}` : ""}
                       </p>
                     )}
@@ -187,7 +187,7 @@ function AccountantReviewPage({ queue = [], reviews = [], audits = [], items = [
                   </div>
                   {r.note && <p style={{ color: "var(--text)" }} className="text-[11px] mt-1">{r.note}</p>}
                   <p style={{ color: "var(--text3)" }} className="text-[11px] mt-0.5">
-                    {r.reviewer}{r.reviewerRole ? ` (${ROLES[r.reviewerRole]?.label || r.reviewerRole})` : ""} · {new Date(r.date).toLocaleString("en-GB")}
+                    {r.reviewer}{r.reviewerRole === "hq" ? " (الإدارة)" : r.reviewerRole ? ` (${ROLES[r.reviewerRole]?.label || r.reviewerRole})` : ""} · {new Date(r.date).toLocaleString("en-GB")}
                   </p>
                 </Card>
               ))}

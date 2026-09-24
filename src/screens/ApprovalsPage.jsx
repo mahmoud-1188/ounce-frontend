@@ -14,14 +14,16 @@ import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 /// التنفيذ في معاملته)، والمرفوض يبقى شاهدًا.
 const LIVE_KINDS = ["expense", "refund", "supplier_settle"];
 
-function ApprovalsPage({ approvals = [], currency, canDecide = false, settings = {}, onDecide, onExecute, onBack }) {
+function ApprovalsPage({ approvals = [], currency, canDecide = false, settings = {}, routing = {}, onDecide, onExecute, onBack }) {
   const [tab, setTab] = useState("pending");
   const [openId, setOpenId] = useState(null);
   const [note, setNote] = useState("");
   const [busyId, setBusyId] = useState(null);
   const [err, setErr] = useState("");
-  const pending = approvals.filter((a) => a.status === "pending");
-  const done = approvals.filter((a) => a.status !== "pending");
+  // ⚠ المعتمَد الذي لم يُنفَّذ بعد (كقرار الإدارة) يبقى في «المعلّقة» — ينتظر «نفِّذ الآن»
+  const awaitingRun = (a) => a.status === "approved" && !a.executedAt;
+  const pending = approvals.filter((a) => a.status === "pending" || awaitingRun(a));
+  const done = approvals.filter((a) => a.status !== "pending" && !awaitingRun(a));
   const list = tab === "pending" ? pending : done;
   const kindRules = APPROVAL_RULES.filter((r) => LIVE_KINDS.includes(r.id))
     .map((r) => ({ ...r, th: settings.approvalThresholds?.[r.id] ?? r.threshold }));
@@ -73,12 +75,12 @@ function ApprovalsPage({ approvals = [], currency, canDecide = false, settings =
                   </div>
                   <p style={{ color: "var(--text)" }} className="text-xs mt-1">{a.kindLabel} — {describe(a)}</p>
                   <p style={{ color: "var(--text3)" }} className="text-[11px]">
-                    طلبه {a.requester || "—"} · {a.requestedAt ? new Date(a.requestedAt).toLocaleString("en-GB") : ""} · يعتمده المدير
+                    طلبه {a.requester || "—"} · {a.requestedAt ? new Date(a.requestedAt).toLocaleString("en-GB") : ""} · {a.approverKind === "hq" ? "تعتمده الإدارة" : "يعتمده المدير"}
                     {a.note ? ` · ${a.note}` : ""}
                   </p>
                   {a.status !== "pending" && (
                     <p style={{ color: st.color }} className="text-[11px] mt-1">
-                      {a.selfApproved ? "اعتمادٌ ذاتيّ للمدير — دُوِّن" : a.status === "rejected" ? "رُفض" : "اعتُمد"} — {a.approver || "—"} · {a.decidedAt ? new Date(a.decidedAt).toLocaleString("en-GB") : ""}
+                      {a.selfApproved ? "اعتمادٌ ذاتيّ للمدير — دُوِّن" : a.status === "rejected" ? "رُفض" : "اعتُمد"} — {a.approver || "—"}{a.approverKind === "hq" ? " (الإدارة)" : ""} · {a.decidedAt ? new Date(a.decidedAt).toLocaleString("en-GB") : ""}
                       {a.decisionNote ? ` — ${a.decisionNote}` : ""}{a.executedAt ? ` · نُفِّذ ${new Date(a.executedAt).toLocaleString("en-GB")}` : ""}
                     </p>
                   )}
@@ -90,7 +92,13 @@ function ApprovalsPage({ approvals = [], currency, canDecide = false, settings =
                       {busy ? "جارٍ التنفيذ…" : "نفِّذ الآن"}
                     </button>
                   )}
-                  {a.status === "pending" && canDecide && (
+                  {/* ⚠ مسارُه للإدارة: القرار في التطبيق المركزي، والتنفيذ هنا بعد اعتمادها */}
+                  {a.status === "pending" && a.approverKind === "hq" && (
+                    <p style={{ color: "var(--accent)" }} className="text-[11px] mt-2 pt-2 font-bold" >
+                      ⏳ بانتظار قرار الإدارة — يظهر هنا «نفِّذ الآن» فور اعتمادها
+                    </p>
+                  )}
+                  {a.status === "pending" && a.approverKind !== "hq" && canDecide && (
                     <div className="mt-2 pt-2" style={{ borderTop: "1px solid var(--line)" }}>
                       {open && <Field label="ملاحظة القرار (إجبارية عند الرفض)"><input style={inputStyle} value={note} onChange={(e) => setNote(e.target.value)} /></Field>}
                       <div className="grid grid-cols-3 gap-2">
@@ -110,10 +118,10 @@ function ApprovalsPage({ approvals = [], currency, canDecide = false, settings =
           {kindRules.map((r) => (
             <div key={r.id} className="flex items-center justify-between py-0.5">
               <span style={{ color: "var(--text2)" }} className="text-[11px]">{r.label}</span>
-              <span style={{ color: "var(--text3)" }} className="text-[11px]">{r.th > 0 ? `من ${fmtMoney(r.th)}` : "دائمًا"} · المدير</span>
+              <span style={{ color: "var(--text3)" }} className="text-[11px]">{r.th > 0 ? `من ${fmtMoney(r.th)}` : "دائمًا"} · {routing[r.id] === "hq" ? "الإدارة" : "المدير"}</span>
             </div>
           ))}
-          <p style={{ color: "var(--text3)" }} className="text-[11px] mt-1">⚖ المدير يعتمد نفسه فقط لأن لا أحدَ فوقه في الفرع — ويُدوَّن اعتمادًا ذاتيًّا.</p>
+          <p style={{ color: "var(--text3)" }} className="text-[11px] mt-1">⚖ المدير يعتمد نفسه فقط لأن لا أحدَ فوقه في الفرع — ويُدوَّن اعتمادًا ذاتيًّا. وما جعلته الإدارة لها يُقرَّر في التطبيق المركزي ويُنفَّذ هنا.</p>
         </Card>
       </div>
     </div>
