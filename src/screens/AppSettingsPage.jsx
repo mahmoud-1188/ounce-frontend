@@ -9,13 +9,14 @@ import { generateRecoveryCode, inputStyle, normalizeRecovery, openWhatsApp, pret
 import { sanitizeNumeric } from "../domain/sanitizeNumeric.js";
 import { verifyToken } from "../domain/verifyToken.js";
 import { Card } from "../ui/Card.jsx";
+import { ControlsSettingsCard } from "../ui/ControlsSettingsCard.jsx";
 import { Field } from "../ui/Field.jsx";
 import { MgrFeeSettingsCard } from "../ui/MgrFeeSettingsCard.jsx";
 import { NumericInput } from "../ui/NumericInput.jsx";
 import { RfidSettingsCard } from "../ui/RfidSettingsCard.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 
-function AppSettingsPage({ settings, onSave, branchIdentity, onSaveBranch, hqPermissions, priceData = {}, onBackfill, onBack }) {
+function AppSettingsPage({ settings, onSave, branchIdentity, onSaveBranch, hqPermissions, priceData = {}, onBackfill, canEditControls = false, onSaveControls = null, onBack }) {
   const [newRecovery, setNewRecovery] = useState("");
   const [fees, setFees] = useState(() => ({ ...DEFAULT_CARD_FEES, ...(settings.cardFees || {}) }));
   const [margins, setMargins] = useState(() => ({ ...DEFAULT_MARGINS, ...(settings.marginByKarat || {}) }));
@@ -125,6 +126,15 @@ function AppSettingsPage({ settings, onSave, branchIdentity, onSaveBranch, hqPer
         <p style={{ color: "var(--text3)" }} className="text-[10px] mb-4">
           الذهبي الداكن هو الأصل — لا يبهر العين في إضاءة المحل ساعات العمل الطويلة.
         </p>
+
+        {onSaveControls && (
+          <>
+            <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">
+              الرقابة — الاعتماد وقفل الفترات
+            </p>
+            <ControlsSettingsCard settings={settings} canEdit={canEditControls} onSave={onSaveControls} />
+          </>
+        )}
 
         <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">
           يوم العمل

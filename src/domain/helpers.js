@@ -3,8 +3,8 @@ import * as XLSX from "xlsx";
 import { Search } from "lucide-react";
 import { AI_APP_GUIDE, ARABIC_INDIC, EASTERN_INDIC, TRACE_TOPICS } from "../core/assistant.js";
 import { CATEGORY_TO_ACCOUNT, CHART_OF_ACCOUNTS, JOURNALS } from "../core/chart.js";
-import { ACCOUNT_TREE, AI_APP_MANUAL, ALL_ACCOUNT_NODES, APP_MODES, ATTACH_PREFIX, B32, BREAKPOINTS, C128, CASH_ACCOUNT_OF, CATEGORY_STATE, DEFAULT_CATEGORIES, EXCHANGE_KINDS, EXPENSE_ACCOUNT_OF, EXPENSE_CATEGORIES, MGR_FEE_DEFAULT, MIGRATION_FLAG, NHR, NHR_POWER_MAX_DBM, OUNCE_SECRET, PRICE_SANE, PRICE_SOURCES, QUERY_FIELDS, QUERY_OPS, QR_EXP, QR_VER, RECOVERY_ALPHABET, RECOVERY_WINDOW_MIN, RFID_DEFAULTS, RFID_SECTIONS } from "../core/constants.js";
-import { GRAMS_PER_OUNCE, PURITY, WEIGHT_UNITS, fine24, fmt, fmtW, fromHalalas, halalas, pricePerGram, roundW, weightTimesPrice } from "../core/money.js";
+import { DOC_KINDS, EPC_EPOCH, ACCOUNT_TREE, AI_APP_MANUAL, ALL_ACCOUNT_NODES, APP_MODES, ATTACH_PREFIX, B32, BREAKPOINTS, C128, CASH_ACCOUNT_OF, CATEGORY_STATE, DEFAULT_CATEGORIES, EXCHANGE_KINDS, EXPENSE_ACCOUNT_OF, EXPENSE_CATEGORIES, MGR_FEE_DEFAULT, MIGRATION_FLAG, NHR, NHR_POWER_MAX_DBM, OUNCE_SECRET, PRICE_SANE, PRICE_SOURCES, QUERY_FIELDS, QUERY_OPS, QR_EXP, QR_VER, RECOVERY_ALPHABET, RECOVERY_WINDOW_MIN, RFID_DEFAULTS, RFID_SECTIONS } from "../core/constants.js";
+import { GRAMS_PER_OUNCE, PURITY, WEIGHT_UNITS, fine24, fmt, fmtMoney, fmtW, fromHalalas, halalas, pricePerGram, roundW, weightTimesPrice } from "../core/money.js";
 import { BANK_COLUMN_HINTS, DEFAULT_CARD_FEES, DEFAULT_MARGINS, USD_TO_SAR_PEG } from "../core/money-rules.js";
 import { NAV_BUNDLES, NAV_MAX_PER_ROW } from "../core/navigation.js";
 import { FUNDING_SOURCES, GOLD_OUT_DESTINATIONS, ONLINE_STATUS } from "../core/workflow.js";
@@ -12,6 +12,7 @@ import { aiApi, goldPriceApi } from "../core/api.js";
 import { accountByCode } from "./accountByCode.js";
 import { journalBalanced } from "./journalBalanced.js";
 import { key } from "./key.js";
+import { buildPlateEpc } from "./buildPlateEpc.js";
 
 const r2 = (v) => Math.round((Number(v) || 0) * 100) / 100;
 
@@ -3202,7 +3203,10 @@ function tsplJobBytes({ canvas, cfg, copies = 1, code = "" }) {
   const enc = new TextEncoder();
   const bmp = canvasToTsplBitmap(canvas);
   const rfidLine = cfg.rfid && code
-    ? String(cfg.rfidCommand || 'RFID WRITE,EPC,"{HEX}"').replace("{HEX}", codeToEpcHex(code)).replace("{CODE}", code)
+    // ⚠ الرقاقة لوحةُ تعريف (المرجع): 8 بايت رمز + 2 رقم المحل + 2 تاريخ الكتابة.
+    //   رقاقةٌ من محلٍّ آخر تُعرف أنها ليست لنا بدل «مجهولة»، والتاريخ يكشف
+    //   رقاقةً أُعيد استعمالها. والقديمة (رمزٌ وحده) تبقى تُطابَق.
+    ? String(cfg.rfidCommand || 'RFID WRITE,EPC,"{HEX}"').replace("{HEX}", buildPlateEpc({ code, storeId: cfg.storeId || 0 })).replace("{CODE}", code)
     : null;
   const head = [
     `SIZE ${cfg.labelWidthMm || 50} mm, ${cfg.labelHeightMm || 20} mm`,
@@ -3363,4 +3367,308 @@ function generateRecoveryCode() {
   return Array.from({ length: 4 }, () => Array.from({ length: 4 }, pick).join("")).join("-");
 }
 
-export { accountForCategory, accountGroup, accountLabel, accountPath, aiAllowedFor, aiAllowedForRole, aiScope, askReportAi, attachmentByteSize, b32Decode, b32Encode, balancesAt, bleWriteChunked, branchDataKey, branchSnapshotKey, btSupported, bundleById, bundledPages, canvasToTsplBitmap, cardFeeOf, cashAccountFor, cashTrialBalance, categoryById, categoryLabel, childrenOf, cleanToken, codeCounter, codeToEpcHex, compressImage, contentWidth, createNhrFileAssembler, dayEnd, dayStart, detectColumns, detectTraceTopic, describeQuery, diffDatasets, drawCode128, drawQr, emptyRow, exchangeKind, expenseAccountFor, exportLedgerXlsx, exportTablesPdf, fetchAiAuditNarrative, fetchAiBusinessInsights, fetchAiChatReply, fetchAiReportSpec, fetchGoldPriceSAR, fetchLiveGram24, fineAt, fmtWeight, fineToKarat, fromGram, fundingSourceLabel, generateRecoveryCode, generateUnitCode, goldDestLabel, goldProfit, guessScreens, hiddenNumbersScan, inPeriod, inputStyle, isBundle, isGoldCogs, isLiveScrap, isPartial, isUnder, issueBranchCode, issueLicense, itemLabel, journalOf, journalTrialBalance, loadAttachment, lotAllocatedPieces, lotAllocatedWeight, lotReconcile, marginFor, mgrFeeBreakdown, mgrFeeEnabled, mgrFeeOn, mgrFeeRate, migrateLegacyKeys, modeAllowsAction, modeAllowsPage, modeAllowsTab, nameExists, navPerRow, nhrClassify, nhrCommand, nhrCommands, nhrCrc32, nhrHex, nhrIsLiveFrame, nhrParseBatchFile, nhrParseJson, nhrParseLiveFrame, normHeader, normalizeArabicQuery, normalizeFundingSource, normalizeName, normalizeRecovery, onlineBlockReason, openAttachment, openWhatsApp, ounceHash, periodRange, prettyPhone, prettyToken, priceBreakdown, printLabelToDevice, printedCount, qrEccBytes, qrGaloisTables, qrMatrix, qrMul, qrRS, r2, r3, readFileAsDataUrl, readKeyOrNull, remainingQty, renderLabelCanvas, reportFactsText, reportFindings, resolveCompare, resolveRange, rfidSettingsFor, runAuditChecks, runQuery, saleLineProvenance, saleModeOf, saleProfitOf, saleProfitSplit, saveAttachment, scrapPrice24, sellPrice24, sendRawToPrinter, setRuntimeCategories, splitCsvLine, statementDigest, streamBase, toCsv, toGram, toIntlPhone, toLatinDigits, trustBalance, tsplCalibrateBytes, tsplJobBytes, unitById, unitCostBasis, unitCurrentValue, usbPrint, useDebounced, useNhrReader, useViewport, useVoice, useWedgeScanner, vendorChallenge, vendorResponse, weekStart, weightTrialBalance };
+// ═══════════════════════════════════════════════════════════════════════
+//  قسم المحاسب والرقابة والأرشيف (v197 في المرجع)
+// ═══════════════════════════════════════════════════════════════════════
+
+const prefersReducedMotion = () =>
+  typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/// رقمٌ يعدّ من قيمته السابقة إلى الجديدة — 550 مل، بتباطؤٍ في النهاية.
+function useCountUp(value, { duration = 550, decimals = 2 } = {}) {
+  const [shown, setShown] = useState(Number(value) || 0);
+  const fromRef = useRef(Number(value) || 0);
+  useEffect(() => {
+    const target = Number(value) || 0;
+    if (prefersReducedMotion() || Math.abs(target - fromRef.current) < 0.005) { fromRef.current = target; setShown(target); return undefined; }
+    const start = performance.now(), from = fromRef.current;
+    let raf = 0;
+    const tick = (now) => {
+      const t = Math.min(1, (now - start) / duration);
+      const e = 1 - Math.pow(1 - t, 3);
+      setShown(from + (target - from) * e);
+      if (t < 1) raf = requestAnimationFrame(tick); else fromRef.current = target;
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [value, duration]);
+  return Number(shown.toFixed(decimals));
+}
+
+/// حدود الفترة من مفتاحٍ مختصر — أو من تاريخين.
+function reportPeriod(key, custom = {}) {
+  const now = new Date();
+  const iso = (d) => d.toISOString();
+  const startOf = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  let from, to = now, label;
+  if (key === "today") { from = startOf(now); label = "اليوم"; }
+  else if (key === "week") { from = new Date(startOf(now).getTime() - 6 * 86400000); label = "٧ أيام"; }
+  else if (key === "month") { from = new Date(now.getFullYear(), now.getMonth(), 1); label = "هذا الشهر"; }
+  else if (key === "quarter") { from = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1); label = "هذا الربع"; }
+  else if (key === "year") { from = new Date(now.getFullYear(), 0, 1); label = "هذه السنة"; }
+  else if (key === "custom") {
+    from = custom.from ? new Date(custom.from) : new Date(now.getFullYear(), 0, 1);
+    to = custom.to ? new Date(new Date(custom.to).getTime() + 86400000 - 1) : now;
+    label = `${(custom.from || "").slice(0, 10)} ← ${(custom.to || "").slice(0, 10)}`;
+  } else { from = new Date(now.getFullYear(), now.getMonth(), 1); label = "هذا الشهر"; }
+  return { from: iso(from), to: iso(to), label };
+}
+
+const monthRange = (period) => { const [y, m] = String(period || "").split("-").map(Number); if (!y || !m) return { from: "", to: "" }; const last = new Date(y, m, 0).getDate(); return { from: `${y}-${String(m).padStart(2, "0")}-01`, to: `${y}-${String(m).padStart(2, "0")}-${String(last).padStart(2, "0")}` }; };
+
+/// المسجَّل في 6500 (عمولات الشبكة) لمدّة — بلا المعكوس.
+function networkFeesRecorded(journal = [], from = "", to = "") {
+  let h = 0;
+  const inRange = (d) => { const x = String(d || "").slice(0, 10); return (!from || x >= from) && (!to || x <= to); };
+  (journal || []).forEach((e) => {
+    if (e.reversed || e.isReversal || !inRange(e.date)) return;
+    if (e.opType === "bank_fee_adjust" || e.opType === "bank_fee_refund") return;
+    (e.lines || []).forEach((l) => { if (l.account === "6500") h += halalas(l.debit) - halalas(l.credit); });
+  });
+  return fromHalalas(h);
+}
+
+/// فهرس الأرشيف — كل مستندٍ بنوعه ومرجعه وطرفه ومبلغه.
+function documentIndex({ sales = [], returns = [], lots = [], taskirEntries = [], taskirOfficeTx = [], scrapEntries = [], receipts = [], expenses = [], payrollRuns = [], suppliers = [], customers = [], taskirOffices = [] } = {}) {
+  const supName = (id) => suppliers.find((x) => x.id === id)?.name || "مورد";
+  const custName = (id) => customers.find((x) => x.id === id)?.name || "";
+  const offName = (id) => taskirOffices.find((x) => x.id === id)?.name || "مكتب";
+  const out = [];
+  sales.forEach((x) => { if (!x.voided) out.push({ id: `sale:${x.id}`, kind: x.external ? "external" : "sale", ref: x.ref, date: x.date, party: x.customerName || custName(x.customerId) || "عميل نقدي", amount: Number(x.total) || 0, note: `${(x.lines || []).length} سطر · ${x.paymentMethod || ""}`, rec: x }); });
+  returns.forEach((r) => out.push({ id: `ret:${r.id}`, kind: "ret", ref: r.ref, date: r.date, party: r.customerName || "", amount: Number(r.refund) || 0, note: `من ${r.saleRef || ""}${r.reasonLabel ? ` · ${r.reasonLabel}` : r.note ? ` · ${r.note}` : ""}`, rec: r }));
+  lots.forEach((l) => { if (l.source === "opening" || l.voided) return; out.push({ id: `lot:${l.id}`, kind: "purchase", ref: l.ref, date: l.date, party: supName(l.supplierId), amount: Number(l.totalCost) || 0, note: `عيار ${l.karat} · ${fmtW(l.weight)} جم · ${l.paymentMethod || ""}`, attachId: l.invoiceAttachId || null, attachFallback: l.invoiceFile || null, rec: l }); });
+  taskirEntries.forEach((t) => out.push({ id: `tsk:${t.id}`, kind: "settle", ref: t.ref, date: t.date, party: supName(t.supplierId), amount: Number(t.workmanshipAmount) || 0, note: `${t.goldSource === "fees_only" ? "أجور" : `${fmtW(t.weight)} جم عيار ${t.karat}`}${t.note ? ` · ${t.note}` : ""}`, attachId: t.invoiceAttachId || null, rec: t }));
+  taskirOfficeTx.forEach((o) => out.push({ id: `off:${o.id}`, kind: "office", ref: o.ref || o.id, date: o.date, party: offName(o.officeId), amount: Number(o.amount) || 0, note: `${fmtW(o.weight)} جم · ${o.method || ""}`, rec: o }));
+  scrapEntries.forEach((e) => { if (e.source === "trade_in") return; out.push({ id: `scr:${e.id}`, kind: "scrap", ref: e.ref, date: e.date, party: e.customerName || e.description || "", amount: Number(e.total) || 0, note: `${fmtW(e.weight)} جم عيار ${e.karat}`, rec: e }); });
+  receipts.forEach((r) => { if ((Number(r.amount) || 0) <= 0) return; out.push({ id: `rcp:${r.id}`, kind: "receipt", ref: r.ref, date: r.date, party: r.customerName || custName(r.customerId), amount: Number(r.amount) || 0, note: r.note || r.method || "", rec: r }); });
+  expenses.forEach((x) => { if (x.voided) return; out.push({ id: `exp:${x.id}`, kind: "expense", ref: x.ref, date: x.date, party: x.name || "", amount: Number(x.amount) || 0, note: x.category || "", rec: x }); });
+  payrollRuns.forEach((r) => out.push({ id: `pay:${r.id}`, kind: "payroll", ref: r.ref, date: r.date, party: `${(r.slips || []).length} موظف`, amount: Number(r.netPayable) || 0, note: r.period, rec: r }));
+  return out.filter((d) => d.date).sort((a, b) => String(b.date).localeCompare(String(a.date)));
+}
+
+function documentPdfSections(doc, { currency = "ر.س" } = {}) {
+  const x = doc.rec || {};
+  const money = (v) => fmtMoney(v || 0);
+  if (doc.kind === "sale" || doc.kind === "external") {
+    return [{ title: "الأصناف", headers: ["الصنف", "الرمز", "العيار", "الوزن", "الكمّية", `السعر (${currency})`], rows: [
+      ...(x.lines || []).map((l) => [l.name || l.itemName || l.description || "", l.unitCode || "", l.karatSnapshot || l.karat || "", fmtW(l.weightSnapshot || l.weight || 0), l.quantity || 1, money((Number(l.unitPrice) || 0) * (Number(l.quantity) || 1))]),
+      ["الإجمالي", "", "", "", "", money(x.total)],
+    ], note: `${x.paymentMethod ? `الدفع: ${x.paymentMethod}` : ""}${x.taxAmount ? ` · الضريبة ${money(x.taxAmount)}` : ""}${x.sellerName ? ` · البائع: ${x.sellerName}` : ""}` }];
+  }
+  if (doc.kind === "ret") return [{ title: "المرتجع", headers: ["البند", "القيمة"], rows: [["الفاتورة الأصل", x.saleRef || ""], ["السبب", x.reasonLabel || x.note || ""], ["الردّ", x.refundLabel || x.refundSource || x.refundTarget || ""], ["الصافي", money(x.net)], ["الضريبة", money(x.tax)], ["المردود", money(x.refund)]] }];
+  if (doc.kind === "purchase") return [{ title: "دفعة الشراء", headers: ["البند", "القيمة"], rows: [["المورد", doc.party], ["العيار", x.karat], ["الوزن", `${fmtW(x.weight)} جم`], ["القطع", x.pieces || ""], ["تكلفة الجرام", money(x.costPerGram)], ["الأجور", money(x.workmanshipTotal)], ["طريقة السداد", x.paymentMethod || ""], ["الإجمالي", money(x.totalCost)]], note: x.invoiceName ? `فاتورة المورد المرفقة: ${x.invoiceName}` : "" }];
+  if (doc.kind === "settle") return [{ title: "سند سداد مورد", headers: ["البند", "القيمة"], rows: [["المورد", doc.party], ["مصدر الذهب", x.goldSource || ""], ["الوزن", `${fmtW(x.weight)} جم عيار ${x.karat || ""}`], ["الأجور المسدَّدة", money(x.workmanshipAmount)], ["ملاحظة", x.note || ""]] }];
+  if (doc.kind === "office") return [{ title: "شراء من مكتب تسكير", headers: ["البند", "القيمة"], rows: [["المكتب", doc.party], ["الوزن", `${fmtW(x.weight)} جم`], ["المبلغ", money(x.amount)], ["الطريقة", x.method || ""]] }];
+  if (doc.kind === "scrap") return [{ title: "سند شراء كسر", headers: ["البند", "القيمة"], rows: [["البائع", doc.party], ["الوزن", `${fmtW(x.weight)} جم عيار ${x.karat}`], ["سعر الجرام", money(x.pricePerGram)], ["الإجمالي", money(x.total)], ["الدفع", x.paymentMethod || ""]] }];
+  if (doc.kind === "receipt") return [{ title: "سند قبض", headers: ["البند", "القيمة"], rows: [["العميل", doc.party], ["المبلغ", money(x.amount)], ["الطريقة", x.method || ""], ["ملاحظة", x.note || ""]] }];
+  if (doc.kind === "expense") return [{ title: "سند صرف", headers: ["البند", "القيمة"], rows: [["البيان", x.name || ""], ["الفئة", x.category || ""], ["المصدر", x.fundingSource || ""], ["المبلغ", money(x.amount)]] }];
+  if (doc.kind === "payroll") return [{ title: `مسيّر رواتب ${x.period}`, headers: ["الموظف", "الإجمالي", "الاستقطاعات", "الصافي", "الصرف"], rows: [
+    ...(x.slips || []).map((sl) => [sl.employeeName, money(sl.gross), money((Number(sl.gross) || 0) - (Number(sl.net) || 0)), money(sl.net), x.paid?.[sl.employeeId] ? (x.paid[sl.employeeId].source === "bank" ? "تحويل بنكي" : "كاش/شبكة") : "—"]),
+    ["الإجمالي", "", "", money(x.netPayable), ""],
+  ] }];
+  return [{ title: doc.kindLabel || doc.kind, headers: ["البند", "القيمة"], rows: [["المرجع", doc.ref], ["الطرف", doc.party], ["المبلغ", money(doc.amount)]] }];
+}
+
+function printDocumentPdf(doc, { currency = "ر.س", branchName = "", onBlocked } = {}) {
+  return exportTablesPdf({ title: `${DOC_KINDS[doc.kind] || doc.kind} ${doc.ref || ""}`, subtitle: `${doc.party || ""} · ${new Date(doc.date).toLocaleString("en-GB")} · ${currency}${fmtMoney(doc.amount)}`, branchName, sections: documentPdfSections(doc, { currency }), sign: false, onBlocked });
+}
+
+/// توقيعٌ داخليّ للمساءلة — من أصدر القائمة ومتى (لا توقيعٌ رقميّ معتمد).
+function signStatement({ payload, by, role, branchName = "", note = "", at }) {
+  // ⚠ `at` يُقبل من الخارج ليُعاد الحساب بنفسه عند التحقّق.
+  const stamp = at || new Date().toISOString();
+  const body = { payload, by, role, branchName, note, at: stamp };
+  const text = JSON.stringify(body);
+  let h1 = 0x811c9dc5, h2 = 0x01000193, h3 = 0x9e3779b9;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    h1 = ((h1 ^ c) * 16777619) >>> 0;
+    h2 = ((h2 + c * (i + 7)) * 2654435761) >>> 0;
+    h3 = ((h3 ^ (c << (i % 13))) * 40503) >>> 0;
+  }
+  const sig = [h1, h2, h3].map((h) => h.toString(16).padStart(8, "0")).join("").toUpperCase();
+  return { ...body, sig, kind: "internalSignature" };
+}
+
+function deviceLabel() {
+  const ua = String((typeof navigator !== "undefined" && navigator.userAgent) || "");
+  const os = /Android/i.test(ua) ? "أندرويد" : /iPhone|iPad/i.test(ua) ? "آيفون"
+    : /Windows/i.test(ua) ? "ويندوز" : /Mac/i.test(ua) ? "ماك" : "جهاز";
+  const br = /Edg\//i.test(ua) ? "إيدج" : /Chrome/i.test(ua) ? "كروم"
+    : /Firefox/i.test(ua) ? "فايرفوكس" : /Safari/i.test(ua) ? "سفاري" : "متصفّح";
+  return `${os} · ${br}`;
+}
+
+/// الفترة السابقة بالطول نفسه — بالتقويم حين تنطبق على شهورٍ كاملة.
+function priorPeriodOf(from, to) {
+  const a = new Date(from).getTime(), b = new Date(to).getTime();
+  if (!Number.isFinite(a) || !Number.isFinite(b) || b < a) return null;
+  const DAY = 86400000;
+  const fa = new Date(from), fb = new Date(to);
+  const isMonthStart = fa.getUTCDate() === 1;
+  const isMonthEnd = new Date(fb.getTime() + DAY).getUTCDate() === 1;
+  let priorFrom, priorTo, days;
+  if (isMonthStart && isMonthEnd) {
+    const months = (fb.getUTCFullYear() - fa.getUTCFullYear()) * 12
+      + (fb.getUTCMonth() - fa.getUTCMonth()) + 1;
+    const pf = new Date(Date.UTC(fa.getUTCFullYear(), fa.getUTCMonth() - months, 1));
+    const pt = new Date(Date.UTC(fa.getUTCFullYear(), fa.getUTCMonth(), 1) - DAY);
+    priorFrom = pf.getTime(); priorTo = pt.getTime();
+    days = Math.round((priorTo - priorFrom) / DAY) + 1;
+  } else {
+    days = Math.round((b - a) / DAY) + 1;
+    priorTo = a - DAY;
+    priorFrom = priorTo - (days - 1) * DAY;
+  }
+  return {
+    from: new Date(priorFrom).toISOString().slice(0, 10),
+    to: new Date(priorTo).toISOString().slice(0, 10),
+    days,
+  };
+}
+
+function comparePeriods({ current, prior, labels = {} }) {
+  const pct = (now, was) => {
+    if (was === 0) return now === 0 ? 0 : null;
+    return Math.round(((now - was) / Math.abs(was)) * 1000) / 10;
+  };
+  const line = (key, label, unit = "money") => {
+    const now = Number(current?.[key]) || 0;
+    const was = Number(prior?.[key]) || 0;
+    const diff = unit === "weight" ? roundW(now - was) : fromHalalas(halalas(now) - halalas(was));
+    return { key, label, unit, now, was, diff, pct: pct(now, was) };
+  };
+  return {
+    money: [
+      line("revenue", labels.revenue || "الإيراد"),
+      line("cogs", labels.cogs || "تكلفة المبيعات"),
+      line("grossProfit", labels.grossProfit || "مجمل الربح"),
+      line("opexTotal", labels.opexTotal || "المصروفات"),
+      line("netProfit", labels.netProfit || "صافي الربح"),
+    ],
+    weight: [
+      line("fineIn", "الوارد وزنًا", "weight"),
+      line("fineOut", "الصادر وزنًا", "weight"),
+      line("fineClosing", "الرصيد الوزني", "weight"),
+    ],
+  };
+}
+
+const reviewKey = (kind, id) => `${kind}:${id}`;
+
+function reviewFingerprint(target) {
+  const t = target || {};
+  return [t.amount != null ? Math.round((Number(t.amount) || 0) * 100) : "", t.lines != null ? t.lines : "", t.reversed ? "r" : ""].join("|");
+}
+
+/// ملخّص الطابور للوحة التحكم والشارات
+function reviewSummary(queue) {
+  const by = { block: 0, warn: 0, info: 0 };
+  const kinds = {};
+  (queue || []).forEach((it) => { by[it.severity] = (by[it.severity] || 0) + 1; kinds[it.kind] = (kinds[it.kind] || 0) + 1; });
+  return { total: (queue || []).length, ...by, kinds };
+}
+
+// ── الرقاقة لوحةُ تعريف: الرمز + رقم المحل + تاريخ الكتابة ──
+
+/// يفكّ لوحة التعريف (96 أو 128 بت). يقبل الرقائق القديمة بالبيانات.
+function readPlateEpc(hex) {
+  const h = String(hex || "").replace(/[^0-9a-f]/gi, "").toUpperCase();
+  if (h.length < 24) return { ok: false, why: "أقصر من 96 بت" };
+  const b = [];
+  for (let i = 0; i < h.length; i += 2) b.push(parseInt(h.slice(i, i + 2), 16));
+  let code = "";
+  for (let i = 0; i < 8; i++) if (b[i]) code += String.fromCharCode(b[i]);
+  const valid = code.length >= 4 && /^[A-Z2-9]+$/.test(code);
+  if (!valid) return { ok: false, why: "ليست بترميز أوقية", raw: h };
+  const out = { ok: true, code, bits: h.length >= 32 ? 128 : 96 };
+  if (h.length >= 24) {
+    out.storeId = (b[8] << 8) | b[9];
+    const days = (b[10] << 8) | b[11];
+    out.writtenAt = days
+      ? new Date(EPC_EPOCH + days * 86400000).toISOString().slice(0, 10) : null;
+    // ⚠ رقاقةٌ قديمة بالبيانات: العيار في البايت 8 يقع موضع رقم المحل
+    const maybeKarat = b[8];
+    const maybeMg = (b[9] << 16) | (b[10] << 8) | b[11];
+    if ([9, 14, 18, 21, 22, 24].includes(maybeKarat) && maybeMg > 0) {
+      out.legacy = true;
+      out.storeId = null;
+      out.writtenAt = null;
+    }
+  }
+  return out;
+}
+
+function epcHexToCode(hex) {
+  const h = String(hex || "").replace(/[^0-9a-f]/gi, "");
+  let out = "";
+  for (let i = 0; i + 1 < h.length; i += 2) { const c = parseInt(h.slice(i, i + 2), 16); if (c) out += String.fromCharCode(c); }
+  return out.trim();
+}
+
+function nextSessionId(prefix, archive = []) {
+  const d = new Date(); const ymd = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+  const n = archive.filter((a) => String(a.session_id || "").includes(`-${ymd}-`)).length + 1;
+  return `${prefix}-${ymd}-${String(n).padStart(3, "0")}`;
+}
+
+/// جلسة RFID — JSON بمخطّط المواصفة.
+function rfidSessionJson(sess) {
+  return JSON.stringify({
+    inventory_session_id: sess.session_id, timestamp: sess.timestamp,
+    branch_id: sess.branch_id, branch_name: sess.branch_name, branch_vat: sess.branch_vat || "", branch_cr: sess.branch_cr || "", branch_phone: sess.branch_phone || "", user: sess.user,
+    total_items: sess.total_items, total_weight: sess.total_weight,
+    items: sess.rows.map((r) => ({ epc: r.epc, item_code: r.code, name: r.name, weight: r.weight, karat: r.karat, status: r.status, rssi: r.rssi })),
+  }, null, 2);
+}
+
+/// CSV — UTF-8 BOM، والصيغُ مُحيَّدة.
+function rfidSessionCsv(sess, sep = ",") {
+  const esc = (v) => { let t = v == null ? "" : String(v); if (/^[=+\-@\t\r]/.test(t)) t = "'" + t;
+    return new RegExp(`[",\\n${sep === ";" ? ";" : ""}]`).test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
+  const head = ["EPC", "Item Code", "Item Name", "Weight", "Status", "Timestamp", "Branch", "RSSI"];
+  const lines = [head.join(sep), ...sess.rows.map((r) => [r.epc, r.code, r.name, r.weight.toFixed(3), r.status, r.at, sess.branch_name || sess.branch_id, r.rssi ?? ""].map(esc).join(sep))];
+  return "﻿" + lines.join("\n");
+}
+
+/// ملخّصٌ نصّيّ — واتساب وبريد.
+function rfidSessionText(sess) {
+  const t = new Date(sess.timestamp);
+  const stamp = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")} ${String(t.getHours()).padStart(2, "0")}:${String(t.getMinutes()).padStart(2, "0")}`;
+  const lines = [
+    `📊 تقرير ${sess.kind === "stocktake" ? "جرد" : "قراءة"} RFID السريع`,
+    `📍 الموقع: ${sess.branch_name || sess.branch_id}`,
+    `⏰ الوقت: ${stamp}`, `🔖 الجلسة: ${sess.session_id}`,
+    "------------------",
+    `✅ إجمالي القطع المرصودة: ${sess.total_items} قطعة`,
+    `⚖️ الوزن الإجمالي: ${sess.total_weight.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} جرام`,
+  ];
+  if (sess.missing_items) lines.push(`❌ مفقودة: ${sess.missing_items}`);
+  if (sess.unknown_items) lines.push(`❓ غير معروفة: ${sess.unknown_items}`);
+  lines.push("------------------", `تم ${sess.kind === "stocktake" ? "الجرد" : "المسح"} بنجاح عبر نظام أوقية.${sess.user ? ` — ${sess.user}` : ""}`);
+  return lines.join("\n");
+}
+
+async function shareOrDownload({ blob, filename, title, text }) {
+  try {
+    const file = typeof File !== "undefined" ? new File([blob], filename, { type: blob.type }) : null;
+    if (file && navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
+      await navigator.share({ files: [file], title, text }); return "shared";
+    }
+  } catch (e) { if (e && e.name === "AbortError") return "cancelled"; }
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  return "downloaded";
+}
+
+/// ما تغيّر في صلاحيات مستخدم — الفرق لا الحالة.
+function diffPermissions(before, after, registry = []) {
+  const label = (id) => registry.find((n) => n.id === id)?.label || id;
+  const b = new Set(before || []), a = new Set(after || []);
+  return {
+    added: [...a].filter((x) => !b.has(x)).map(label),
+    removed: [...b].filter((x) => !a.has(x)).map(label),
+  };
+}
+
+export { comparePeriods, deviceLabel, diffPermissions, documentIndex, documentPdfSections, epcHexToCode, monthRange, networkFeesRecorded, nextSessionId, prefersReducedMotion, printDocumentPdf, priorPeriodOf, readPlateEpc, reportPeriod, reviewFingerprint, reviewKey, reviewSummary, rfidSessionCsv, rfidSessionJson, rfidSessionText, shareOrDownload, signStatement, useCountUp, accountForCategory, accountGroup, accountLabel, accountPath, aiAllowedFor, aiAllowedForRole, aiScope, askReportAi, attachmentByteSize, b32Decode, b32Encode, balancesAt, bleWriteChunked, branchDataKey, branchSnapshotKey, btSupported, bundleById, bundledPages, canvasToTsplBitmap, cardFeeOf, cashAccountFor, cashTrialBalance, categoryById, categoryLabel, childrenOf, cleanToken, codeCounter, codeToEpcHex, compressImage, contentWidth, createNhrFileAssembler, dayEnd, dayStart, detectColumns, detectTraceTopic, describeQuery, diffDatasets, drawCode128, drawQr, emptyRow, exchangeKind, expenseAccountFor, exportLedgerXlsx, exportTablesPdf, fetchAiAuditNarrative, fetchAiBusinessInsights, fetchAiChatReply, fetchAiReportSpec, fetchGoldPriceSAR, fetchLiveGram24, fineAt, fmtWeight, fineToKarat, fromGram, fundingSourceLabel, generateRecoveryCode, generateUnitCode, goldDestLabel, goldProfit, guessScreens, hiddenNumbersScan, inPeriod, inputStyle, isBundle, isGoldCogs, isLiveScrap, isPartial, isUnder, issueBranchCode, issueLicense, itemLabel, journalOf, journalTrialBalance, loadAttachment, lotAllocatedPieces, lotAllocatedWeight, lotReconcile, marginFor, mgrFeeBreakdown, mgrFeeEnabled, mgrFeeOn, mgrFeeRate, migrateLegacyKeys, modeAllowsAction, modeAllowsPage, modeAllowsTab, nameExists, navPerRow, nhrClassify, nhrCommand, nhrCommands, nhrCrc32, nhrHex, nhrIsLiveFrame, nhrParseBatchFile, nhrParseJson, nhrParseLiveFrame, normHeader, normalizeArabicQuery, normalizeFundingSource, normalizeName, normalizeRecovery, onlineBlockReason, openAttachment, openWhatsApp, ounceHash, periodRange, prettyPhone, prettyToken, priceBreakdown, printLabelToDevice, printedCount, qrEccBytes, qrGaloisTables, qrMatrix, qrMul, qrRS, r2, r3, readFileAsDataUrl, readKeyOrNull, remainingQty, renderLabelCanvas, reportFactsText, reportFindings, resolveCompare, resolveRange, rfidSettingsFor, runAuditChecks, runQuery, saleLineProvenance, saleModeOf, saleProfitOf, saleProfitSplit, saveAttachment, scrapPrice24, sellPrice24, sendRawToPrinter, setRuntimeCategories, splitCsvLine, statementDigest, streamBase, toCsv, toGram, toIntlPhone, toLatinDigits, trustBalance, tsplCalibrateBytes, tsplJobBytes, unitById, unitCostBasis, unitCurrentValue, usbPrint, useDebounced, useNhrReader, useViewport, useVoice, useWedgeScanner, vendorChallenge, vendorResponse, weekStart, weightTrialBalance };

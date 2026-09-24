@@ -638,6 +638,17 @@ function normalizeReceipts(rows) {
   }));
 }
 
+/// أحكام المراجعة المحاسبية (migration 037) — تُضاف ولا تُعدَّل.
+function normalizeReviews(rows) {
+  return rows.map((r) => ({
+    id: r.id, key: r.key, kind: r.kind, targetId: r.target_id ?? r.targetId, targetRef: r.target_ref ?? r.targetRef,
+    targetDate: r.target_date ?? r.targetDate ?? null, label: r.label, why: r.why, amount: toMoney(r.amount),
+    verdict: r.verdict, note: r.note || "", fingerprint: r.fingerprint || "",
+    reviewer: r.reviewer_name ?? r.reviewer ?? "", reviewerId: r.reviewer_id ?? r.reviewerId, reviewerRole: r.reviewer_role ?? r.reviewerRole,
+    date: r.created_at ?? r.date,
+  }));
+}
+
 /**
  * نقطة الدخول الرئيسية — تُستدعى مرة واحدة بعد الدخول بنتيجة
  * fetchBootstrap()، وتُرجع كائنًا جاهزًا للتوزيع مباشرة على setters
@@ -692,6 +703,9 @@ function normalizeBootstrap(boot) {
           workdayMode: boot.settings.workday_mode === "off" ? "off" : "required",
           openingMode: !!boot.settings.opening_mode,
           openingFinishedAt: boot.settings.opening_finished_at || null,
+          approvalsEnabled: boot.settings.approvals_enabled !== false,
+          approvalThresholds: boot.settings.approval_thresholds || {},
+          periodLocks: { lockAll: boot.settings.lock_all || null, lockPosted: boot.settings.lock_posted || null },
         }
       : null,
     expenses: normalizeExpenses(boot.expenses || [], usersFullById),
@@ -703,6 +717,9 @@ function normalizeBootstrap(boot) {
     repairs: normalizeRepairs(boot.repairs || []),
     returns: normalizeReturns(boot.returns || []),
     receipts: normalizeReceipts(boot.receipts || []),
+    // الاعتمادات تصل مُشكَّلةً من الخادم (shapeApproval) — مرورٌ مباشر
+    approvals: Array.isArray(boot.approvals) ? boot.approvals : [],
+    reviews: normalizeReviews(boot.reviews || []),
     assetClasses: normalizeAssetClasses(boot.assetClasses || []),
     fixedAssets: normalizeFixedAssets(boot.fixedAssets || []),
     depreciationSchedule: normalizeDepreciationSchedule(boot.depreciationSchedule || []),
@@ -725,6 +742,7 @@ function normalizeBootstrap(boot) {
 
 export {
   normalizeBootstrap,
+  normalizeReviews,
   normalizeItems,
   normalizeSales,
   normalizeCashPools,

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Banknote, ChevronUp, FileText, Handshake, Loader2, Lock, LogOut, Menu, Mic, Package, PackageMinus, Plus, Printer, Receipt, RotateCcw, Scale, Search, ShoppingCart, Truck, Wrench, X } from "lucide-react";
 import { CHART_OF_ACCOUNTS, POSTING_RULES } from "../core/chart.js";
-import { AUTO_WORKDAY, APP_MODES, CATEGORY_STATE, DEFAULT_APP_MODE, DEFAULT_CATEGORIES, DEFAULT_INTEGRATION, DEFAULT_OPENING_BALANCE, DEFAULT_PRINTER, DEFAULT_SETTINGS, DEFAULT_STORE, DEFAULT_USERS, EXPENSE_CATEGORIES, ISSUE_REASONS, MIGRATION_FLAG, PARTNER_REQUIRED, PUBLISH_CAP, RFID_DEFAULTS, ROLES, TRUST_MOVES } from "../core/constants.js";
+import { AUTO_WORKDAY, APP_MODES, CATEGORY_STATE, DEFAULT_APP_MODE, DEFAULT_CATEGORIES, DEFAULT_INTEGRATION, DEFAULT_OPENING_BALANCE, DEFAULT_PRINTER, DEFAULT_SETTINGS, DEFAULT_STORE, DEFAULT_USERS, EXPENSE_CATEGORIES, ISSUE_REASONS, MIGRATION_FLAG, PARTNER_REQUIRED, PUBLISH_CAP, REVIEW_VERDICTS, RFID_DEFAULTS, ROLES, TRUST_MOVES } from "../core/constants.js";
 import { DEFAULT_COMMISSION } from "../core/erp.js";
 import { AUDIT_KEY, AUDIT_LOG_KEY, BANK_TX_KEY, BRANCH_IDENTITY_KEY, BRANCH_LINK_KEY, BUSINESS_DAYS_KEY, CASH_KEY, CATEGORIES_KEY, COMMISSIONS_KEY, CUSTOMERS_KEY, CUSTOM_GROUPS_KEY, DAILY_CUSTODY_KEY, ENTRY_SESSIONS_KEY, EXPENSES_KEY, EXPENSE_NAMES_KEY, EXT_INVOICES_KEY, FISCAL_CLOSURES_KEY, GOLD_LEDGER_KEY, HQ_PERMISSIONS_KEY, INTEGRATION_KEY, ITEMS_KEY, JOURNAL_KEY, LOTS_KEY, MENU_ORDER_KEY, NAV_LAYOUT_KEY, OPENING_BALANCE_KEY, SAVED_QUERIES_KEY, PARTNERS_KEY, PARTNER_TX_KEY, PRICE_KEY, PRINTER_KEY, RECEIPTS_KEY, REPAIRS_KEY, RESERVATIONS_KEY, RETURNS_KEY, RFID_KEY, SAFE_AUDITS_KEY, SAFE_GOLD_KEY, SAFE_KEY, SALES_KEY, SCRAP_CUSTODY_KEY, SCRAP_KEY, SCRAP_REQUESTS_KEY, SCRAP_SURPLUS_KEY, SETTINGS_KEY, SHORTCUTS_KEY, STOCKTAKE_LOCK_KEY, STORE_KEY, STORE_ORDERS_KEY, SUPPLIERS_KEY, TASKIR_KEY, TASKIR_OFFICES_KEY, TASKIR_OFFICE_TX_KEY, TRUST_ACCOUNTS_KEY, TRUST_GOLD_KEY, TRUST_LEDGER_KEY, USERS_KEY, WEIGHT_ADJ_KEY } from "../core/keys.js";
 import { PURITY, fine24, fmt, fmtMoney, fmtW, fromHalalas, halalas, pricePerGram, roundMoney2, roundW, sumMoney, weightTimesPrice } from "../core/money.js";
@@ -9,7 +9,7 @@ import { CARD_NETWORKS } from "../core/money-rules.js";
 import { DEFAULT_NAV_LAYOUT, MAIN_TAB_IDS, NAV_REGISTRY, TAB_KIND_IDS } from "../core/navigation.js";
 import { installStorageGuard, layoutIds, loadAllStores, normalizeOpeningBalance, normalizeRoleLayout, validateStore } from "../core/stores.js";
 import * as api from "../core/api.js";
-import { normalizeBootstrap, normalizeCashTxRow, normalizeLots, normalizeSafeGoldTx, normalizeSafeAudits, normalizeBusinessDays, normalizeDailyCustody, normalizeTaskirEntries, normalizeTaskirOfficeTx, normalizeFixedAssets, normalizeDepreciationSchedule } from "../core/normalize.js";
+import { normalizeBootstrap, normalizeReviews, normalizeCashTxRow, normalizeLots, normalizeSafeGoldTx, normalizeSafeAudits, normalizeBusinessDays, normalizeDailyCustody, normalizeTaskirEntries, normalizeTaskirOfficeTx, normalizeFixedAssets, normalizeDepreciationSchedule } from "../core/normalize.js";
 // ⚠ الحجوزات/الإصلاحات/المرتجعات: normalize.js يُطبِّع القيم فعليًا (راجع
 // normalizeReservations/normalizeRepairs/normalizeReturns/normalizeReceipts)
 // لكن استدعاءها هنا يمر عبر n.reservations/n.repairs/... من normalizeBootstrap
@@ -43,6 +43,26 @@ function branchRefFromUrl() {
 // fallback عام بدل رمز الخطأ الخام (لا معنى لـ"insufficient_stock" لمستخدم
 // عادي، لكن الرسالة المطابقة له مفهومة).
 const API_ERROR_MESSAGES = {
+  // الرقابة وقسم المحاسب (migration 037)
+  period_locked: "الفترة مقفلة — لا قيود فيها (أو المدير وحده يعدّل فيها)",
+  branch_locked: "الفرع مقفلٌ من الإدارة",
+  approval_not_found: "طلب الاعتماد غير موجود",
+  approval_already_executed: "نُفِّذ هذا الطلب سلفًا",
+  approval_not_approved: "الطلب لم يُعتمد بعد",
+  approval_amount_mismatch: "المبلغ يختلف عمّا اعتُمد — أرسل طلبًا جديدًا",
+  approval_already_decided: "قُرِّر هذا الطلب سلفًا",
+  rejection_reason_required: "اكتب سبب الرفض",
+  reviewer_role_required: "الحكم بيد المحاسب أو المدير",
+  review_note_required: "اكتب السبب — «يحتاج تعديلًا» و«ملاحظة» بلا نصٍّ لا يُفيدان",
+  stocktake_reason_required: "فرق الجرد يُعتمد بسببه — اكتب السبب",
+  invalid_lock_date: "تاريخ القفل غير صالح",
+  invalid_thresholds: "حدود الاعتماد غير صالحة",
+  invalid_enroll_code: "رمز الربط غير صحيح",
+  enroll_code_used: "استُعمل هذا الرمز سلفًا — اطلب رمزًا جديدًا",
+  enroll_code_expired: "انتهت صلاحية الرمز — اطلب رمزًا جديدًا",
+  manager_enroll_requires_hq: "ربط جهاز مديرٍ آخر بيد الإدارة",
+  period_already_settled: "هذا الشهر مسوًّى سلفًا — مرّةً واحدة لكل شهر",
+  insufficient_network_balance: "رصيد الشبكة لا يكفي",
   // اشتراك المتجر (يفرضه الخادم على الفرع منذ migration 032 — لوحة الأدمن)
   subscription_expired: "انتهى اشتراك المحل — تواصل مع مزوّد البرنامج لتجديده",
   store_suspended: "اشتراك المحل موقوف — تواصل مع مزوّد البرنامج",
@@ -201,7 +221,7 @@ import { buildWeightEntries } from "../domain/buildWeightEntries.js";
 import { computeCommission } from "../domain/computeCommission.js";
 import { computeReturnAmounts } from "../domain/computeReturnAmounts.js";
 import { hashPin } from "../domain/hashPin.js";
-import { aiAllowedFor, aiScope, branchDataKey, branchSnapshotKey, bundleById, cardFeeOf, cashAccountFor, categoryLabel, contentWidth, exchangeKind, expenseAccountFor, exportTablesPdf, fetchGoldPriceSAR, generateUnitCode, goldDestLabel, goldProfit, inPeriod, isBundle, isLiveScrap, itemLabel, lotAllocatedWeight, migrateLegacyKeys, modeAllowsAction, modeAllowsPage, modeAllowsTab, nameExists, navPerRow, normalizeFundingSource, normalizeName, r2, r3, remainingQty, saleProfitOf, saveAttachment, setRuntimeCategories, streamBase, trustBalance, unitCostBasis, unitCurrentValue, useViewport, weightTrialBalance } from "../domain/helpers.js";
+import { documentIndex, aiAllowedFor, aiScope, branchDataKey, branchSnapshotKey, bundleById, cardFeeOf, cashAccountFor, categoryLabel, contentWidth, exchangeKind, expenseAccountFor, exportTablesPdf, fetchGoldPriceSAR, generateUnitCode, goldDestLabel, goldProfit, inPeriod, isBundle, isLiveScrap, itemLabel, lotAllocatedWeight, migrateLegacyKeys, modeAllowsAction, modeAllowsPage, modeAllowsTab, nameExists, navPerRow, normalizeFundingSource, normalizeName, r2, r3, remainingQty, saleProfitOf, saveAttachment, setRuntimeCategories, streamBase, trustBalance, unitCostBasis, unitCurrentValue, useViewport, weightTrialBalance } from "../domain/helpers.js";
 import { isPeriodClosed } from "../domain/isPeriodClosed.js";
 import { key } from "../domain/key.js";
 import { nextCashRef } from "../domain/nextCashRef.js";
@@ -226,6 +246,16 @@ import { SaleDetailModal } from "../modals/SaleDetailModal.jsx";
 import { SetPriceModal } from "../modals/SetPriceModal.jsx";
 import { VoiceSheet } from "../modals/VoiceSheet.jsx";
 import { AccessSettingsPage } from "../screens/AccessSettingsPage.jsx";
+import { AccountantReviewPage } from "../screens/AccountantReviewPage.jsx";
+import { ApprovalsPage } from "../screens/ApprovalsPage.jsx";
+import { BranchDashboardPage } from "../screens/BranchDashboardPage.jsx";
+import { ReportsHubPage } from "../screens/ReportsHubPage.jsx";
+import { ShowcasePage } from "../screens/ShowcasePage.jsx";
+import { BankFeeSettlementForm } from "../ui/BankFeeSettlementForm.jsx";
+import { DocumentsArchive } from "../ui/DocumentsArchive.jsx";
+import { EnrollClaimSheet } from "../modals/EnrollClaimSheet.jsx";
+import { EnrollQrSheet } from "../modals/EnrollQrSheet.jsx";
+import { buildReviewQueue } from "../domain/buildReviewQueue.js";
 import { AddGoodsPage } from "../screens/AddGoodsPage.jsx";
 import { AiAssistantPage } from "../screens/AiAssistantPage.jsx";
 import { AppSettingsPage } from "../screens/AppSettingsPage.jsx";
@@ -383,6 +413,11 @@ export default function GoldInventoryApp() {
   const [attendance, setAttendance] = useState([]);
   const [leaves, setLeaves] = useState([]);
   const [approvals, setApprovals] = useState([]);
+  // ── قسم المحاسب والرقابة (migration 037) ──
+  const [reviews, setReviews] = useState([]);           // أحكام المراجعة — من الخادم، تُضاف ولا تُعدَّل
+  const [branchLock, setBranchLock] = useState(null);   // { reason, lockedAt, lockedBy } — قفلٌ من الإدارة (423)
+  const [enrollFor, setEnrollFor] = useState(null);     // المستخدم الذي يُصدَر له رمز ربط
+  const [claiming, setClaiming] = useState(false);      // شاشة «عندي رمز ربط» على جهاز الموظّف
   const [webhooks, setWebhooks] = useState([]);
   const [customGroups, setCustomGroups] = useState([]);
   const [row2Open, setRow2Open] = useState(0);
@@ -1343,6 +1378,7 @@ export default function GoldInventoryApp() {
         refundTarget: req.refundTarget,
         note: req.note || null,
       });
+      if (res.approvalPending) { notePendingApproval(res.approvalPending); return { ok: false, pending: true, errors: [`فوق حدّ الاعتماد — أُرسل الطلب ${res.approvalPending.ref} للمدير`] }; }
       const r = res.return;
       const sale = sales.find((x) => x.id === req.saleId);
       const record = {
@@ -1447,6 +1483,132 @@ export default function GoldInventoryApp() {
     }
   };
 
+  // ══ قسم المحاسب والرقابة (migration 037) ══════════════════════════
+  //
+  // ⚠ الطابور يُبنى من الدفاتر المحمّلة كما في المرجع (buildReviewQueue)،
+  //   والأحكام وحدها من الخادم: هي السجلّ الذي لا يُعدَّل.
+  const reviewQueue = useMemo(() => buildReviewQueue({
+    journal, sales, returns, expenses, lots, audits, approvals, businessDays, reviews, settings: appSettings,
+    // الخادم يُرسل أحدث 2000 قيد — عند بلوغها لا تُقرأ الأرصدة من المحمَّل
+    journalComplete: journal.length < 2000,
+  }), [journal, sales, returns, expenses, lots, audits, approvals, businessDays, reviews, appSettings?.workdayMode]);
+
+  /// طلبٌ فوق حدّ الاعتماد: لم يُنفَّذ شيء، وحُفظ طلبًا بحمولته (202).
+  const notePendingApproval = (ap) => {
+    setApprovals((prev) => [ap, ...prev.filter((x) => x.id !== ap.id)]);
+    flashToast(`فوق حدّ الاعتماد — أُرسل الطلب ${ap.ref} (${fmtMoney(ap.amount)}) للمدير، ويُنفَّذ عند اعتماده`);
+  };
+
+  /// تنفيذ طلبٍ معتمد — تُعاد العملية نفسها بحمولتها ومعها approvalId،
+  /// والخادم يختم التنفيذ في معاملتها: مرّةً واحدة وبالمبلغ نفسه.
+  const executeApproval = async (ap) => {
+    const p = { ...(ap.payload || {}), approvalId: ap.id };
+    try {
+      if (ap.kind === "expense") await api.expensesApi.add(p);
+      else if (ap.kind === "supplier_settle") await api.taskirApi.add(p);
+      else if (ap.kind === "refund") {
+        const { route, saleId, ...body } = p;
+        if (!saleId) throw new Error("no_sale");
+        if (route === "return") await api.returnsApi.create(saleId, body);
+        else await api.returnsApi.createFull(saleId, body);
+      } else {
+        flashToast("نوع طلبٍ لا يُنفَّذ من هنا");
+        return false;
+      }
+      flashToast(`نُفِّذ ${ap.ref}`);
+      return true;
+    } catch (err) {
+      flashToast(`اعتُمد ${ap.ref} وتعذّر تنفيذه: ${apiErrorMessage(err, "خطأ غير متوقع")}`);
+      return false;
+    } finally {
+      loadBootstrap(currentUser).catch((e) => console.warn("[أوقية] تعذّر تحديث البيانات بعد الاعتماد:", e));
+    }
+  };
+
+  const handleDecideApproval = async (ap, decision, note) => {
+    try {
+      const res = await api.controlApi.decide(ap.id, decision, note || "");
+      setApprovals((prev) => prev.map((x) => (x.id === ap.id ? res.approval : x)));
+      if (decision === "approved") await executeApproval(res.approval);
+      else flashToast(`رُفض ${ap.ref}`);
+      return { ok: true };
+    } catch (err) {
+      return { error: apiErrorMessage(err, "تعذّر تسجيل القرار") };
+    }
+  };
+
+  const handleAddReview = async (item, verdict, note) => {
+    try {
+      const res = await api.controlApi.addReview({
+        key: item.key, kind: item.kind, targetId: item.id, targetRef: item.ref, targetDate: item.date || null,
+        label: item.label, why: item.why, amount: Number(item.amount) || 0,
+        verdict, note, fingerprint: item.fingerprint || "",
+      });
+      const [rec] = normalizeReviews([res.review]);
+      setReviews((prev) => [rec, ...prev]);
+      flashToast(`سُجّل الحكم: ${REVIEW_VERDICTS[verdict]?.label || verdict}`);
+      return rec;
+    } catch (err) {
+      return { error: apiErrorMessage(err, "تعذّر تسجيل الحكم") };
+    }
+  };
+
+  const fetchBankFees = async (period) => api.controlApi.bankFees(period);
+  const handleBankFeeSettlement = async ({ period, actualFee, note }) => {
+    try {
+      const res = await api.controlApi.settleBankFees({ period, actualFee, note });
+      const d = res.adjustment;
+      flashToast(Math.abs(d.diff) < 0.005 ? `${period} مطابق — سُجّلت التسوية` : `سُوّي ${period}: ${d.diff > 0 ? "خُصم" : "رُدّ"} ${fmtMoney(Math.abs(d.diff))}`);
+      loadBootstrap(currentUser).catch(() => {});
+      return true;
+    } catch (err) {
+      flashToast(apiErrorMessage(err, "تعذّرت التسوية"));
+      return false;
+    }
+  };
+
+  /// حدود الاعتماد وقفل الفترات — المدير يضبطها، والخادم يفرضها على كل قيد.
+  const handleSaveControls = async (payload) => {
+    try {
+      const res = await api.controlApi.saveControls(payload);
+      const c = res.controls || {};
+      setAppSettings((prev) => ({ ...prev, approvalsEnabled: c.approvals_enabled !== false, approvalThresholds: c.approval_thresholds || {},
+        periodLocks: { lockAll: c.lock_all || null, lockPosted: c.lock_posted || null } }));
+      flashToast("حُفظت الرقابة");
+      return true;
+    } catch (err) {
+      flashToast(apiErrorMessage(err, "تعذّر حفظ الرقابة"));
+      return false;
+    }
+  };
+
+  const handleIssueEnroll = async (user) => {
+    try {
+      return await api.controlApi.enrollInvite(user.id);
+    } catch (err) {
+      return { error: apiErrorMessage(err, "تعذّر إصدار رمز الربط") };
+    }
+  };
+
+  const handleClaimEnroll = async (code, pin) => {
+    if (!branchLink?.branchId) return { error: "افتح رابط دخول الفرع على هذا الجهاز أولًا" };
+    try {
+      const res = await api.controlApi.enrollClaim(branchLink.branchId, code, pin);
+      flashToast(`رُبط الجهاز — ادخل باسم ${res.user?.name || ""} ورقمك الجديد`);
+      return res;
+    } catch (err) {
+      const c = err?.body?.error;
+      return { error: apiErrorMessage(err, "تعذّر ربط الجهاز"), back: ["invalid_enroll_code", "enroll_code_used", "enroll_code_expired"].includes(c) };
+    }
+  };
+
+  // ⚠ الفرع مقفلٌ من الإدارة: أي طلبٍ يُرفض بـ423 يحجب التطبيق كلّه بشاشة قفل
+  useEffect(() => {
+    const on = (e) => setBranchLock({ ...(e.detail || {}) });
+    window.addEventListener("ounce:branch-locked", on);
+    return () => window.removeEventListener("ounce:branch-locked", on);
+  }, []);
+
   // ⚠ حُوِّلت للباك إند بالكامل: POST /sales/:id/return يتحقق فعليًا من
   // sale_lines على الخادم (لا مصفوفة محلية فقط)، يُعيد وحدات item_units
   // الحقيقية لغير مباعة، يُرحّل دفتر الوزن (سطر posting_rules.sale_return
@@ -1462,6 +1624,7 @@ export default function GoldInventoryApp() {
     if (!sale) return null;
     try {
       const res = await api.returnsApi.create(saleId, { lineIndexes, refundSource, note: note || null });
+      if (res.approvalPending) { notePendingApproval(res.approvalPending); return null; }
       const r = res.return;
       const rec = {
         id: r.id, ref: r.ref, date: r.created_at, saleId, saleRef: sale.ref || null,
@@ -4233,6 +4396,8 @@ export default function GoldInventoryApp() {
     setRepairs(n.repairs);
     setReturns(n.returns);
     setReceipts(n.receipts);
+    setApprovals(n.approvals);
+    setReviews(n.reviews);
     setFixedAssets(n.fixedAssets);
     setDepreciations(n.depreciationSchedule);
     // ⚠ إصلاح فجوة حقيقية (2026-09): journal/goldLedger كانتا محليتين
@@ -4247,7 +4412,7 @@ export default function GoldInventoryApp() {
       // ⚠ دمج لا استبدال: appSettings يحمل أيضًا تفضيلات محلية بحتة
       // (الثيم، طباعة، requirePin...) لا وجود لها في الباك إند بعد —
       // استبدال الكائن كاملًا كان سيمحوها.
-      setAppSettings((prev) => ({ ...prev, taxEnabled: n.appSettings.taxEnabled, taxRate: n.appSettings.taxRate, cardFees: n.appSettings.cardFees, workdayMode: n.appSettings.workdayMode, openingMode: n.appSettings.openingMode, openingFinishedAt: n.appSettings.openingFinishedAt }));
+      setAppSettings((prev) => ({ ...prev, taxEnabled: n.appSettings.taxEnabled, taxRate: n.appSettings.taxRate, cardFees: n.appSettings.cardFees, workdayMode: n.appSettings.workdayMode, openingMode: n.appSettings.openingMode, openingFinishedAt: n.appSettings.openingFinishedAt, approvalsEnabled: n.appSettings.approvalsEnabled, approvalThresholds: n.appSettings.approvalThresholds, periodLocks: n.appSettings.periodLocks }));
     }
   };
 
@@ -4320,6 +4485,9 @@ export default function GoldInventoryApp() {
         const wait = Math.min(600, 30 * 2 ** (failedTries.current - 5)) * 1000;
         lockUntil.current = now + wait;
         flashToast(`خمس محاولات فاشلة — قُفل ${Math.round(wait / 1000)} ثانية`);
+      } else if (e instanceof api.ApiError && e.status === 423) {
+        // الفرع مقفلٌ من الإدارة — شاشة القفل تُظهر السبب، والرقم صحيح.
+        failedTries.current = Math.max(0, failedTries.current - 1);
       } else if (e instanceof api.ApiError && e.status === 401) {
         // رقم سري خاطئ — الرسالة الافتراضية في PriceLoginScreen تكفي.
       } else if (e instanceof api.ApiError && SUBSCRIPTION_ERRORS.has(e.body?.error)) {
@@ -5983,6 +6151,7 @@ export default function GoldInventoryApp() {
         fundingSource: entry.fundingSource,
         notes: entry.notes || "",
       });
+      if (res.approvalPending) { notePendingApproval(res.approvalPending); return null; }
       // إعادة تحميل قائمة التسكيرات وحركات مكاتب التسكير من السيرفر —
       // أبسط وأضمن من محاولة دمج الاستجابة المختصرة محليًا بشكل يطابق
       // شكل GET بالضبط (خصوصًا supplier_name/office_name المُلحَقين
@@ -6056,6 +6225,7 @@ export default function GoldInventoryApp() {
         periodMonth: isPayroll ? entry.periodMonth || new Date().toISOString().slice(0, 7) : null,
         nameId: entry.nameId || null,
       });
+      if (res.approvalPending) { notePendingApproval(res.approvalPending); return null; }
       const record = {
         id: res.expense.id, ref: res.expense.ref, date: res.expense.created_at,
         category: res.expense.category, name: res.expense.name, amount: Number(res.expense.amount) || 0,
@@ -6821,6 +6991,42 @@ export default function GoldInventoryApp() {
   // تومض للحظة قبل أن يُعرف إن كان هناك توكن محفوظ صالح أصلًا — "ريفرش
   // يعمل تسجيل خروج" كان يبدو صحيحًا بصريًا حتى بعد أن تصير الجلسة تُستعاد
   // فعليًا في الخلفية.
+  // ⚠ الفرع مقفلٌ من الإدارة: طبقةٌ تحجب كل شيء. تتحقّق كل دقيقة وتُفتح
+  //   من نفسها حين يُفكّ القفل — الخادم يرفض كل طلبٍ حتى ذلك الحين.
+  const checkBranchLock = async () => {
+    if (!currentUser) { setBranchLock(null); return; }
+    try {
+      await api.fetchCurrentUser();
+      setBranchLock(null);
+      loadBootstrap(currentUser).catch(() => {});
+    } catch (e) {
+      if (!(e instanceof api.ApiError && e.status === 423)) setBranchLock(null);
+    }
+  };
+  const lockOverlay = branchLock ? (
+    <div className="fixed inset-0 flex items-center justify-center px-6" dir="rtl" style={{ background: "rgba(10,9,8,.96)", zIndex: 9998 }}>
+      <Card style={{ padding: 18, maxWidth: 360, width: "100%", border: "1px solid var(--badLine)" }}>
+        <p style={{ color: "var(--bad)" }} className="text-base font-bold mb-2">الفرع موقوف من الإدارة المركزية</p>
+        <p style={{ color: "var(--text2)" }} className="text-xs mb-3">
+          {branchLock.reason ? `السبب: ${branchLock.reason}` : "لا بيعَ ولا حركةَ حتى تفكّ الإدارة القفل."}
+          {branchLock.lockedAt ? ` · منذ ${new Date(branchLock.lockedAt).toLocaleString("en-GB")}` : ""}
+          {branchLock.lockedBy ? ` · ${branchLock.lockedBy}` : ""}
+        </p>
+        <button onClick={checkBranchLock} className="w-full py-2.5 rounded-xl text-xs font-bold" style={{ background: "var(--accentBg)", color: "var(--accent)", border: "1px solid var(--accentLine)" }}>
+          {currentUser ? "تحقّق الآن من الإدارة" : "حسنًا"}
+        </button>
+        {currentUser && (
+          <button onClick={() => { setBranchLock(null); handleLogout(); }} className="w-full mt-2 py-2 rounded-xl text-[11px]" style={{ background: "var(--panel)", color: "var(--text2)", border: "1px solid var(--line)" }}>خروج</button>
+        )}
+      </Card>
+    </div>
+  ) : null;
+  useEffect(() => {
+    if (!branchLock || !currentUser) return undefined;
+    const t = setInterval(() => { checkBranchLock(); }, 60000);
+    return () => clearInterval(t);
+  }, [branchLock, currentUser?.id]);
+
   if (loading || sessionChecking || branchLinkStatus === "pending") {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--bg)" }}>
@@ -6869,6 +7075,17 @@ export default function GoldInventoryApp() {
           users={users}
           onDirectLogin={handleDirectLogin}
         />
+        {/* ⚠ جهاز الموظّف: يُربط برمزٍ من المدير، ويضع الموظّف رقمه بنفسه */}
+        <div className="fixed bottom-3 inset-x-0 flex justify-center" style={{ zIndex: 30 }}>
+          <button onClick={() => setClaiming(true)} className="px-4 py-2 rounded-full text-[11px] font-bold"
+            style={{ background: "var(--panel)", color: "var(--accentText)", border: "1px solid var(--line)" }}>
+            عندي رمز ربط
+          </button>
+        </div>
+        {claiming && (
+          <EnrollClaimSheet branchName={branchLink?.branchName || ""} onClaim={handleClaimEnroll} onClose={() => setClaiming(false)} />
+        )}
+        {lockOverlay}
         <Toast message={toast} />
       </>
     );
@@ -6876,6 +7093,10 @@ export default function GoldInventoryApp() {
 
   return (
     <div dir="rtl" style={{ background: "var(--bg)", minHeight: "100vh", fontFamily: "'Cairo','Tajawal',system-ui,sans-serif" }}>
+      {lockOverlay}
+      {enrollFor && (
+        <EnrollQrSheet user={enrollFor} onIssue={handleIssueEnroll} onClose={() => setEnrollFor(null)} />
+      )}
       <style>{`
         * { box-sizing: border-box; }
         input:focus, select:focus, textarea:focus { outline: none; }
@@ -7563,6 +7784,9 @@ export default function GoldInventoryApp() {
             onToggleAi={handleToggleUserAi}
             onSetPermissions={handleSetUserPermissions}
             onRemoveUser={handleRemoveUser}
+            currentUserId={currentUser?.id || null}
+            onEnroll={role === "manager" ? (u) => setEnrollFor(u) : null}
+            onFetchLog={async () => (await api.controlApi.permissionLog()).log || []}
             onBack={() => setMorePage(null)}
           />
         )}
@@ -7572,7 +7796,9 @@ export default function GoldInventoryApp() {
         {morePage === "settings" && (
           <AppSettingsPage
             priceData={priceData}
-            settings={appSettings} onSave={handleUpdateSettings} branchIdentity={branchIdentity} onSaveBranch={handleSaveBranchIdentity} hqPermissions={hqPermissions} onBack={() => setMorePage(null)} />
+            settings={appSettings} onSave={handleUpdateSettings} branchIdentity={branchIdentity} onSaveBranch={handleSaveBranchIdentity} hqPermissions={hqPermissions}
+            canEditControls={role === "manager"} onSaveControls={handleSaveControls}
+            onBack={() => setMorePage(null)} />
         )}
         {morePage === "openingCompare" && (
           <OpeningComparePage
@@ -7853,6 +8079,29 @@ export default function GoldInventoryApp() {
             journal={journal}
             goldLedger={goldLedger}
             accounts={CHART_OF_ACCOUNTS}
+            // ⚠ أعمار الديون من المستندات لا من الدفتر: تاريخ نشوء الدَّين
+            // تاريخ الفاتورة، والدفتر يحمل تاريخ الترحيل — وقد يختلفان.
+            // والالتزام الوزني للموردين: الشراء الآجل ذهبٌ مستعار.
+            agingWeightEntries={(suppliers || []).map((sp) => {
+              const def = (lots || []).filter((l) => l.supplierId === sp.id && l.paymentMethod === "deferred" && l.source !== "opening");
+              const owed = def.reduce((a, l) => a + (Number(l.weight) || 0) * (Number(l.karat) || 21) / 24, 0);
+              return { name: sp.name, balance: roundW(owed), since: def.map((l) => l.date).filter(Boolean).sort()[0] };
+            }).filter((x) => Math.abs(x.balance) > 0.0005)}
+            agingEntries={customers.map((c) => {
+              // الآجل ناقص المقبوض (والمرتجع من الآجل يصل سند قبض)، والعمر من
+              // أقدم فاتورةٍ لم تُغطَّ بعد — الوارد يُسدّد الأقدم أوّلًا.
+              const credit = (sales || []).filter((x) => x.customerId === c.id && !x.voided && x.paymentMethod === "credit")
+                .sort((x, y) => String(x.date).localeCompare(String(y.date)));
+              let paid = (receipts || []).filter((r) => r.customerId === c.id).reduce((a, r) => a + halalas(r.amount), 0);
+              let owed = 0, since = null;
+              for (const x of credit) {
+                const t = halalas(x.total);
+                const cover = Math.min(t, Math.max(0, paid));
+                paid -= cover;
+                if (t - cover > 0) { owed += t - cover; if (!since) since = x.date; }
+              }
+              return { name: c.name, balance: fromHalalas(owed), since: since || c.createdAt };
+            }).filter((x) => Math.abs(x.balance) > 0.01)}
             currency={priceData.currency}
             branchName={appSettings?.storeName || ""}
             preparedBy={currentUser?.name || ""}
@@ -8040,6 +8289,12 @@ export default function GoldInventoryApp() {
           // بحث عن قطعة، وربط بطاقة غير معروفة (حقيقي — يكتب على الخادم).
           <RfidReaderPage
             items={activeItems}
+            suppliers={suppliers}
+            lots={lots}
+            categories={categories}
+            branch={{ code: branchIdentity?.code || "", name: branchIdentity?.name || "" }}
+            userName={currentUser?.name || ""}
+            storeId={Number(printerCfg?.storeId) || 0}
             rfidCfg={rfidCfg}
             canManage={role !== "employee"}
             onBindEpc={handleBindEpc}
@@ -8239,6 +8494,116 @@ export default function GoldInventoryApp() {
             onBack={() => setMorePage(null)}
             flashToast={flashToast}
           />
+        )}
+        {morePage === "reportsHub" && (
+          <ReportsHubPage
+            currency={priceData.currency}
+            data={{
+              journal, accounts: CHART_OF_ACCOUNTS, goldLedger, sales, returns, lots, expenses,
+              items, customers, suppliers, scrapEntries, users,
+              cashBalance, safeBalance, safeGoldBalance, totals,
+              reservations, audits, cashTx, safeTx, partners, partnersTotals, taskirOffices, taskirEntries,
+              branchDoc: { name: branchIdentity?.name || appSettings?.storeName || "" },
+              taxRate: Number(appSettings?.taxRate) || 0.15,
+            }}
+            // ⚠ ضغطة صفٍّ تفتح تقريره — والتبويبات (المخزون/النقد/…) تُفتح بمعرّفها
+            onOpen={(o) => o?.page && openPage(o.page)}
+            onBack={() => setMorePage(null)}
+          />
+        )}
+        {morePage === "dashboard" && (
+          <BranchDashboardPage
+            totals={totals}
+            sales={sales}
+            returns={returns}
+            lots={lots}
+            expenses={expenses}
+            journal={journal}
+            audits={audits}
+            suppliers={suppliers}
+            taskirEntries={taskirEntries}
+            cashTx={cashTx}
+            safeTx={safeTx}
+            safeGoldTx={safeGoldTx}
+            scrapEntries={scrapEntries}
+            cashBalance={cashBalance}
+            safeBalance={safeBalance}
+            custodyBalance={scrapCustodyBalance}
+            reviewQueue={reviewQueue}
+            priceData={priceData}
+            openDay={realOpenDay}
+            branchName={branchIdentity?.name || ""}
+            onFetchStatements={async () => {
+              const r = await api.fetchSupplierStatements();
+              return {
+                lots: normalizeLots(r.lots || []),
+                taskirEntries: normalizeTaskirEntries(r.taskirEntries || []),
+                safeGoldTx: normalizeSafeGoldTx(r.safeGoldTx || []),
+                feeCashTx: (r.feeCashTx || []).map(normalizeCashTxRow),
+                taskirFeesSettled: r.taskirFeesSettled || {},
+              };
+            }}
+            onGo={(page) => openPage(page)}
+            onBack={() => setMorePage(null)}
+          />
+        )}
+        {morePage === "accountantReview" && (
+          <AccountantReviewPage
+            queue={reviewQueue}
+            reviews={reviews}
+            audits={audits}
+            items={items}
+            journal={journal}
+            goldLedger={goldLedger}
+            accounts={CHART_OF_ACCOUNTS}
+            currency={priceData.currency}
+            canReview={role === "accountant" || role === "manager"}
+            reviewer={currentUser?.name || ""}
+            reviewerRole={role || ""}
+            branchName={branchIdentity?.name || ""}
+            periodLocks={appSettings?.periodLocks || null}
+            onReview={handleAddReview}
+            onGo={(page) => openPage(page)}
+            onBack={() => setMorePage(null)}
+          />
+        )}
+        {morePage === "approvals" && (
+          <ApprovalsPage
+            approvals={approvals}
+            currency={priceData.currency}
+            canDecide={role === "manager"}
+            settings={appSettings}
+            onDecide={handleDecideApproval}
+            onExecute={executeApproval}
+            onBack={() => setMorePage(null)}
+          />
+        )}
+        {morePage === "showcase" && (
+          <ShowcasePage items={items} categories={categories} price24={priceData.current} settings={appSettings} currency={priceData.currency}
+            onSell={(permsNow.allowedTabs || []).includes("sales") && openDay && !stocktakeLock ? (id) => { setQuickSaleItemId(id); setShowNewSale(true); } : null}
+            onBack={() => setMorePage(null)} />
+        )}
+        {morePage === "bankFees" && (
+          <div>
+            <SubPageHeader title="تسوية عمولات البنك" onBack={() => setMorePage(null)} />
+            <div className="px-4 pt-3 pb-6">
+              <p style={{ color: "var(--text2)" }} className="text-[11px] mb-3">
+                الإعدادات تقدّر العمولة عند كل بيعٍ بالشبكة، والبنك يخصم بنسبته الفعلية. قارن كشف البنك بما سُجّل وسوِّ الفرق مرّةً للشهر — يعدّل الناتج النهائي بعد خصم العمولات.
+              </p>
+              <BankFeeSettlementForm journal={journal} networkBalance={safeBalance?.network || 0} currency={priceData.currency}
+                canSettle={role === "manager"} onFetch={fetchBankFees} onSubmit={handleBankFeeSettlement} />
+            </div>
+          </div>
+        )}
+        {morePage === "documents" && (
+          <div>
+            <SubPageHeader title="الأرشيف — الفواتير والمستندات" onBack={() => setMorePage(null)} />
+            <div className="px-4 pt-3 pb-6">
+              <DocumentsArchive
+                docs={documentIndex({ sales, returns: returns.map((r) => ({ ...r, saleRef: r.saleRef || sales.find((x) => x.id === r.saleId)?.ref || "" })), lots, taskirEntries, taskirOfficeTx, scrapEntries, receipts, expenses, payrollRuns, suppliers, customers, taskirOffices })}
+                currency={priceData.currency} branchName={branchIdentity?.name || ""} onBlocked={flashToast} />
+            </div>
+          </div>
         )}
         {morePage === "openingBalance" && (
           <OpeningBalancePage

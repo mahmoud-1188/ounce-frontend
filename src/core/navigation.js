@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Home, Barcode, BarChart3, BookmarkCheck, Building2, CalendarCheck, ClipboardCheck, ClipboardList, Coins, Database, FileMinus, FileText, Flame, Grid, Handshake, Landmark, LayoutGrid, Lock, PiggyBank, Plus, Printer, Receipt, RefreshCw, RotateCcw, Scale, Search, Send, Settings, ShieldCheck, ShoppingCart, Sparkles, Sun, SlidersHorizontal, Tag, Truck, UserRound, Users, Wallet, Warehouse, Wrench } from "lucide-react";
+import { ArrowLeftRight, Check, Home, Barcode, BarChart3, BookmarkCheck, Building2, CalendarCheck, ClipboardCheck, ClipboardList, Coins, Database, FileMinus, FileText, Flame, Grid, Handshake, Landmark, LayoutGrid, Lock, PiggyBank, Plus, Printer, Receipt, RefreshCw, RotateCcw, Scale, Search, Send, Settings, ShieldCheck, ShoppingCart, Sparkles, Sun, SlidersHorizontal, Tag, Truck, UserRound, Users, Wallet, Warehouse, Wrench } from "lucide-react";
 import { ROLES } from "./constants.js";
 
 const TAB_KIND_IDS = ["home", "inventory", "sales", "cash", "expenses", "stocktake"];
@@ -75,6 +75,13 @@ const NAV_REGISTRY = [
   { id: "exchange", label: "التبادل مع الأنظمة", icon: RefreshCw },
   { id: "customerReport", label: "تقرير العملاء", icon: Users },
   { id: "docCycle", label: "الدورة المستندية", icon: ClipboardCheck },
+  { id: "reportsHub", label: "مركز التقارير", icon: BarChart3 },
+  { id: "accountantReview", label: "المراجعة المحاسبية", icon: ClipboardCheck },
+  { id: "approvals", label: "الاعتمادات", icon: Check },
+  { id: "documents", label: "الأرشيف — الفواتير والمستندات", icon: FileText },
+  { id: "bankFees", label: "تسوية عمولات البنك", icon: Landmark },
+  { id: "showcase", label: "الاستعراض للزبون", icon: Sparkles },
+  { id: "dashboard", label: "لوحة التحكم", icon: BarChart3 },
 ];
 
 // Default arrangement: which of a role's permitted pages start out in the
@@ -96,6 +103,8 @@ const DEFAULT_NAV_LAYOUT = {
     row1: ["inventory", "sales", "grp_money", "stocktake", "addGoods"],
     row2: ["grp_reports", "grp_clients", "grp_purchase", "grp_scrap_all"],
   },
+  // المحاسب يقرأ ولا يشغّل: التقارير والمشتريات وخدمة العملاء للاطّلاع
+  accountant: { row1: ["grp_reports", "grp_purchase"], row2: ["grp_clients"] },
 };
 
 const NAV_ROWS = ["row1", "row2"];
@@ -125,7 +134,7 @@ const NAV_BUNDLES = [
     label: "التقارير",
     icon: BarChart3,
     hint: "كل التقارير واليومية",
-    items: ["reports", "journal", "generalLedger", "salesReturn", "trialBalance", "fullStatements", "anyStatement", "masterReport", "supplierLedger", "officeLedger", "salesReturn", "bankRecon", "search",
+    items: ["reportsHub", "dashboard", "accountantReview", "approvals", "documents", "bankFees", "reports", "journal", "generalLedger", "salesReturn", "trialBalance", "fullStatements", "anyStatement", "masterReport", "supplierLedger", "officeLedger", "salesReturn", "bankRecon", "search",
             "inventory", "salesHistory", "sellerReports", "taxReport", "financials", "openingCompare"],
   },
   {
@@ -133,7 +142,7 @@ const NAV_BUNDLES = [
     label: "خدمة العملاء",
     icon: UserRound,
     hint: "العملاء والأمانات والإصلاحات",
-    items: ["customers", "trustAccounts", "repairs", "reservations"],
+    items: ["customers", "showcase", "trustAccounts", "repairs", "reservations"],
   },
   {
     id: "grp_purchase",
@@ -238,6 +247,13 @@ const SHORTCUT_HINTS = {
   exchange: ["تبادل", "استيراد", "تصدير", "ربط أنظمة"],
   customerReport: ["تقرير عملاء", "تقرير العملاء", "كشف عملاء"],
   docCycle: ["دورة مستندية", "الدورة المستندية", "مبادئ محاسبية"],
+  reportsHub: ["مركز التقارير", "كل التقارير", "نظرة سريعة"],
+  accountantReview: ["مراجعة", "محاسب", "المراجعة المحاسبية", "تحتاج مراجعة", "اعتماد المحاسب"],
+  approvals: ["اعتماد", "الاعتمادات", "موافقة", "الموافقات", "طلب اعتماد", "بانتظار الاعتماد"],
+  documents: ["الأرشيف", "الفواتير", "المستندات", "فاتورة قديمة", "سند", "طباعة فاتورة", "pdf"],
+  bankFees: ["عمولة البنك", "عمولات الشبكة", "تسوية العمولة", "كشف البنك", "نسبة العمولة"],
+  showcase: ["استعراض", "اعرض للزبون", "الكتالوج", "صور القطع", "عرض القطع"],
+  dashboard: ["لوحة", "لوحة التحكم", "مؤشرات", "ملخص"],
 };
 
 /// يُعيد أفضل صفحة تطابق الطلب، أو null. لا يقترح ما هو خارج الصلاحية.
@@ -245,12 +261,21 @@ const SHORTCUT_HINTS = {
 const NAV_MAX_PER_ROW = 5;
 
 const MENU_GROUPS = [
+  // ⚠ المرتجع والاستبدال عملُ بيعٍ لا تقرير: كانا تحت «التقارير» فلا
+  //   يجدهما البائع حين يقف الزبون أمامه بالقطعة.
+  {
+    id: "sales",
+    label: "المبيعات",
+    hint: "الاستعراض · السجل · المرتجعات والاستبدال · البائعون",
+    icon: Receipt,
+    items: ["showcase", "salesHistory", "salesReturn", "sellerReports"],
+  },
   {
     id: "reports",
     label: "التقارير",
     hint: "كل التقارير والقوائم",
     icon: BarChart3,
-    items: ["reports", "journal", "generalLedger", "trialBalance", "fullStatements", "anyStatement", "masterReport", "queryBuilder", "customerReport", "docCycle", "search", "bankRecon", "supplierLedger", "officeLedger", "salesReturn", "sellerReports", "salesHistory", "taxReport", "financials"],
+    items: ["reportsHub", "dashboard", "accountantReview", "approvals", "documents", "bankFees", "reports", "journal", "generalLedger", "trialBalance", "fullStatements", "anyStatement", "masterReport", "queryBuilder", "customerReport", "docCycle", "search", "bankRecon", "supplierLedger", "officeLedger", "taxReport", "financials"],
   },
   {
     id: "inventory",

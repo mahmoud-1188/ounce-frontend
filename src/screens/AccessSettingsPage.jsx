@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { AlertTriangle, Plus, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { AlertTriangle, History, Plus, QrCode as QrIcon, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
 import { fmt } from "../core/money.js";
 import { MAIN_TAB_IDS } from "../core/navigation.js";
 import { inputStyle, normalizeName, toLatinDigits } from "../domain/helpers.js";
@@ -16,7 +16,7 @@ import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 // بطاقة كل موظف: u.pin لم يعد موجودًا في الحالة المحلية إطلاقًا — كان
 // ‌`{"•".repeat(u.pin.length)}` سيرمي خطأ فورًا (u.pin === undefined)، فصار
 // عرضًا ثابتًا بلا اعتماد على طول فعلي.
-function AccessSettingsPage({ users, navRegistry = [], roles = {}, onAddUser, onRenameUser, onToggleAi, onSetPermissions, onRemoveUser, onBack }) {
+function AccessSettingsPage({ users, navRegistry = [], roles = {}, currentUserId = null, onAddUser, onRenameUser, onToggleAi, onSetPermissions, onRemoveUser, onEnroll = null, onFetchLog = null, onBack }) {
   const [showAdd, setShowAdd] = useState(false);
   const [name, setName] = useState("");
   const [pin, setPin] = useState("");
@@ -27,6 +27,7 @@ function AccessSettingsPage({ users, navRegistry = [], roles = {}, onAddUser, on
   const [newName, setNewName] = useState("");
   const [guardMsg, setGuardMsg] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [showLog, setShowLog] = useState(false);
 
   const nameTaken = users.some((u) => normalizeName(u.name) === normalizeName(name));
   const valid = name.trim() && /^\d{4,6}$/.test(pin) && !nameTaken;
@@ -357,6 +358,15 @@ function AccessSettingsPage({ users, navRegistry = [], roles = {}, onAddUser, on
                       >
                         <ShieldCheck size={11} /> الصلاحيات
                       </button>
+                      {onEnroll && (u.role !== "manager" || u.id === currentUserId) && (
+                        <button
+                          onClick={() => onEnroll(u)}
+                          className="text-[11px] px-2.5 py-1 rounded-full flex items-center gap-1"
+                          style={{ background: "var(--panel)", color: "var(--accentText)", border: "1px solid var(--line)" }}
+                        >
+                          <QrIcon size={11} /> ربط جهاز
+                        </button>
+                      )}
                       <button
                         onClick={() => {
                           setRenaming(u.id);
@@ -379,7 +389,67 @@ function AccessSettingsPage({ users, navRegistry = [], roles = {}, onAddUser, on
             );
           })}
         </div>
+
+        {/* ── سجل الصلاحيات: من منح من ماذا ومتى — الفرق لا الحالة ── */}
+        {onFetchLog && (
+          <>
+            <button onClick={() => setShowLog((v) => !v)}
+              className="w-full mt-4 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2"
+              style={{ background: showLog ? "var(--accentBg)" : "var(--panel)", color: "var(--accent)", border: "1px solid var(--line)" }}>
+              <History size={14} /> {showLog ? "إخفاء سجل الصلاحيات" : "سجل الصلاحيات"}
+            </button>
+            {showLog && <PermissionLog onFetch={onFetchLog} registry={navRegistry} roles={roles} />}
+          </>
+        )}
+        <div style={{ height: 24 }} />
       </div>
+    </div>
+  );
+}
+
+const PERM_KINDS = {
+  create: "أُضيف", delete: "حُذف", role: "تغيّر دوره", pages: "تغيّرت صفحاته", reset: "أُعيد لافتراضي الدور",
+  ai: "أدوات الذكاء", rename: "تغيّر اسمه", enroll: "ربط جهاز",
+};
+
+/// سجلّ التدقيق يحفظ **ما فُعل**، وهذا يحفظ **من صار يستطيع فعله** — والسؤال
+/// الذي يُسأل بعد كل اختلاس: «من أعطى فلانًا هذه الصلاحية ومتى؟»
+function PermissionLog({ onFetch, registry = [], roles = {} }) {
+  const [log, setLog] = useState(null);
+  const [err, setErr] = useState("");
+  useEffect(() => {
+    let live = true;
+    onFetch().then((r) => { if (live) setLog(r || []); }).catch(() => { if (live) setErr("تعذّر تحميل السجل"); });
+    return () => { live = false; };
+  }, []);
+  const label = (id) => registry.find((n) => n.id === id)?.label || id;
+  if (err) return <p style={{ color: "var(--bad)" }} className="text-[11px] mt-2">⚠ {err}</p>;
+  if (!log) return <p style={{ color: "var(--text3)" }} className="text-[11px] mt-2">جارٍ التحميل…</p>;
+  if (!log.length) return <p style={{ color: "var(--text3)" }} className="text-[11px] mt-2">لا تغييرات مسجّلة بعد.</p>;
+  const detail = (x) => {
+    if (x.kind === "ai") return x.after?.canUseAi ? "فُتحت" : "أُغلقت";
+    if (x.kind === "rename") return `${x.before?.name || ""} ← ${x.after?.name || ""}`;
+    if (x.kind === "create") return roles[x.after?.role]?.label || x.after?.role || "";
+    if (x.kind === "enroll") return x.byKind === "self" ? "ربطه الموظّف ووضع رقمه" : "أُصدر رمز ربط";
+    const parts = [];
+    if ((x.added || []).length) parts.push(`مُنح: ${x.added.map(label).join("، ")}`);
+    if ((x.removed || []).length) parts.push(`سُحب: ${x.removed.map(label).join("، ")}`);
+    return parts.join(" · ");
+  };
+  return (
+    <div className="flex flex-col gap-1.5 mt-2">
+      {log.map((x) => (
+        <Card key={x.id} style={{ padding: 10 }}>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] px-2 py-0.5 rounded-full" style={{ background: "var(--panel)", color: x.kind === "delete" || x.kind === "role" ? "var(--bad)" : "var(--accent)", border: "1px solid var(--line)" }}>
+              {PERM_KINDS[x.kind] || x.kind}
+            </span>
+            <span style={{ color: "var(--text)" }} className="text-xs font-bold flex-1">{x.target || "—"}</span>
+          </div>
+          {detail(x) && <p style={{ color: "var(--text2)" }} className="text-[11px] mt-1">{detail(x)}</p>}
+          <p style={{ color: "var(--text3)" }} className="text-[10px] mt-0.5">{x.by || "—"}{x.byKind === "hq" ? " (الإدارة)" : ""} · {new Date(x.date).toLocaleString("en-GB")}</p>
+        </Card>
+      ))}
     </div>
   );
 }

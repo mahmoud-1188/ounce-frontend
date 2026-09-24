@@ -2,7 +2,9 @@ import React, { useCallback, useMemo, useState } from "react";
 import { Barcode } from "lucide-react";
 import { NHR_POWER_MAX_DBM, RFID_DEFAULTS } from "../core/constants.js";
 import { fmtW } from "../core/money.js";
-import { inputStyle, rfidSettingsFor, useNhrReader } from "../domain/helpers.js";
+import { inputStyle, nextSessionId, rfidSettingsFor, useNhrReader } from "../domain/helpers.js";
+import { buildRfidSession } from "../domain/buildRfidSession.js";
+import { ShareMenu } from "../ui/ShareMenu.jsx";
 import { matchEpcToUnits } from "../domain/matchEpcToUnits.js";
 import { BindEpcSheet } from "../modals/BindEpcSheet.jsx";
 import { Card } from "../ui/Card.jsx";
@@ -21,7 +23,7 @@ import { SubPageHeader } from "../ui/SubPageHeader.jsx";
  * (section) يُمرَّر كـ{rfid: rfidCfg} لأن rfidSettingsFor نفسها منقولة
  * حرفيًا وتتوقع الشكل settings.rfid.
  */
-function RfidReaderPage({ items = [], rfidCfg, canManage, onBindEpc, onApplyCount, onBack }) {
+function RfidReaderPage({ items = [], suppliers = [], lots = [], categories = [], branch = {}, userName = "", storeId = 0, rfidCfg, canManage, onBindEpc, onApplyCount, onBack }) {
   const [tab, setTab] = useState("live");        // live | batch | find
   const [tags, setTags] = useState(new Map());   // epc → {rssi, total}
   const [logLines, setLogLines] = useState([]);
@@ -47,8 +49,20 @@ function RfidReaderPage({ items = [], rfidCfg, canManage, onBindEpc, onApplyCoun
     return { ...eff, profile: base.profile, q: base.q, session: base.session, target: base.target };
   }, [rfidCfg]);
   const r = useNhrReader({ onTags, onBatch: onBatchFile, onLog, config: readerCfg });
-  const live = useMemo(() => matchEpcToUnits([...tags.keys()], items), [tags, items]);
-  const batchMatch = useMemo(() => (batch?.ok ? matchEpcToUnits(batch.epcs, items) : null), [batch, items]);
+  const live = useMemo(() => matchEpcToUnits([...tags.keys()], items, { suppliers, lots, storeId }), [tags, items, suppliers, lots, storeId]);
+  const batchMatch = useMemo(() => (batch?.ok ? matchEpcToUnits(batch.epcs, items, { suppliers, lots, storeId }) : null), [batch, items, suppliers, lots, storeId]);
+  // ⚠ جلسة للتصدير والمشاركة — من الدفعة إن وُجدت وإلا من المسح المباشر.
+  //   الرقاقة تحمل RSSI من القارئ، فيُلحق بكل سطرٍ مطابق.
+  const [archive, setArchive] = useState([]);
+  const getSession = () => {
+    const src = batchMatch || live;
+    if (!src || (!src.found?.length && !src.unknown?.length && !src.otherStore?.length)) return null;
+    const found = (src.found || []).map((f) => ({ ...f, rssi: tags.get(f.epc)?.rssi ?? null }));
+    const sess = buildRfidSession({ kind: "rfid", sessionId: nextSessionId("RFID", archive), branch, user: userName, categories,
+      found, missing: batchMatch ? src.missing || [] : [], unknown: src.unknown || [], otherStore: src.otherStore || [] });
+    setArchive((a) => [...a, { session_id: sess.session_id }]);
+    return sess;
+  };
   const busy = r.state === "live" || r.state === "batch" || r.state === "saving" || r.state === "uploading";
 
   const STATES = { idle: "غير متصل", connecting: "يتصل…", ready: "جاهز", live: "يمسح مباشرةً",
@@ -59,7 +73,7 @@ function RfidReaderPage({ items = [], rfidCfg, canManage, onBindEpc, onApplyCoun
       <p style={{ color: "var(--accent)", margin: 0 }} className="text-[11px] font-bold mb-2">{title}</p>
       <div className="grid grid-cols-3 gap-2 mb-2">
         {[["مطابق", m.found.length, "good"], ["ناقص", m.missing.length, m.missing.length ? "bad" : "text3"],
-          ["غير معروف", m.unknown.length, m.unknown.length ? "accent" : "text3"]].map(([l, v, tone]) => (
+          ["غير معروف", m.unknown.length + (m.otherStore?.length || 0), m.unknown.length ? "accent" : "text3"]].map(([l, v, tone]) => (
           <div key={l}>
             <p style={{ color: "var(--text3)", margin: 0 }} className="text-[10px]">{l}</p>
             <p style={{ color: `var(--${tone})`, margin: 0 }} className="text-[16px] font-bold">{v}</p>
@@ -75,6 +89,16 @@ function RfidReaderPage({ items = [], rfidCfg, canManage, onBindEpc, onApplyCoun
             </p>
           ))}
           {m.missing.length > 12 && <p style={{ color: "var(--text3)" }} className="text-[10px]">و{m.missing.length - 12} غيرها</p>}
+        </div>
+      )}
+      {(m.otherStore || []).length > 0 && (
+        <div className="mt-2 pt-1" style={{ borderTop: "1px solid var(--line)" }}>
+          <p style={{ color: "var(--text2)", margin: 0 }} className="text-[10px] font-bold mb-1">
+            رقائق محلٍّ آخر ({m.otherStore.length}) — ليست مفقودة، ليست لنا
+          </p>
+          {m.otherStore.slice(0, 6).map((o) => (
+            <p key={o.epc} style={{ color: "var(--text3)", margin: 0, fontFamily: "monospace" }} className="text-[10px]">{o.code} · محل {o.storeId}</p>
+          ))}
         </div>
       )}
       {m.unknown.length > 0 && (
@@ -96,7 +120,7 @@ function RfidReaderPage({ items = [], rfidCfg, canManage, onBindEpc, onApplyCoun
 
   return (
     <div>
-      <SubPageHeader title="قارئ RFID" onBack={onBack} />
+      <SubPageHeader title="قارئ RFID" onBack={onBack} right={<ShareMenu compact getSession={getSession} />} />
       <div className="px-4 pt-3">
 
         <Card style={{ padding: 12, marginBottom: 10, border: `1px solid ${r.state === "idle" ? "var(--line)" : "var(--accentLine)"}` }}>

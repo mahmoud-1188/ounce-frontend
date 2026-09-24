@@ -4,6 +4,7 @@ import { CASH_LEDGER_CODES, WAGES_LEDGER_CODES } from "../core/constants.js";
 import { fmtMoney, fmtW } from "../core/money.js";
 import { buildAccountLedger } from "../domain/buildAccountLedger.js";
 import { buildAccountTreeReport } from "../domain/buildAccountTreeReport.js";
+import { buildAging } from "../domain/buildAging.js";
 import { buildGoldByKaratLedger } from "../domain/buildGoldByKaratLedger.js";
 import { buildMultiAccountLedger } from "../domain/buildMultiAccountLedger.js";
 import { buildOfficialStatement } from "../domain/buildOfficialStatement.js";
@@ -13,9 +14,10 @@ import { EmptyState } from "../ui/EmptyState.jsx";
 import { Field } from "../ui/Field.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 
-function GeneralLedgerPage({ journal = [], goldLedger = [], accounts = [], currency = "ر.س", branchName = "", preparedBy = "", onBackfill, onBack }) {
+function GeneralLedgerPage({ journal = [], goldLedger = [], accounts = [], agingEntries = [], agingWeightEntries = [], currency = "ر.س", branchName = "", preparedBy = "", onBackfill, onBack }) {
   const [tab, setTab] = useState("tree");        // tree | account | gold | cash | wages
-  const [treeView, setTreeView] = useState("balance");   // moved | balance | all
+  const [treeView, setTreeView] = useState("balance");
+  const [agingUnit, setAgingUnit] = useState("money");   // moved | balance | all
   // ⚠ أي سطرٍ يُضغط تظهر تفاصيله — لا رقمٌ بلا مستند خلفه
   const [detail, setDetail] = useState(null);
   const [code, setCode] = useState("");
@@ -167,7 +169,7 @@ function GeneralLedgerPage({ journal = [], goldLedger = [], accounts = [], curre
         </Card>
 
         <div className="flex gap-1 mb-3 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
-          {[["tree", "الشجرة"], ["account", "كشف"], ["official", "كشف رسمي"], ["gold", "الذهب"], ["cash", "النقدية"], ["wages", "الأجور"]].map(([id, lbl]) => (
+          {[["tree", "الشجرة"], ["account", "كشف"], ["official", "كشف رسمي"], ["aging", "أعمار الديون"], ["gold", "الذهب"], ["cash", "النقدية"], ["wages", "الأجور"]].map(([id, lbl]) => (
             <button key={id} onClick={() => setTab(id)} className="py-2 px-3 rounded-xl text-[11px] font-bold"
               style={{ background: tab === id ? "var(--accentBg)" : "var(--field)", whiteSpace: "nowrap", flexShrink: 0,
                 color: tab === id ? "var(--accent)" : "var(--text2)", border: "1px solid var(--line)" }}>
@@ -175,6 +177,68 @@ function GeneralLedgerPage({ journal = [], goldLedger = [], accounts = [], curre
             </button>
           ))}
         </div>
+
+        {/* ══ أعمار الديون ══ */}
+        {tab === "aging" && (() => {
+          const isW = agingUnit === "weight";
+          const ag = buildAging({ asOf: to, unit: agingUnit,
+            entries: isW ? agingWeightEntries : agingEntries });
+          const fmtU = (v) => (isW ? `${fmtW(v)} جم24` : `${currency}${fmtMoney(v)}`);
+          return (
+            <>
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                {[["money", "نقديّ — على العملاء"], ["weight", "وزنيّ — للموردين"]].map(([u, l]) => (
+                  <button key={u} onClick={() => setAgingUnit(u)} className="py-2.5 rounded-xl text-[11px] font-bold"
+                    style={{ background: agingUnit === u ? "var(--accentBg)" : "var(--field)",
+                      color: agingUnit === u ? "var(--accent)" : "var(--text2)", border: "1px solid var(--line)" }}>{l}</button>
+                ))}
+              </div>
+              <Card style={{ padding: 11, marginBottom: 8, border: "1px solid var(--accentLine)" }}>
+                <p style={{ color: "var(--text3)", margin: 0 }} className="text-[11px] leading-6">
+                  ⚠ <b>رصيدٌ إجمالي لا يُنبئ بشيء.</b> مئة ألفٍ عمرها أسبوع غير مئة ألفٍ عمرها
+                  سنة — والثانية غالبًا لن تُحصَّل.
+                </p>
+              </Card>
+              <Card style={{ padding: 12, marginBottom: 8 }}>
+                {ag.labels.map((l, i) => (
+                  <div key={l} className="flex items-baseline justify-between py-0.5">
+                    <span style={{ color: i === ag.labels.length - 1 ? "var(--bad)" : "var(--text3)" }}
+                      className="text-[11px]">{l}</span>
+                    <span style={{ color: i === ag.labels.length - 1 ? "var(--bad)" : "var(--text2)" }}
+                      className="text-[11px] font-bold">{fmtU(ag.totals[i])}</span>
+                  </div>
+                ))}
+                <div style={{ borderTop: "1px solid var(--line)", marginTop: 5, paddingTop: 5 }}>
+                  <div className="flex items-baseline justify-between">
+                    <span style={{ color: "var(--text)" }} className="text-[11px] font-bold">الإجمالي</span>
+                    <span style={{ color: "var(--text)" }} className="text-[12px] font-bold">{fmtU(ag.total)}</span>
+                  </div>
+                </div>
+                {ag.overdue > 0 && (
+                  <p style={{ color: "var(--bad)", margin: "6px 0 0" }} className="text-[11px] leading-6">
+                    ⚠ {fmtU(ag.overdue)} متأخّرٌ أكثر من 90 يومًا — {isW
+                      ? <><b>وهذا أخطر من المتأخّر النقدي:</b> ذهبٌ مستحقٌّ عليك منذ سنة يعني
+                        أنك <b>بعتَ ذهب غيرك وصرفتَ ثمنه</b>.</>
+                      : <><b>يُخصَّص له مقابل الديون المشكوك فيها</b> في التسويات الجردية.</>}
+                  </p>
+                )}
+              </Card>
+              {ag.rows.length === 0 ? (
+                <p style={{ color: "var(--text3)" }} className="text-[11px]">لا ديونٍ قائمة.</p>
+              ) : ag.rows.map((r, i) => (
+                <Card key={i} style={{ padding: 9, marginBottom: 3 }}>
+                  <div className="flex items-baseline justify-between">
+                    <span style={{ color: "var(--text)" }} className="text-[11px]">{r.name}</span>
+                    <span style={{ color: r.bucket === 3 ? "var(--bad)" : "var(--text2)" }}
+                      className="text-[11px] font-bold">{fmtU(r.balance)}</span>
+                  </div>
+                  <p style={{ color: r.bucket === 3 ? "var(--bad)" : "var(--text3)", margin: 0 }}
+                    className="text-[11px]">{r.days} يومًا</p>
+                </Card>
+              ))}
+            </>
+          );
+        })()}
 
         {/* ── تفاصيل السطر المضغوط ── */}
         {detail && (

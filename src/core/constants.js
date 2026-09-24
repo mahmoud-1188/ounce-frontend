@@ -448,15 +448,33 @@ const ROLES = {
   employee: {
     // ⚠ لا «aiAssistant» في القائمة: الذكاء يُفتح لكل مستخدم على حدة
     // من شاشة الصلاحيات، لا لكل من حمل الدور.
-    label: "موظف", allowedTabs: ["sales"], allowedMore: [],
+    label: "موظف", allowedTabs: ["sales"], allowedMore: ["showcase"],
     canManageDay: false,
     denyActions: ["openDay", "closeDay"],
   },
   assistant: {
     canBreak: true,
     label: "نائب المدير", allowedTabs: ["sales", "stocktake"],
-    allowedMore: [],
+    allowedMore: ["showcase"],
     canManageDay: true,
+  },
+  accountant: {
+    label: "المحاسب",
+    hint: "يراجع الدفاتر ويعتمد ويعلّق — لا يبيع ولا يقبض ولا يُكوّد",
+    canManageDay: false,
+    canBreak: false,
+    allowedTabs: ["more"],
+    allowedMore: ["accountantReview", "dashboard", "approvals", "documents", "bankFees", "journal", "generalLedger", "trialBalance", "fullStatements", "anyStatement",
+      "financials", "docCycle", "reportsHub", "reports", "bankRecon", "supplierLedger", "officeLedger", "salesHistory",
+      "purchases", "customers", "safeAudit", "openingCompare", "masterReport", "codingReport", "queryBuilder", "search",
+      "taxReport", "customerReport", "suppliers", "partners", "fixedAssets", "payroll", "workday"],
+    denyActions: [
+      "openDay", "closeDay", "cashMove", "expense", "priceFix", "sale",
+      "sell", "sellCredit", "discount", "salesReturn", "purchase", "purchaseDeferred",
+      "addItem", "addGoods", "codeItems", "issueOut", "voidItem", "stockAdjust", "convertScrap", "breakStones", "sendScrap",
+      "assessScrap", "approveScrap", "buyScrap", "categories", "repair", "taskir", "settleSupplier",
+      "postJournal", "backfill", "fiscalClose", "capitalChange", "profitDistribution",
+    ],
   },
   manager: {
     label: "المدير",
@@ -472,7 +490,7 @@ const ROLES = {
     // كانت الصفحتان مبنيتين ومُفعَّلتين خادميًّا لكن غير قابلتين للوصول
     // فعليًا من القائمة لأي مدير افتراضي — هذا الإصلاح يضيفهما هنا، ومعهما
     // hqReports (migration 017) مباشرة بلا نفس الفجوة من أول يوم.
-    allowedMore: ["addGoods", "printing", "printerSetup", "salesHistory", "sellerReports", "price", "reports", "journal", "trialBalance", "search", "bankRecon", "supplierLedger", "officeLedger", "salesReturn", "scrap", "scrapIntake", "scrapCustody", "conversions", "itemEdit", "goldOut", "categories", "workday", "customers", "trustAccounts", "reservations", "safeAudit", "integration", "storeLink", "backup", "purchases", "suppliers", "taskirat", "partners", "access", "taxReport", "settings", "financials", "openingCompare", "repairs", "aiAssistant", "navCustomize", "openingBalance", "fixedAssets", "payroll", "attendanceHr", "hqReports", "priceFix", "fullStatements", "anyStatement", "generalLedger", "masterReport", "exchange", "customerReport", "docCycle"],
+    allowedMore: ["addGoods", "printing", "printerSetup", "salesHistory", "sellerReports", "price", "reports", "journal", "trialBalance", "search", "bankRecon", "supplierLedger", "officeLedger", "salesReturn", "scrap", "scrapIntake", "scrapCustody", "conversions", "itemEdit", "goldOut", "categories", "workday", "customers", "trustAccounts", "reservations", "safeAudit", "integration", "storeLink", "backup", "purchases", "suppliers", "taskirat", "partners", "access", "taxReport", "settings", "financials", "openingCompare", "repairs", "aiAssistant", "navCustomize", "openingBalance", "fixedAssets", "payroll", "attendanceHr", "hqReports", "priceFix", "fullStatements", "anyStatement", "generalLedger", "masterReport", "exchange", "customerReport", "docCycle", "accountantReview", "dashboard", "approvals", "documents", "bankFees", "showcase", "reportsHub"],
   },
 };
 
@@ -802,6 +820,52 @@ const STATEMENT_ENTITIES = [
 ];
 
 /// أكواد حسابات النقد (الخزنة/الصندوق) — تُستخدم في قائمة التدفق النقدي.
+
+// ═══════════════════════════════════════════════════════════════════════
+//  قسم المحاسب والرقابة (v197 في المرجع)
+// ═══════════════════════════════════════════════════════════════════════
+
+const REVIEW_VERDICTS = {
+  approved: { label: "معتمد", color: "var(--good)", hint: "العملية سليمة — تخرج من الطابور" },
+  needs_change: { label: "يحتاج تعديلًا", color: "var(--bad)", hint: "تبقى في الطابور موسومةً حتى يُعتمد التعديل" },
+  note: { label: "ملاحظة", color: "var(--accent)", hint: "توثيقٌ بلا حكم — تبقى كما هي" },
+};
+
+const REVIEW_KINDS = {
+  journal_unbalanced: { label: "قيد مختلّ", severity: "block", page: "journal" },
+  journal_reversed: { label: "قيد عُكس", severity: "info", page: "journal" },
+  sale_no_journal: { label: "فاتورة بلا قيد", severity: "block", page: "salesHistory" },
+  return_no_journal: { label: "مرتجع بلا قيد", severity: "block", page: "salesReturn" },
+  expense_no_journal: { label: "مصروف بلا قيد", severity: "block", page: "expenses" },
+  stocktake_variance: { label: "فرق جرد بلا سبب", severity: "warn", page: "stocktake" },
+  approval_pending: { label: "اعتماد معلّق", severity: "warn", page: "approvals" },
+  no_workday: { label: "عملية بلا يوم عمل", severity: "warn", page: "workday" },
+  lot_no_invoice: { label: "شراء آجل بلا فاتورة", severity: "info", page: "purchases" },
+  day_stale: { label: "يوم مفتوح من يوم سابق", severity: "warn", page: "workday" },
+  negative_cash: { label: "نقد سالب في الأستاذ", severity: "block", page: "generalLedger" },
+};
+
+const REVIEW_SEVERITY = {
+  block: { label: "يمنع الإقفال", color: "var(--bad)", order: 0 },
+  warn: { label: "يحتاج مراجعة", color: "var(--accent)", order: 1 },
+  info: { label: "للعلم", color: "var(--text2)", order: 2 },
+};
+
+const DOC_KINDS = {
+  sale: "فاتورة بيع", ret: "مرتجع", purchase: "فاتورة شراء", settle: "سند سداد مورد", office: "شراء من مكتب تسكير",
+  scrap: "سند شراء كسر", receipt: "سند قبض", expense: "سند صرف", payroll: "مسيّر رواتب", external: "فاتورة خارجية",
+};
+
+/// دعوة ربط الجهاز — صلاحيتها بالدقائق (الخادم يفرضها، وهنا للعدّاد)
+const ENROLL_TTL_MIN = 30;
+
+const WEAK_PINS = ["0000", "1111", "1234", "1122", "2222", "9999", "4321",
+  "123456", "111111", "000000", "112233"];
+
+/// رقاقة Impinj M830 — لوحة تعريف بـ96 بتًا: 8 رمز + 2 محل + 2 تاريخ
+const EPC_EPOCH = Date.UTC(2020, 0, 1);
+const M830 = { epcBits: 96, epcBytes: 12, epcWords: 6, pcWord: "3000", tidBits: 96, userBits: 0 };
+
 const CASH_LEDGER_CODES = ["1110", "1120", "1130", "1140", "1150"];
 
 /// أكواد حسابات الأجور — دفتر أجورٍ منفصل.
@@ -1179,5 +1243,5 @@ const QUERY_OPS = [
   { id: "not", label: "لا يحتوي" },
 ];
 
-export { ACCOUNT_GROUPS, ACCOUNT_TREE, AUTO_WORKDAY, AI_APP_MANUAL, AI_PROMPTS, AI_SYSTEM_RULES, ALL_ACCOUNT_NODES, APP_MODES, ATTACH_PREFIX, B32, BREAKPOINTS, C128, CASH_ACCOUNT_OF, CASH_LEDGER_CODES, CATEGORY_STATE, COMPARE_MODES, CUST_EVENTS, DEFAULT_APP_MODE, DEFAULT_CATEGORIES, DEFAULT_INTEGRATION, DEFAULT_OPENING_BALANCE, DEFAULT_PRINTER, DEFAULT_SETTINGS, DEFAULT_STORE, DEFAULT_USERS, DEMO_VERSION, DOC_CYCLE, DOC_REFS, EXCHANGE_KINDS, EXCHANGE_VERSION, EXPENSE_ACCOUNT_OF, EXPENSE_CATEGORIES, EXT_SAMPLE, FIX_KINDS, ISSUE_REASONS, KPI_DEFS, LEGACY_ACCOUNT_NODES, LOGO_FADE_MS, LOGO_SWAP_MS, MANUAL_ACCOUNT_TREE, MAX_ATTACH_BYTES, MGR_FEE_DEFAULT, MIGRATION_FLAG, NHR, NHR_POWER_MAX_DBM, OUNCE_SECRET, PARTNER_REQUIRED, PRICE_SANE, PRICE_SOURCES, PRINTER_SERVICES, PUBLISH_CAP, QR_ALNUM, QR_EXP, QR_VER, RECOVERY_ALPHABET, RECOVERY_WINDOW_MIN, REPORT_RANGES, RFID_DEFAULTS, RFID_MODES, RFID_SECTIONS, ROLES, QUERY_FIELDS, QUERY_OPS, STATEMENT_ENTITIES, STORE_SAMPLE, TRUST_MOVES, WAGES_LEDGER_CODES };
+export { DOC_KINDS, ENROLL_TTL_MIN, EPC_EPOCH, M830, REVIEW_KINDS, REVIEW_SEVERITY, REVIEW_VERDICTS, WEAK_PINS, ACCOUNT_GROUPS, ACCOUNT_TREE, AUTO_WORKDAY, AI_APP_MANUAL, AI_PROMPTS, AI_SYSTEM_RULES, ALL_ACCOUNT_NODES, APP_MODES, ATTACH_PREFIX, B32, BREAKPOINTS, C128, CASH_ACCOUNT_OF, CASH_LEDGER_CODES, CATEGORY_STATE, COMPARE_MODES, CUST_EVENTS, DEFAULT_APP_MODE, DEFAULT_CATEGORIES, DEFAULT_INTEGRATION, DEFAULT_OPENING_BALANCE, DEFAULT_PRINTER, DEFAULT_SETTINGS, DEFAULT_STORE, DEFAULT_USERS, DEMO_VERSION, DOC_CYCLE, DOC_REFS, EXCHANGE_KINDS, EXCHANGE_VERSION, EXPENSE_ACCOUNT_OF, EXPENSE_CATEGORIES, EXT_SAMPLE, FIX_KINDS, ISSUE_REASONS, KPI_DEFS, LEGACY_ACCOUNT_NODES, LOGO_FADE_MS, LOGO_SWAP_MS, MANUAL_ACCOUNT_TREE, MAX_ATTACH_BYTES, MGR_FEE_DEFAULT, MIGRATION_FLAG, NHR, NHR_POWER_MAX_DBM, OUNCE_SECRET, PARTNER_REQUIRED, PRICE_SANE, PRICE_SOURCES, PRINTER_SERVICES, PUBLISH_CAP, QR_ALNUM, QR_EXP, QR_VER, RECOVERY_ALPHABET, RECOVERY_WINDOW_MIN, REPORT_RANGES, RFID_DEFAULTS, RFID_MODES, RFID_SECTIONS, ROLES, QUERY_FIELDS, QUERY_OPS, STATEMENT_ENTITIES, STORE_SAMPLE, TRUST_MOVES, WAGES_LEDGER_CODES };
 

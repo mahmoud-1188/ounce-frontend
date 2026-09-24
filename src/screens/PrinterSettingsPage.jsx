@@ -3,6 +3,7 @@ import { Check } from "lucide-react";
 import { DEFAULT_PRINTER, PRINTER_SERVICES } from "../core/constants.js";
 import { PURITY, fmt, fmtW } from "../core/money.js";
 import { buildCalibrationCanvas } from "../domain/buildCalibrationCanvas.js";
+import { buildPlateEpc } from "../domain/buildPlateEpc.js";
 import { bleWriteChunked, btSupported, codeToEpcHex, inputStyle, printLabelToDevice, sendRawToPrinter, tsplCalibrateBytes, tsplJobBytes, usbPrint } from "../domain/helpers.js";
 import { Card } from "../ui/Card.jsx";
 import { Field } from "../ui/Field.jsx";
@@ -341,7 +342,13 @@ function PrinterSettingsPage({ config, onSave, sampleItem, currency, price24, on
                   <p style={{ color: "var(--text3)", margin: 0 }} className="text-[10px] leading-6">
                     ⚠ الأمر يختلف بين الشركات. الافتراضي صيغة TSC. راجع دليل SDK طابعتك —
                     السطر الذي فيه <b>RFID</b> — والصقه هنا بنفس الشكل.
-                    <br />مثال لرمز <b>R7K2M9PQ</b>: <span style={{ fontFamily: "monospace", direction: "ltr", display: "inline-block" }}>{codeToEpcHex("R7K2M9PQ")}</span>
+                    <br />مثال لرمز <b>R7K2M9PQ</b>: <span style={{ fontFamily: "monospace", direction: "ltr", display: "inline-block" }}>{buildPlateEpc({ code: "R7K2M9PQ", storeId: cfg.storeId || 0 })}</span>
+                  </p>
+                  <Field label="رقم المحل على الرقاقة (0–65535)">
+                    <NumericInput value={String(cfg.storeId || "")} onChange={(v) => set("storeId", Math.max(0, Math.min(65535, Math.round(Number(v) || 0))))} placeholder="0" />
+                  </Field>
+                  <p style={{ color: "var(--text3)", margin: 0 }} className="text-[10px] leading-6">
+                    الرقاقة تحمل الرمز ورقم المحل وتاريخ الكتابة — فرقاقةُ فرعٍ آخر تُقرأ «ليست لنا» لا «مفقودة».
                   </p>
                 </>
               )}

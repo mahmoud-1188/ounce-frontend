@@ -93,6 +93,12 @@ async function apiFetch(path, { method = "GET", body, headers } = {}) {
   }
 
   if (!res.ok) {
+    // ⚠ 423 = الفرع مقفلٌ من الإدارة: كل طلبٍ يُرفض حتى يُفكّ، فالتطبيق
+    //   كلّه يُحجب بشاشة قفلٍ واحدة (يستمع لهذا الحدث) بدل أن تُظهر كل
+    //   شاشةٍ خطأها بمفردها.
+    if (res.status === 423 && typeof window !== "undefined") {
+      try { window.dispatchEvent(new CustomEvent("ounce:branch-locked", { detail: payload || {} })); } catch { /* تجاهل */ }
+    }
     // 401 هنا يعني توكن منتهي/غير صالح — لا يوجد تجديد تلقائي (refresh
     // token) في هذا الباك إند بعد؛ الشاشة المستدعية مسؤولة عن معالجة
     // ApiError.status === 401 بإعادة المستخدم لشاشة الدخول.
@@ -476,7 +482,28 @@ const hqTransactionsApi = {
   receive: (id) => apiFetch(`/branch/hq-transactions/${id}/receive`, { method: "POST" }),
 };
 
+// ── قسم المحاسب والرقابة (migration 037) ──
+//
+// المراجعة المحاسبية (أحكامٌ تُضاف ولا تُعدَّل) · الاعتمادات (ما فوق الحدّ
+// يُحفظ طلبًا بـ202، والمعتمَد يُعاد إرساله بـapprovalId فيُنفَّذ مرّةً) ·
+// حدود الاعتماد وقفل الفترات · سجل الصلاحيات · ربط الجهاز بـQR ·
+// تسوية عمولة البنك.
+const controlApi = {
+  reviews: () => apiFetch("/reviews"),
+  addReview: (payload) => apiFetch("/reviews", { method: "POST", body: payload }),
+  approvals: () => apiFetch("/approvals"),
+  decide: (id, decision, note) => apiFetch(`/approvals/${id}/decide`, { method: "POST", body: { decision, note } }),
+  saveControls: (payload) => apiFetch("/settings/controls", { method: "PATCH", body: payload }),
+  permissionLog: () => apiFetch("/permission-log"),
+  enrollInvite: (userId) => apiFetch(`/users/${userId}/enroll-invite`, { method: "POST" }),
+  // عامّ بلا توكن — الفرع من رابط الدخول المحفوظ على الجهاز
+  enrollClaim: (branchId, code, pin) => apiFetch("/enroll/claim", { method: "POST", body: { branchId, code, pin } }),
+  bankFees: (period) => apiFetch(`/bank-fees?period=${encodeURIComponent(period)}`),
+  settleBankFees: (payload) => apiFetch("/bank-fees/settle", { method: "POST", body: payload }),
+};
+
 export {
+  controlApi,
   ApiError,
   getAuthToken,
   setAuthToken,
