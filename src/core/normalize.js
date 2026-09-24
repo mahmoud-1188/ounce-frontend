@@ -723,6 +723,7 @@ function normalizeBootstrap(boot) {
     // زيادة الإدارة على السعر وإعلاناتها (migration 038) — مُشكَّلتان من الخادم
     pricePolicy: boot.pricePolicy || null,
     approvalRouting: boot.approvalRouting || {},
+    hqPolicy: boot.hqPolicy || null,
     notices: Array.isArray(boot.notices) ? boot.notices : [],
     assetClasses: normalizeAssetClasses(boot.assetClasses || []),
     fixedAssets: normalizeFixedAssets(boot.fixedAssets || []),

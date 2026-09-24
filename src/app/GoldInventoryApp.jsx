@@ -108,6 +108,8 @@ const API_ERROR_MESSAGES = {
   office_not_found: "مكتب التسكير غير موجود",
   scrap_payment_requires_karat_and_weight: "السداد بالكسر يتطلب عيارًا ووزنًا",
   page_not_allowed: "لا تملك صلاحية هذه الشاشة",
+  action_denied_by_hq: "منعت الإدارة المركزية هذه العملية",
+  action_denied_for_role: "هذه العملية خارج صلاحيتك",
   invalid_or_expired_token: "انتهت الجلسة — سجّل الدخول مجددًا",
   name_taken: "يوجد موظف بهذا الاسم",
   pin_taken: "هذا الرقم السري مستخدم",
@@ -425,6 +427,7 @@ export default function GoldInventoryApp() {
   // ── قسم المحاسب والرقابة (migration 037) ──
   const [reviews, setReviews] = useState([]);           // أحكام المراجعة — من الخادم، تُضاف ولا تُعدَّل
   // ── تحكّم الإدارة (migration 038) ──
+  const [hqPolicy, setHqPolicy] = useState(null); // سياسة الإدارة على الشاشات والعمليات: { byRole, branch }
   const [approvalRouting, setApprovalRouting] = useState({}); // من يعتمد ماذا — من الإدارة (hq|branch)
   const [pricePolicy, setPricePolicy] = useState(null); // { markup:{mode,value}|null, world24Manual, at, by }
   const [hqNotices, setHqNotices] = useState([]);       // إعلانات الإدارة [{id, text, by, at, until}]
@@ -2490,6 +2493,21 @@ export default function GoldInventoryApp() {
       more = more.filter((id) => override.allowedMore?.includes(id));
     }
 
+    // ⚠ سياسة الإدارة (migration 040): قيد الفرع للدور يحلّ محلّ قيد الدور
+    //   العام؛ الممنوع يُحذف والممنوح يُضاف — والمنع يغلب المنح. الخادم
+    //   يفرض الشيء نفسه على allowedPages، فهذا إظهارٌ لا حماية.
+    const hqEntry = hqPolicy?.branch?.[r] || hqPolicy?.byRole?.[r];
+    if (hqEntry) {
+      const deny = new Set(hqEntry.deny || []);
+      tabs = tabs.filter((id) => !deny.has(id));
+      more = more.filter((id) => !deny.has(id));
+      for (const id of hqEntry.grant || []) {
+        if (deny.has(id) || !NAV_REGISTRY.some((n) => n.id === id)) continue;
+        if (MAIN_TAB_IDS.includes(id)) { if (!tabs.includes(id)) tabs.push(id); }
+        else if (!more.includes(id)) more.push(id);
+      }
+    }
+
     // ⚠ migration 017: hqReports مسموح صلاحيةً (allowed_more/ROLES) لأي
     // مدير، لكن الخادم يرفضها فعليًا (403 not_hq_branch) لغير فرع HQ —
     // نخفيها هنا من القائمة أصلًا لغير ذلك الفرع بدل إظهار زر يفشل دومًا.
@@ -2632,7 +2650,7 @@ export default function GoldInventoryApp() {
       allowedTabs: (base.allowedTabs || []).filter((t) => modeAllowsTab(appMode, t)),
       allowedMore: (base.allowedMore || []).filter((p2) => modeAllowsPage(appMode, p2)),
     };
-  }, [role, currentUser, users, hqPermissions, appMode]);
+  }, [role, currentUser, users, hqPermissions, hqPolicy, appMode]);
 
   // ── الفهرس يُبنى عند الحاجة ──
   //
@@ -3719,6 +3737,12 @@ export default function GoldInventoryApp() {
       flashToast(`التطبيق في وضع «${APP_MODES[appMode]?.label}» — هذه العملية معطَّلة`);
       return false;
     }
+    // ⚠ منع الإدارة المركزية — من كل النطاقات (الفرع/الدور/الكل)
+    const hqScopes = [hqPolicy?.branch?.[role], hqPolicy?.branch?.["*"], hqPolicy?.byRole?.[role], hqPolicy?.byRole?.["*"]];
+    if (hqScopes.some((p0) => (p0?.denyActions || []).includes(action))) {
+      flashToast("منعت الإدارة المركزية هذه العملية");
+      return false;
+    }
     const deny = ROLES[role]?.denyActions;
     if (Array.isArray(deny) && deny.includes(action)) {
       flashToast("هذه العملية خارج صلاحيتك");
@@ -4413,6 +4437,7 @@ export default function GoldInventoryApp() {
     setReviews(n.reviews);
     setPricePolicy(n.pricePolicy);
     setApprovalRouting(n.approvalRouting || {});
+    setHqPolicy(n.hqPolicy || null);
     setHqNotices(n.notices);
     setFixedAssets(n.fixedAssets);
     setDepreciations(n.depreciationSchedule);
