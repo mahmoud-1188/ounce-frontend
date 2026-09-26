@@ -159,6 +159,8 @@ function FullStatementsPage({
               <Row label="مخزون أول المدة" value={money(inc.openStock)} indent />
               <Row label="+ المشتريات" value={money(inc.purchases)} indent />
               <Row label="− مخزون آخر المدة" value={`(${fmtMoney(inc.closeStock)})`} indent />
+              {/* المصنعية والعمولة (5200) والفاقد والعجز (5300) — كانت خارج القائمة */}
+              {(inc.otherCostRows || []).map((x) => <Row key={x.code} label={`+ ${x.name}`} value={money(x.amount)} indent />)}
               <Row label="تكلفة المبيعات" value={money(inc.cogs)} bold />
             </Sec>
             <Sec title="مجمل الربح">
@@ -166,6 +168,12 @@ function FullStatementsPage({
                 tone={inc.grossProfit >= 0 ? "var(--good)" : "var(--bad)"} />
               {inc.grossMarginPct !== null && <Row label="هامش مجمل الربح" value={`${inc.grossMarginPct}٪`} />}
             </Sec>
+            {(inc.otherIncomeRows || []).length > 0 && (
+              <Sec title="إيرادات أخرى">
+                {inc.otherIncomeRows.map((x) => <Row key={x.code} label={x.name} value={money(x.amount)} indent />)}
+                <Row label="إجمالي الإيرادات الأخرى" value={money(inc.otherIncome)} bold />
+              </Sec>
+            )}
             <Sec title="المصروفات التشغيلية">
               {inc.opex.slice(0, 14).map((x) => <Row key={x.code} label={x.name} value={money(x.amount)} indent />)}
               <Row label="إجمالي المصروفات" value={money(inc.opexTotal)} bold />

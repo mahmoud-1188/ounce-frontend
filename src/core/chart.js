@@ -28,6 +28,9 @@ const CHART_OF_ACCOUNTS = [
   { code: "1130", name: "الصندوق اليومي — نقدي", parent: "1100", unit: "currency", nature: "debit", statement: "balance", pool: "daily", method: "cash" },
   { code: "1140", name: "الصندوق اليومي — شبكة", parent: "1100", unit: "currency", nature: "debit", statement: "balance", pool: "daily", method: "network" },
   { code: "1150", name: "عهدة شراء الكسر", parent: "1100", unit: "currency", nature: "debit", statement: "balance", pool: "custody", method: "cash" },
+  { code: "1160", name: "البنك — الحساب الجاري", parent: "1100", unit: "currency", nature: "debit", statement: "balance" },
+  // نقدٌ في الطريق بين الإدارة والفروع — مدينٌ عند المُرسِل حتى يستلمه الفرع (migration 041/044)
+  { code: "1170", name: "تحويلات نقدية بين الفروع — وسيط", parent: "1100", unit: "currency", nature: "debit", statement: "balance" },
 
   // مخزون الذهب — يُمسك بالوحدتين: الوزن حقيقة والقيمة تقدير
   { code: "1200", name: "مخزون الذهب", parent: "1000", unit: "both", nature: "debit", statement: "balance", group: true },
@@ -217,7 +220,9 @@ const CHART_OF_ACCOUNTS = [
     unit: "currency", nature: "credit", statement: "balance" },
   { code: "2420", name: "أمانة ذهب — أرصدة العملاء", parent: "2400",
     unit: "gram", nature: "credit", statement: "balance" },
-  { code: "2350", name: "سلف موظفين", parent: "2300", unit: "currency",
+  // ⚠ سلف الموظفين أصلٌ تحت «المدينون» (1300) برمزه القديم — كانت تحت 2300
+  //   فتُعرض التزامًا موجبًا في الميزانية (المرجع 5.2.0 · migration 044).
+  { code: "2350", name: "سلف موظفين", parent: "1300", unit: "currency",
     nature: "debit", statement: "balance" },
 
   // ── مصروفات الموظفين ──

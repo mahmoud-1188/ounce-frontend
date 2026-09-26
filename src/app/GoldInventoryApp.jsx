@@ -109,6 +109,10 @@ const API_ERROR_MESSAGES = {
   scrap_payment_requires_karat_and_weight: "السداد بالكسر يتطلب عيارًا ووزنًا",
   page_not_allowed: "لا تملك صلاحية هذه الشاشة",
   action_denied_by_hq: "منعت الإدارة المركزية هذه العملية",
+  item_reserved_for_other: "القطعة محجوزة لعميل آخر",
+  reservation_not_open: "الحجز لم يعد مفتوحًا",
+  insufficient_pool_balance: "رصيد الصندوق المصدر لا يكفي",
+  insufficient_safe_balance: "رصيد الخزنة لا يكفي",
   settings_locked_by_hq: "هذه الإعدادات مُدارة من الإدارة المركزية — تُعدَّل من هناك",
   action_denied_for_role: "هذه العملية خارج صلاحيتك",
   invalid_or_expired_token: "انتهت الجلسة — سجّل الدخول مجددًا",
@@ -5733,6 +5737,7 @@ export default function GoldInventoryApp() {
       paymentMethod: tLines.length ? "trade_in" : draft.paymentMethod,
       cardNetwork: draft.cardNetwork || null,
       customerId: draft.customerId || null,
+      reservationId: draft.reservationId || null,
       lines: draft.lines.map((l) => ({ itemId: l.itemId, quantity: l.quantity, unitPrice: l.unitPrice })),
       taxApplicable: !!draft.taxApplicable,
       cashPart: Number(draft.cashPart) || 0,
@@ -5753,6 +5758,15 @@ export default function GoldInventoryApp() {
     }
 
     const srvSale = res.sale;
+    // ⚠ فاتورةٌ خُصم منها عربون: الصندوق والحجز والدفتر تغيّرت على الخادم بغير ما
+    //   تحسبه الشاشة — نعيد التحميل كي لا تُعرض أرقامٌ لم تقع.
+    if (Number(srvSale.depositApplied) > 0) {
+      setShowNewSale(false);
+      setQuickSaleItemId(null);
+      flashToast(`تم إنشاء الفاتورة — خُصم عربون ${fmtMoney(srvSale.depositApplied)} والمقبوض ${fmtMoney(srvSale.payable)}`);
+      loadBootstrap(currentUser).catch(() => {});
+      return;
+    }
     const now = new Date().toISOString();
     const lines = draft.lines.map((l) => {
       const item = items.find((i) => i.id === l.itemId);
@@ -9033,6 +9047,7 @@ export default function GoldInventoryApp() {
             settings={appSettings}
             role={role}
           customers={customers}
+          reservations={reservations}
           activeItems={activeItems}
           priceData={priceData}
           initialItemId={quickSaleItemId}

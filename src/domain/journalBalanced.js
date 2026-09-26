@@ -1,12 +1,13 @@
-function journalBalanced(entry) {
-  const dr = (entry?.lines || []).reduce((a, l) => a + (Number(l.debit) || 0), 0);
-  const cr = (entry?.lines || []).reduce((a, l) => a + (Number(l.credit) || 0), 0);
-  return Math.abs(dr - cr) < 0.005;
-}
 
-/// يبني القيد العكسي: نفس الأسطر بطرفين مقلوبين.
-///
-/// ⚠ لا يُنشأ عكسٌ لقيد مُلغى سلفًا — وإلا صار الإلغاء دورةً لا نهاية
-/// لها، ويُقيَّد المبلغ ثلاث مرات.
+import { halalas } from "../core/money.js";
+
+/// يتحقق من توازن قيد جاهز.
+function journalBalanced(entry) {
+  // تنبيه: بالهللة كحارس التخزين: جمعُ كسورٍ عشرية يتراكم خطؤه في قيدٍ طويل (0.1+0.2 ≠ 0.3)
+  //   فيختلف حكم التدقيق عن حكم الحارس على القيد نفسه.
+  const dr = (entry?.lines || []).reduce((a, l) => a + halalas(Number(l.debit) || 0), 0);
+  const cr = (entry?.lines || []).reduce((a, l) => a + halalas(Number(l.credit) || 0), 0);
+  return dr === cr;
+}
 
 export { journalBalanced };

@@ -16,8 +16,10 @@ import { ScanField } from "../ui/ScanField.jsx";
 function NewSaleModal({ activeItems, priceData,
   // ⚠ العملة كانت غائبة عن التوقيع: البدل يستخدمها فيسقط بـ
   // «currency is not defined» — والنافذة تُفرَغ بلا رسالة.
-  currency = "ر.س", initialItemId, taxEnabled, taxRate, settings = {}, role, customers = [], dailyCash = null, onClose, onConfirm, onBindEpc }) {
+  currency = "ر.س", initialItemId, taxEnabled, taxRate, settings = {}, role, customers = [], reservations = [], dailyCash = null, onClose, onConfirm, onBindEpc }) {
   const [customerId, setCustomerId] = useState("");
+  // عربون الحجز يُخصم من الفاتورة (المرجع 5.2.0) — حجز القطعة نفسها تلقائيًّا أو حجزٌ يُختار
+  const [depositFrom, setDepositFrom] = useState("");
   const [scanCode, setScanCode] = useState("");
   // ── تجميد السعر ──
   // الفاتورة قد تستغرق دقائق، وسعر الذهب يتحرك خلالها. التجميد يثبّت
@@ -95,6 +97,15 @@ function NewSaleModal({ activeItems, priceData,
     ? fromHalalas(halalas(total) - Math.round(halalas(total) / (1 + taxRate)))
     : 0;
   const netAmount = total - taxAmount;
+  // حجوزات العميل المفتوحة بعربونٍ باقٍ
+  const openDeposits = customerId
+    ? reservations.filter((r) => r.status === "open" && r.customerId === customerId && (Number(r.deposit) || 0) - (Number(r.depositUsed) || 0) > 0.005)
+    : [];
+  const depositRsv = openDeposits.find((r) => r.id === depositFrom) || null;
+  const depositPart = depositRsv
+    ? Math.min(total, Math.round(((Number(depositRsv.deposit) || 0) - (Number(depositRsv.depositUsed) || 0)) * 100) / 100)
+    : 0;
+  const dueNow = Math.round((total - depositPart) * 100) / 100;
   const selectedCount = Object.keys(selection).length;
 
   const handleConfirm = () => {
@@ -118,6 +129,7 @@ function NewSaleModal({ activeItems, priceData,
       networkPart: networkAmt,
       taxApplicable,
       customerId: customerId || null,
+      reservationId: depositRsv ? depositRsv.id : null,
       frozenPrice,
       frozenAt,
     });
@@ -197,9 +209,20 @@ function NewSaleModal({ activeItems, priceData,
               return;
             }
             if (hit.reservedFor) {
-              setScanMsg("هذه القطعة محجوزة لعميل آخر");
-              setScanCode("");
-              return;
+              // ⚠ المحجوزة تُباع لصاحب حجزها وحده — ويُخصم عربونه (الخادم يفرض الشيء نفسه)
+              const rsv = reservations.find((r) => r.id === hit.reservedFor && r.status === "open");
+              if (!rsv || !rsv.customerId) {
+                setScanMsg("هذه القطعة محجوزة");
+                setScanCode("");
+                return;
+              }
+              if (customerId && customerId !== rsv.customerId) {
+                setScanMsg("هذه القطعة محجوزة لعميل آخر");
+                setScanCode("");
+                return;
+              }
+              if (!customerId) setCustomerId(rsv.customerId);
+              setDepositFrom(rsv.id);
             }
             const matchedUnit = (hit.units || []).find((u) => !u.sold &&
               (u.code === code || (u.epc && u.epc.toUpperCase() === upper)));
@@ -265,6 +288,23 @@ function NewSaleModal({ activeItems, priceData,
             ))}
           </select>
         </Field>
+      )}
+      {openDeposits.length > 0 && (
+        <Field label="خصم عربون حجز">
+          <select style={inputStyle} value={depositRsv ? depositRsv.id : ""} onChange={(e) => setDepositFrom(e.target.value)}>
+            <option value="">بلا خصم</option>
+            {openDeposits.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.ref} — عربون {fmt((Number(r.deposit) || 0) - (Number(r.depositUsed) || 0))}{r.description ? ` · ${r.description}` : ""}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
+      {depositPart > 0 && (
+        <p style={{ color: "var(--accent)" }} className="text-[11px] mb-3">
+          يُخصم العربون {fmt(depositPart)} — المطلوب من العميل الآن {fmt(dueNow)}{splitPay ? " (يُخصم من الجزء النقدي أولًا)" : ""}
+        </p>
       )}
       {paymentMethod === "credit" && !customerId && (
         <p style={{ color: "var(--bad)" }} className="text-[11px] mb-3">

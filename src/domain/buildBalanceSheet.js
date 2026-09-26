@@ -1,56 +1,66 @@
-import { fmtMoney, fromHalalas, halalas } from "../core/money.js";
-import { balancesAt } from "./helpers.js";
 
+import { fromHalalas, halalas } from "../core/money.js";
+import { accountRoot, balancesAt, goldClassOf } from "./helpers.js";
+
+/// قائمة المركز المالي.
+/// قائمة المركز المالي.
+///
+/// تنبيه: `netProfit` يجب أن يأتي من قائمة الدخل نفسها، وهي تحسب الجرد
+/// كمُعامل (`openingStock` و`closingStock`) لا كقيدٍ في الدفتر. فإن
+/// لم يُرحَّل قيد الجرد، عرف الدخلُ ما لا يعرفه الميزان — والفرق يظهر
+/// هنا كأنه كسر.
+///
+/// فنكشف الفرق ونُسمّيه بدل أن يُنسب للدفتر: `stockAdjNeeded` يقول كم
+/// ينقص قيدُ الجرد ليتطابق الاثنان.
 function buildBalanceSheet({ journal = [], accounts = [], to, netProfit = 0 }) {
   const b = balancesAt(journal, to);
-  const pick = (pred) => accounts.filter((a) => !a.group && pred(a) && Math.abs(b[a.code] || 0) > 0)
-    .map((a) => ({ code: a.code, name: a.name, amount: fromHalalas((b[a.code] || 0) * (a.nature === "credit" ? -1 : 1)) }));
-  // ⚠ **الحسابات المقابلة** (contra) تُطرح لا تُجمع.
+  // قاعدة: الإشارة من جانب القسم لا من طبيعة الحساب: الأصول مدينة، والالتزامات والملكية دائنة.
+  //   فالحساب المقابل (طبيعته عكس قسمه) يخرج سالبًا فيُطرح وحده. كانت الإشارة من طبيعة
+  //   الحساب، فـ3400 «سحوبات الملاك» (مدين) يُجمع مع حقوق الملكية بدل أن يُطرح منها —
+  //   سحبٌ بألفين يرفع الملكية ألفين، والميزانية تختلّ بأربعة آلاف.
+  const pick = (pred, side) => accounts.filter((a) => !a.group && pred(a) && Math.abs(b[a.code] || 0) > 0)
+    .map((a) => ({ code: a.code, name: a.name, amount: fromHalalas((b[a.code] || 0) * (side === "credit" ? -1 : 1)),
+      ...(a.nature !== side ? { contra: true } : {}) }));
+  // والقسم من الجذر (سلسلة الآباء) لا من أوّل رقم: 2350 «سلف موظفين» أصلٌ برمزٍ يبدأ بـ2
+  const inRoot = (root) => (a) => a.statement === "balance" && accountRoot(a.code, accounts) === root;
+  // تنبيه: الحسابات المقابلة (contra) تُطرح لا تُجمع.
   //
   // `1490` مجمّع الإهلاك رقمُه يبدأ بـ1 وطبيعتُه دائنة — فقلبُ الإشارة
-  // يجعله موجبًا **ويُجمع مع الأصول**. والصواب أن يُطرح منها: أصلٌ بستّين
+  // يجعله موجبًا ويُجمع مع الأصول. والصواب أن يُطرح منها: أصلٌ بستّين
   // ألفًا أُهلك أربعةَ عشر يساوي ستةً وأربعين، لا أربعةً وسبعين.
   //
-  // كشفته محاكاة سنةِ عمل: الفرق كان ضعف المجمّع بالضبط.
-  const assets = pick((a) => a.code.startsWith("1") && a.statement === "balance")
-    .map((x) => {
-      const acc = accounts.find((a) => a.code === x.code);
-      return acc?.nature === "credit" ? { ...x, amount: -x.amount, contra: true } : x;
-    });
-  const liabilities = pick((a) => a.code.startsWith("2") && a.statement === "balance");
-  const equity = pick((a) => a.code.startsWith("3") && a.statement === "balance");
+  // الفرق كان ضعف المجمّع بالضبط.
+  const assets = pick(inRoot("1000"), "debit");
+  const liabilities = pick(inRoot("2000"), "credit");
+  const equity = pick(inRoot("3000"), "credit");
   const S = (arr) => fromHalalas(arr.reduce((a, x) => a + halalas(x.amount), 0));
+  // قاعدة: مخزون الذهب بصنفيه (قرار المالك): مشغول = المُدخل بالتكويد · غير مشغول = الكسر
+  const goldOf = (cls) => assets.filter((x) => goldClassOf(x.code) === cls);
+  const goldClasses = { worked: { rows: goldOf("worked"), amount: S(goldOf("worked")) }, unworked: { rows: goldOf("unworked"), amount: S(goldOf("unworked")) } };
   const assetsT = S(assets), liabT = S(liabilities), eqT = S(equity);
-  // ⚠ ربح الفترة يُضاف لحقوق الملكية ولم يُقفل بعد: بلاه لا تتوازن القائمة
+  // تنبيه: ربح الفترة يُضاف لحقوق الملكية ولم يُقفل بعد: بلاه لا تتوازن القائمة
   // أبدًا قبل الإقفال السنوي، ويظنّ القارئ الدفتر مكسورًا.
-  const eqWithProfit = fromHalalas(halalas(eqT) + halalas(netProfit));
-  const diff = fromHalalas(halalas(assetsT) - halalas(liabT) - halalas(eqWithProfit));
-
-  // ⚠ صافي الدفتر: أرصدة 4xxx و5xxx و6xxx كما هي، بلا مُعاملات الجرد.
-  // الفرق بينه وبين `netProfit` هو **بالضبط** قيد الجرد غير المُرحَّل.
+  // تنبيه: صافي الدفتر: أرصدة 4xxx و5xxx و6xxx حتى التاريخ — بعد قيود إقفال السنة. هو الربح الذي لم يُنقل بعد إلى
+  //   الأرباح المحتجزة، وهو ما يُضاف لحقوق الملكية. كان يُضاف `netProfit` (ربح الفترة المعروضة): بعد إقفال سنةٍ
+  //   داخل الفترة يُعدّ ربحها مرّتين — في 3300 وفي «ربح الفترة» — فلا تتوازن القائمة.
   const ledgerNet = fromHalalas(-accounts
     .filter((a) => !a.group && a.statement === "income")
     .reduce((acc, a) => acc + (b[a.code] || 0), 0));
+  const eqWithProfit = fromHalalas(halalas(eqT) + halalas(ledgerNet));
+  const diff = fromHalalas(halalas(assetsT) - halalas(liabT) - halalas(eqWithProfit));
   const stockAdjNeeded = fromHalalas(halalas(netProfit) - halalas(ledgerNet));
 
   return {
-    assets, liabilities, equity,
+    assets, liabilities, equity, goldClasses,
     netProfit, ledgerNet, stockAdjNeeded,
     assetsTotal: assetsT, liabilitiesTotal: liabT, equityTotal: eqWithProfit,
     balanced: Math.abs(halalas(diff)) < 100,
     difference: diff,
-    // ⚠ سببٌ مُسمّى بدل «لا يتوازن»: من قرأ الأخيرة ظنّ دفتره مكسورًا،
+    // تنبيه: سببٌ مُسمّى بدل «لا يتوازن»: من قرأ الأخيرة ظنّ دفتره مكسورًا،
     // ومن قرأ «ينقص قيد جرد بـ524,964» عرف ما يفعل.
-    reason: Math.abs(halalas(diff)) < 100
-      ? null
-      // ⚠ الإشارة: الفرق في المركز = −(فرق الربح). ربحٌ أعلى في القائمة
-      // يعني حقوق ملكيةٍ أعلى، فالأصول تبدو أنقص بنفس المقدار.
-      : Math.abs(halalas(diff) + halalas(stockAdjNeeded)) < 200
-        ? `ينقص قيد تسوية المخزون بـ${fmtMoney(Math.abs(stockAdjNeeded))} — رحّله من التسويات الجردية`
-        : "راجع ميزان المراجعة — الخلل في الدفتر لا في العرض",
+    // قاعدة: الملكية بربح الدفتر غير المُقفل: الفرق لا يكون إلا من دفترٍ غير متوازن — والمخزون يُقاس بقيد IFRS لا بمُعامل
+    reason: Math.abs(halalas(diff)) < 100 ? null : "راجع ميزان المراجعة — الخلل في الدفتر لا في العرض",
   };
 }
-
-/// قائمة التغيّر في حقوق الملكية.
 
 export { buildBalanceSheet };

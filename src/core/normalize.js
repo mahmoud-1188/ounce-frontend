@@ -574,6 +574,8 @@ function normalizeReservations(rows) {
     itemId: r.item_id,
     total: toMoney(r.total),
     deposit: toMoney(r.deposit),
+    depositUsed: toMoney(r.deposit_used || 0),
+    saleId: r.sale_id || null,
     remaining: r.remaining == null ? null : toMoney(r.remaining),
     description: r.description || "",
     status: r.status,
