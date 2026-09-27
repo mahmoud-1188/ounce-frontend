@@ -1422,6 +1422,9 @@ function emptyRow() {
     weight: "",
     stonesWeight: "",
     quantity: "1",
+    // المصنعية تُكتب للجرام (الافتراضي) والنظام يضربها في وزن القطعة، أو للقطعة مباشرةً
+    wmMode: "gram",
+    workmanshipPerGram: "",
     workmanshipPerUnit: "",
     photoDataUrl: null,
     // قطع الطقم: تُحدَّد عند الإدخال ليعرف النظام وقت البيع ماذا يحوي.

@@ -455,7 +455,7 @@ const payrollApi = {
   decideLeave: (id, decision) => apiFetch(`/leave-requests/${id}/decide`, { method: "POST", body: { decision } }),
   preview: (period) => apiFetch(`/payroll/preview?period=${period}`),
   fetchRuns: () => apiFetch("/payroll/runs"),
-  accrue: (period) => apiFetch("/payroll/runs", { method: "POST", body: { period } }),
+  accrue: (period, approvalId = null) => apiFetch("/payroll/runs", { method: "POST", body: { period, ...(approvalId ? { approvalId } : {}) } }),
   pay: (runId, employeeId, fundingSource) =>
     apiFetch(`/payroll/runs/${runId}/pay/${employeeId}`, { method: "POST", body: { fundingSource } }),
   payGosi: (runId, fundingSource) =>
@@ -482,6 +482,18 @@ const priceFixApi = {
 // طلبات/تحويلات حقيقية بين الفرع والمركزي، لا رموزًا تُلصق يدويًّا كما
 // في المرجع (راجع تعليق الهجرة). الفرع يبدأ خمسة أنواع، ويستلم اثنين
 // فقط (goods_from_hq, send_for_coding) بعد اعتماد الإدارة أو مباشرةً.
+/** استعلام القطع — بطاقة لكل رمز من الخادم (migration 045) */
+// أرصدة الموردين الافتتاحية (migration 046)
+const supplierOpeningApi = {
+  list: () => apiFetch("/suppliers/openings"),
+  add: (supplierId, body) => apiFetch(`/suppliers/${supplierId}/openings`, { method: "POST", body }),
+  void: (id) => apiFetch(`/suppliers/openings/${id}/void`, { method: "POST", body: {} }),
+};
+
+const pieceInquiryApi = {
+  query: (codes) => apiFetch("/piece-inquiry", { method: "POST", body: { codes } }),
+};
+
 const hqTransactionsApi = {
   list: () => apiFetch("/branch/hq-transactions"),
   create: (payload) => apiFetch("/branch/hq-transactions", { method: "POST", body: payload }),
@@ -509,6 +521,8 @@ const controlApi = {
 };
 
 export {
+  pieceInquiryApi,
+  supplierOpeningApi,
   controlApi,
   ApiError,
   getAuthToken,

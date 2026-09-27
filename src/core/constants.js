@@ -448,14 +448,14 @@ const ROLES = {
   employee: {
     // ⚠ لا «aiAssistant» في القائمة: الذكاء يُفتح لكل مستخدم على حدة
     // من شاشة الصلاحيات، لا لكل من حمل الدور.
-    label: "موظف", allowedTabs: ["sales"], allowedMore: ["showcase"],
+    label: "موظف", allowedTabs: ["sales"], allowedMore: ["showcase", "pieceInquiry"],
     canManageDay: false,
     denyActions: ["openDay", "closeDay"],
   },
   assistant: {
     canBreak: true,
     label: "نائب المدير", allowedTabs: ["sales", "stocktake"],
-    allowedMore: ["showcase"],
+    allowedMore: ["showcase", "pieceInquiry"],
     canManageDay: true,
   },
   accountant: {
@@ -467,7 +467,7 @@ const ROLES = {
     allowedMore: ["accountantReview", "dashboard", "approvals", "documents", "bankFees", "aiAccountant", "journal", "generalLedger", "trialBalance", "fullStatements", "anyStatement",
       "financials", "docCycle", "reportsHub", "reports", "bankRecon", "supplierLedger", "officeLedger", "salesHistory",
       "purchases", "customers", "safeAudit", "openingCompare", "masterReport", "codingReport", "queryBuilder", "search",
-      "taxReport", "customerReport", "suppliers", "partners", "fixedAssets", "payroll", "workday"],
+      "taxReport", "customerReport", "suppliers", "partners", "fixedAssets", "payroll", "workday", "pieceInquiry"],
     denyActions: [
       "openDay", "closeDay", "cashMove", "expense", "priceFix", "sale",
       "sell", "sellCredit", "discount", "salesReturn", "purchase", "purchaseDeferred",
@@ -490,7 +490,7 @@ const ROLES = {
     // كانت الصفحتان مبنيتين ومُفعَّلتين خادميًّا لكن غير قابلتين للوصول
     // فعليًا من القائمة لأي مدير افتراضي — هذا الإصلاح يضيفهما هنا، ومعهما
     // hqReports (migration 017) مباشرة بلا نفس الفجوة من أول يوم.
-    allowedMore: ["addGoods", "printing", "printerSetup", "salesHistory", "sellerReports", "price", "reports", "journal", "trialBalance", "search", "bankRecon", "supplierLedger", "officeLedger", "salesReturn", "scrap", "scrapIntake", "scrapCustody", "conversions", "itemEdit", "goldOut", "categories", "workday", "customers", "trustAccounts", "reservations", "safeAudit", "integration", "storeLink", "backup", "purchases", "suppliers", "taskirat", "partners", "access", "taxReport", "settings", "financials", "openingCompare", "repairs", "aiAssistant", "navCustomize", "openingBalance", "fixedAssets", "payroll", "attendanceHr", "hqReports", "priceFix", "fullStatements", "anyStatement", "generalLedger", "masterReport", "exchange", "customerReport", "docCycle", "accountantReview", "dashboard", "approvals", "documents", "bankFees", "showcase", "reportsHub", "aiAccountant"],
+    allowedMore: ["addGoods", "printing", "printerSetup", "salesHistory", "sellerReports", "price", "reports", "journal", "trialBalance", "search", "bankRecon", "supplierLedger", "officeLedger", "salesReturn", "scrap", "scrapIntake", "scrapCustody", "conversions", "itemEdit", "goldOut", "categories", "workday", "customers", "trustAccounts", "reservations", "safeAudit", "integration", "storeLink", "backup", "purchases", "suppliers", "taskirat", "partners", "access", "taxReport", "settings", "financials", "openingCompare", "repairs", "aiAssistant", "navCustomize", "openingBalance", "fixedAssets", "payroll", "attendanceHr", "hqReports", "priceFix", "fullStatements", "anyStatement", "generalLedger", "masterReport", "exchange", "customerReport", "docCycle", "accountantReview", "dashboard", "approvals", "documents", "bankFees", "showcase", "reportsHub", "aiAccountant", "pieceInquiry"],
   },
 };
 

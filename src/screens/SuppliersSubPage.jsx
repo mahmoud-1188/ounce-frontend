@@ -9,8 +9,9 @@ import { Field } from "../ui/Field.jsx";
 import { InvoiceAttachField } from "../ui/InvoiceAttachField.jsx";
 import { SettleSupplierForm } from "../ui/SettleSupplierForm.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
+import { SupplierOpeningCard } from "../ui/SupplierOpeningCard.jsx";
 
-function SuppliersSubPage({ suppliers, lots, items, safeTx, cashTx, taskirEntries, scrapEntries = [], offices = [], safeGoldTx = [], price24 = 0, currency, canManage, onAddSupplier, onAttachInvoice, onAddPurchase, onCloseLot, onSettle, onBack, onOpenEntity }) {
+function SuppliersSubPage({ suppliers, lots, items, safeTx, cashTx, taskirEntries, scrapEntries = [], offices = [], safeGoldTx = [], price24 = 0, currency, canManage, supplierOpenings = [], onAddOpening = null, onVoidOpening = null, onAddSupplier, onAttachInvoice, onAddPurchase, onCloseLot, onSettle, onBack, onOpenEntity }) {
   const [detailId, setDetailId] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
   const [showSettle, setShowSettle] = useState(false);
@@ -91,6 +92,22 @@ function SuppliersSubPage({ suppliers, lots, items, safeTx, cashTx, taskirEntrie
           method: "تسوية",
         });
       });
+
+    // الرصيد الافتتاحي للمورد (migration 046): أوّل سطرٍ في كشفه
+    supplierOpenings.filter((o) => o.supplierId === supplierId && !o.voided).forEach((o) => {
+      const due = o.side === "due";
+      if (o.kind === "gold") {
+        const fine = Number(o.fineWeight) || (Number(o.weight) || 0) * (PURITY[o.karat] || (Number(o.karat) || 21) / 24);
+        goldOwed += due ? -fine : fine;
+        rows.push({ date: o.date, desc: `رصيد افتتاحي — ذهب ${due ? "لنا عنده" : "علينا له"} · ${fmtW(o.weight)} جم عيار ${o.karat}${o.note ? ` · ${o.note}` : ""}`,
+          karat: o.karat, ...(due ? { weightOut: Number(o.weight) || 0, fineOut: fine } : { weightIn: Number(o.weight) || 0, fineIn: fine }), settled: false, method: "افتتاحي" });
+      } else {
+        const a = Number(o.amount) || 0;
+        feesOwed += due ? -a : a;
+        rows.push({ date: o.date, desc: `رصيد افتتاحي — نقد ${due ? "لنا عنده" : "علينا له"}${o.note ? ` · ${o.note}` : ""}`,
+          ...(due ? { feesOut: a } : { feesIn: a }), settled: false, method: "افتتاحي" });
+      }
+    });
 
     rows.sort((a, b) => new Date(a.date) - new Date(b.date));
     return { rows, byKarat, goldOwed, feesOwed, lots: supLots };
@@ -187,6 +204,11 @@ function SuppliersSubPage({ suppliers, lots, items, safeTx, cashTx, taskirEntrie
                 setShowSettle(false);
               }}
             />
+          )}
+
+          {sup && (
+            <SupplierOpeningCard supplier={sup} openings={supplierOpenings} price24={price24} currency={currency}
+              canManage={canManage && !!onAddOpening} onAdd={onAddOpening} onVoid={onVoidOpening} />
           )}
 
           <p style={{ color: "var(--text2)" }} className="text-xs mb-2">

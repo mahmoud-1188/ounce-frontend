@@ -23,7 +23,7 @@ import { SubPageHeader } from "../ui/SubPageHeader.jsx";
  *    محلي مزدوج يخاطر بالتفاوت (GOSI/عمولة/غياب كلها تعتمد بيانات
  *    مبيعات/حضور حقيقية على الخادم، لا شيء منها متاح محليًا هنا أصلًا).
  */
-function PayrollPage({ currency = "ر.س", safeBalance = {}, canManage, onBack, flashToast }) {
+function PayrollPage({ currency = "ر.س", safeBalance = {}, canManage, onBack, flashToast, onApprovalPending = null }) {
   const [tab, setTab] = useState("run");
   const thisMonth = new Date().toISOString().slice(0, 7);
   const [period, setPeriod] = useState(thisMonth);
@@ -122,6 +122,11 @@ function PayrollPage({ currency = "ر.س", safeBalance = {}, canManage, onBack, 
     setAccruing(true);
     try {
       const res = await api.payrollApi.accrue(period);
+      if (res.approvalPending) {
+        if (onApprovalPending) onApprovalPending(res.approvalPending);
+        else flashToast?.(`أُرسل مسيّر ${period} للاعتماد (${res.approvalPending.ref})`);
+        return;
+      }
       flashToast?.(`احتُسبت رواتب ${period} — ${res.staffCount} موظف · صافي ${fmtMoney(res.netPayable)}`);
       await loadStaffAndRuns();
     } catch (err) {

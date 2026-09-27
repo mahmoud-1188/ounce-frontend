@@ -82,6 +82,9 @@ const API_ERROR_MESSAGES = {
   line_index_out_of_range: "السطر غير موجود في الفاتورة",
   duplicate_line_index: "السطر مكرّر في الطلب",
   unit_mismatch: "القطع المباعة من هذا الصنف لا تطابق الفاتورة",
+  invalid_opening_kind: "اختر نوع الرصيد وجهته",
+  already_voided: "أُلغي من قبل",
+  opening_not_found: "الرصيد غير موجود",
   credit_sale_requires_credit_refund: "الفاتورة آجلة — الردّ يُخصم من دَين العميل لا نقدًا",
   zero_amount: "قيمة المرتجع صفر — راجع الأسطر",
   no_new_lines: "اختر القطعة الجديدة",
@@ -302,6 +305,7 @@ import { PayrollPage } from "../screens/PayrollPage.jsx";
 import { AttendanceHrPage } from "../screens/AttendanceHrPage.jsx";
 import { HqReportPage } from "../screens/HqReportPage.jsx";
 import { HqTransactionsPage } from "../screens/HqTransactionsPage.jsx";
+import { PieceInquiryPage } from "../screens/PieceInquiryPage.jsx";
 import { CodingReportPage } from "../screens/CodingReportPage.jsx";
 import { QueryBuilderPage } from "../screens/QueryBuilderPage.jsx";
 import { FullStatementsPage } from "../screens/FullStatementsPage.jsx";
@@ -383,6 +387,7 @@ export default function GoldInventoryApp() {
   const [scrapCustodyTx, setScrapCustodyTx] = useState([]);
   const [safeTx, setSafeTx] = useState([]);
   const [taskirEntries, setTaskirEntries] = useState([]);
+  const [supplierOpenings, setSupplierOpenings] = useState([]);
   const [taskirOffices, setTaskirOffices] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [partners, setPartners] = useState([]);
@@ -1545,7 +1550,12 @@ export default function GoldInventoryApp() {
         if (!saleId) throw new Error("no_sale");
         if (route === "return") await api.returnsApi.create(saleId, body);
         else await api.returnsApi.createFull(saleId, body);
-      } else {
+      } else if (ap.kind === "asset_purchase") await api.fixedAssetsApi.create(p);
+      else if (ap.kind === "asset_disposal") {
+        const { assetId, ...body } = p;
+        await api.fixedAssetsApi.dispose(assetId, body);
+      } else if (ap.kind === "payroll_run") await api.payrollApi.accrue(p.period, ap.id);
+      else {
         flashToast("نوع طلبٍ لا يُنفَّذ من هنا");
         return false;
       }
@@ -2788,6 +2798,25 @@ export default function GoldInventoryApp() {
     }
   };
 
+  // أرصدة الموردين الافتتاحية — تُرحَّل على الخادم فورًا (migration 046)
+  const handleAddSupplierOpening = async (supplierId, body) => {
+    try {
+      const r = await api.supplierOpeningApi.add(supplierId, body);
+      setSupplierOpenings((p) => [...p, r.opening]);
+      flashToast("سُجّل الرصيد الافتتاحي ورُحّل قيده");
+    } catch (err) {
+      throw new Error(apiErrorMessage(err, "تعذّر حفظ الرصيد الافتتاحي"));
+    }
+  };
+  const handleVoidSupplierOpening = async (id) => {
+    try {
+      const r = await api.supplierOpeningApi.void(id);
+      setSupplierOpenings((p) => p.map((o) => (o.id === id ? { ...o, ...r.opening } : o)));
+      flashToast("أُلغي الرصيد وعُكس قيده");
+    } catch (err) {
+      flashToast(apiErrorMessage(err, "تعذّر إلغاء الرصيد"));
+    }
+  };
   const handleSettleSupplier = (entry) => txn("handleSettleSupplier", () => {
     const sup = suppliers.find((x) => x.id === entry.supplierId);
     if (!sup) return null;
@@ -3009,6 +3038,7 @@ export default function GoldInventoryApp() {
   const handleAddFixedAsset = async (payload) => {
     try {
       const res = await api.fixedAssetsApi.create(payload);
+      if (res.approvalPending) { notePendingApproval(res.approvalPending); return true; }
       const asset = normalizeFixedAssets([res.asset])[0];
       setFixedAssets((prev) => [asset, ...prev]);
       flashToast(`سُجِّل الأصل — ${asset.ref}`);
@@ -3042,6 +3072,7 @@ export default function GoldInventoryApp() {
   const handleDisposeFixedAsset = async ({ assetId, ...payload }) => {
     try {
       const res = await api.fixedAssetsApi.dispose(assetId, payload);
+      if (res.approvalPending) { notePendingApproval(res.approvalPending); return true; }
       const updated = normalizeFixedAssets([res.asset])[0];
       setFixedAssets((prev) => prev.map((a) => (a.id === assetId ? updated : a)));
       flashToast(`اُستُبعِد الأصل — ${updated.name}`);
@@ -4438,6 +4469,7 @@ export default function GoldInventoryApp() {
     setExpenses(n.expenses);
     setExpenseNames(n.expenseNames);
     setTaskirEntries(n.taskirEntries);
+    setSupplierOpenings(n.supplierOpenings || []);
     setTaskirOffices(n.taskirOffices);
     setTaskirOfficeTx(n.taskirOfficeTx);
     setCustomers(n.customers);
@@ -7809,6 +7841,9 @@ export default function GoldInventoryApp() {
         )}
         {morePage === "suppliers" && (
           <SuppliersSubPage
+            supplierOpenings={supplierOpenings}
+            onAddOpening={handleAddSupplierOpening}
+            onVoidOpening={handleVoidSupplierOpening}
             onOpenEntity={(k, r) => setSheetEntity({ kind: k, record: r })}
             scrapEntries={scrapEntries}
             offices={taskirOffices}
@@ -8087,6 +8122,7 @@ export default function GoldInventoryApp() {
         )}
         {morePage === "supplierLedger" && (
           <SupplierLedgerPage
+            supplierOpenings={supplierOpenings}
             suppliers={suppliers}
             lots={lots}
             cashTx={cashTx}
@@ -8439,6 +8475,7 @@ export default function GoldInventoryApp() {
             canManage={role === "manager"}
             onBack={() => setMorePage(null)}
             flashToast={flashToast}
+            onApprovalPending={notePendingApproval}
           />
         )}
         {morePage === "attendanceHr" && (
@@ -8455,6 +8492,9 @@ export default function GoldInventoryApp() {
             onBack={() => setMorePage(null)}
             flashToast={flashToast}
           />
+        )}
+        {morePage === "pieceInquiry" && (
+          <PieceInquiryPage price24={priceData.current || 0} currency={priceData.currency} onBack={() => setMorePage(null)} />
         )}
         {morePage === "hqDocs" && (
           <HqTransactionsPage
@@ -8630,6 +8670,7 @@ export default function GoldInventoryApp() {
         )}
         {morePage === "dashboard" && (
           <BranchDashboardPage
+            supplierOpenings={supplierOpenings}
             totals={totals}
             sales={sales}
             returns={returns}

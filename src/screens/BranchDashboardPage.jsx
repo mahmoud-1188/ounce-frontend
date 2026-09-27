@@ -5,7 +5,7 @@ import { reviewSummary, saleProfitOf } from "../domain/helpers.js";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 
 function BranchDashboardPage({ totals, sales = [], returns = [], lots = [], expenses = [], journal = [], audits = [], suppliers = [],
-  taskirEntries = [], cashTx = [], safeTx = [], safeGoldTx = [], scrapEntries = [], cashBalance = {}, safeBalance = {}, custodyBalance = {},
+  taskirEntries = [], supplierOpenings = [], cashTx = [], safeTx = [], safeGoldTx = [], scrapEntries = [], cashBalance = {}, safeBalance = {}, custodyBalance = {},
   reviewQueue = [], priceData = {}, openDay = null, branchName = "", onFetchStatements = null, onGo, onBack }) {
   const [period, setPeriod] = useState("month");
   // ⚠ أرصدة الموردين من مصادرها كاملةً (كشف المورد نفسه): bootstrap يقصّ
@@ -40,7 +40,7 @@ function BranchDashboardPage({ totals, sales = [], returns = [], lots = [], expe
     const ar = journal.reduce((a, e) => a + (e.lines || []).filter((l) => l.account === "1310").reduce((b, l) => b + (Number(l.debit) || 0) - (Number(l.credit) || 0), 0), 0);
     const src = full || { lots, taskirEntries, safeGoldTx, feeCashTx: [...cashTx, ...safeTx] };
     const sup = suppliers.map((sp) => buildSupplierStatement(sp, { lots: src.lots, taskirEntries: src.taskirEntries,
-      safeGoldTx: src.safeGoldTx, cashTx: src.feeCashTx, taskirFeesSettled: src.taskirFeesSettled || null }));
+      safeGoldTx: src.safeGoldTx, cashTx: src.feeCashTx, taskirFeesSettled: src.taskirFeesSettled || null, openings: src.supplierOpenings || supplierOpenings }));
     const supGold = roundW(sup.reduce((a, x) => a + x.now.gold, 0));
     const supFees = sumMoney(sup.map((x) => x.now.fees));
     const varianceAudits = audits.filter((a) => (a.entries || []).some((en) => (Number(en.countedQty) || 0) !== (Number(en.systemQty) || 0)));

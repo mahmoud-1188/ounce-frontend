@@ -10,7 +10,7 @@ import { Field } from "../ui/Field.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 
 function SupplierLedgerPage({
-  suppliers = [], lots = [], cashTx = [], safeTx = [], safeGoldTx = [], taskirEntries = [],
+  suppliers = [], lots = [], cashTx = [], safeTx = [], safeGoldTx = [], taskirEntries = [], supplierOpenings = [],
   currency, price24 = 0, branchName, onBack, flashToast, onFetchStatements = null,
 }) {
   const [pick, setPick] = useState(null);          // معرّف المورد
@@ -35,7 +35,7 @@ function SupplierLedgerPage({
   const all = useMemo(
     () => suppliers.map((sup) => buildSupplierStatement(sup, {
       lots: src.lots, taskirEntries: src.taskirEntries, safeGoldTx: src.safeGoldTx,
-      cashTx: src.feeCashTx, taskirFeesSettled: src.taskirFeesSettled || null, from, to,
+      cashTx: src.feeCashTx, taskirFeesSettled: src.taskirFeesSettled || null, openings: src.supplierOpenings || supplierOpenings, from, to,
     })).sort((a, b) => b.now.gold - a.now.gold),
     [suppliers, src, from, to]
   );

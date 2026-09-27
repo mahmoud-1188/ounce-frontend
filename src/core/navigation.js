@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Bot, Check, Home, Barcode, BarChart3, BookmarkCheck, Building2, CalendarCheck, ClipboardCheck, ClipboardList, Coins, Database, FileMinus, FileText, Flame, Grid, Handshake, Landmark, LayoutGrid, Lock, PiggyBank, Plus, Printer, Receipt, RefreshCw, RotateCcw, Scale, Search, Send, Settings, ShieldCheck, ShoppingCart, Sparkles, Sun, SlidersHorizontal, Tag, Truck, UserRound, Users, Wallet, Warehouse, Wrench } from "lucide-react";
+import { ArrowLeftRight, Bot, Gem, Check, Home, Barcode, BarChart3, BookmarkCheck, Building2, CalendarCheck, ClipboardCheck, ClipboardList, Coins, Database, FileMinus, FileText, Flame, Grid, Handshake, Landmark, LayoutGrid, Lock, PiggyBank, Plus, Printer, Receipt, RefreshCw, RotateCcw, Scale, Search, Send, Settings, ShieldCheck, ShoppingCart, Sparkles, Sun, SlidersHorizontal, Tag, Truck, UserRound, Users, Wallet, Warehouse, Wrench } from "lucide-react";
 import { ROLES } from "./constants.js";
 
 const TAB_KIND_IDS = ["home", "inventory", "sales", "cash", "expenses", "stocktake"];
@@ -72,6 +72,7 @@ const NAV_REGISTRY = [
   { id: "masterReport", label: "التقارير الموحّدة", icon: LayoutGrid },
   { id: "anyStatement", label: "كشف حساب — أي شيء", icon: Search },
   { id: "fullStatements", label: "القوائم المالية الكاملة", icon: FileText },
+  { id: "pieceInquiry", label: "استعلام القطع", icon: Gem },
   { id: "exchange", label: "التبادل مع الأنظمة", icon: RefreshCw },
   { id: "customerReport", label: "تقرير العملاء", icon: Users },
   { id: "docCycle", label: "الدورة المستندية", icon: ClipboardCheck },
@@ -245,6 +246,7 @@ const SHORTCUT_HINTS = {
   masterReport: ["تقرير موحد", "تقارير موحدة", "تقرير شامل"],
   anyStatement: ["كشف حساب", "كشف", "اي شخص", "أي شخص"],
   fullStatements: ["قوائم مالية كاملة", "قوائم كاملة", "الميزانية العمومية"],
+  pieceInquiry: ["استعلام القطع", "استعلام قطعة", "بطاقة القطعة", "من كود", "تتبع قطعة"],
   exchange: ["تبادل", "استيراد", "تصدير", "ربط أنظمة"],
   customerReport: ["تقرير عملاء", "تقرير العملاء", "كشف عملاء"],
   docCycle: ["دورة مستندية", "الدورة المستندية", "مبادئ محاسبية"],
@@ -284,7 +286,7 @@ const MENU_GROUPS = [
     label: "المخزون والتكويد",
     hint: "التكويد · الطباعة · التحويلات",
     icon: Warehouse,
-    items: ["addGoods", "codingReport", "categories", "printing", "printerSetup", "rfidReader", "rfidSettings", "itemEdit", "conversions"],
+    items: ["pieceInquiry", "addGoods", "codingReport", "categories", "printing", "printerSetup", "rfidReader", "rfidSettings", "itemEdit", "conversions"],
   },
   {
     id: "purchasing",

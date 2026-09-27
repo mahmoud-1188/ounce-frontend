@@ -11,7 +11,7 @@ import { fine24, roundW, sumMoney } from "../core/money.js";
 ///
 /// taskirFeesSettled: {taskirId: مبلغ} من الخادم — الجزء من أجور التسكير
 /// الذي سدّد التزام الأجور فعلًا (الباقي أجورٌ جديدة لا تُنقص الرصيد).
-function buildSupplierStatement(sup, { lots = [], taskirEntries = [], cashTx = [], safeTx = [], safeGoldTx = [], taskirFeesSettled = null, from = "", to = "" } = {}) {
+function buildSupplierStatement(sup, { lots = [], taskirEntries = [], cashTx = [], safeTx = [], safeGoldTx = [], taskirFeesSettled = null, openings = [], from = "", to = "" } = {}) {
   const wm = (l) => Number(l.workmanshipTotal ?? l.workmanship) || 0;
   const day = (d) => String(d || "").slice(0, 10);
   const mine = lots.filter((l) => l.supplierId === sup.id && l.source !== "opening");
@@ -29,7 +29,21 @@ function buildSupplierStatement(sup, { lots = [], taskirEntries = [], cashTx = [
   });
   const paidLabel = { safe_cash: "شراء مسدَّد نقدًا", safe_network: "شراء مسدَّد شبكة", scrap: "شراء مسدَّد بالكسر", office: "شراء عبر مكتب تسكير" };
 
+  // أرصدته الافتتاحية (supplier_openings): علينا له يرفع، ولنا عنده يُنقص (وقد يصير الرصيد مدينًا)
+  const obs = (openings || []).filter((o) => o.supplierId === sup.id && !o.voided);
   const rows = [
+    ...obs.map((o) => {
+      const sign = o.side === "due" ? -1 : 1;
+      const gold = o.kind === "gold";
+      return {
+        id: o.id, ref: "افتتاحي", date: o.date,
+        kind: `رصيد افتتاحي — ${gold ? "ذهب" : "نقد"} ${o.side === "due" ? "لنا عنده" : "علينا له"}`,
+        karat: gold ? o.karat : null, weight: gold ? Number(o.weight) || 0 : 0,
+        gold: gold ? sign * fine24(o.weight, o.karat) : 0,
+        fees: gold ? 0 : sign * (Number(o.amount) || 0),
+        cash: 0, note: o.note || "",
+      };
+    }),
     ...mine.map((l) => {
       const def = l.paymentMethod === "deferred";
       const cashPaid = l.paymentMethod === "safe_cash" || l.paymentMethod === "safe_network";

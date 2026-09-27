@@ -713,6 +713,7 @@ function normalizeBootstrap(boot) {
     expenses: normalizeExpenses(boot.expenses || [], usersFullById),
     expenseNames: normalizeExpenseNames(boot.expenseNames || []),
     taskirEntries: normalizeTaskirEntries(boot.taskirEntries || []),
+    supplierOpenings: boot.supplierOpenings || [],
     taskirOffices: normalizeTaskirOffices(boot.taskirOffices || []),
     taskirOfficeTx: normalizeTaskirOfficeTx(boot.taskirOfficeTx || []),
     reservations: normalizeReservations(boot.reservations || []),

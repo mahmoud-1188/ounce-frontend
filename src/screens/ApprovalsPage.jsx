@@ -12,7 +12,7 @@ import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 ///
 /// المدير يقرّر؛ والمعتمَد يُنفَّذ فورًا بحمولته مرةً واحدة (الخادم يختم
 /// التنفيذ في معاملته)، والمرفوض يبقى شاهدًا.
-const LIVE_KINDS = ["expense", "refund", "supplier_settle"];
+const LIVE_KINDS = ["expense", "refund", "supplier_settle", "asset_purchase", "asset_disposal", "payroll_run"];
 
 function ApprovalsPage({ approvals = [], currency, canDecide = false, settings = {}, routing = {}, onDecide, onExecute, onBack }) {
   const [tab, setTab] = useState("pending");
@@ -33,6 +33,9 @@ function ApprovalsPage({ approvals = [], currency, canDecide = false, settings =
     if (a.kind === "expense") return `${p.name || p.category || "مصروف"} · من ${p.fundingSource || "الصندوق"}`;
     if (a.kind === "refund") return `مرتجع فاتورة · ${(p.lineIndexes || []).length} سطر${p.refundTarget || p.refundSource ? ` · ${p.refundTarget || p.refundSource}` : ""}`;
     if (a.kind === "supplier_settle") return `سداد مورد${p.weight ? ` · ${p.weight} جم` : ""}${p.workmanshipAmount ? ` · أجور ${fmtMoney(p.workmanshipAmount)}` : ""}`;
+    if (a.kind === "asset_purchase") return `شراء أصل · ${p.name || ""}${p.fundingSource ? ` · من ${p.fundingSource}` : ""}`;
+    if (a.kind === "asset_disposal") return `استبعاد أصل · ${a.note || ""}${p.reason === "scrap" ? " · إتلاف" : p.proceeds ? ` · بيع ${fmtMoney(p.proceeds)}` : ""}`;
+    if (a.kind === "payroll_run") return `مسيّر رواتب ${p.period || ""}`;
     return a.kindLabel;
   };
   const decide = async (a, decision) => {
@@ -118,7 +121,7 @@ function ApprovalsPage({ approvals = [], currency, canDecide = false, settings =
           {kindRules.map((r) => (
             <div key={r.id} className="flex items-center justify-between py-0.5">
               <span style={{ color: "var(--text2)" }} className="text-[11px]">{r.label}</span>
-              <span style={{ color: "var(--text3)" }} className="text-[11px]">{r.th > 0 ? `من ${fmtMoney(r.th)}` : "دائمًا"} · {routing[r.id] === "hq" ? "الإدارة" : "المدير"}</span>
+              <span style={{ color: "var(--text3)" }} className="text-[11px]">{r.th > 0 ? `من ${fmtMoney(r.th)}` : "دائمًا"} · {routing[r.id] === "hq" ? "الإدارة" : routing[r.id] === "hq_above" ? `المدير · الإدارة من ${fmtMoney(routing.hqAbove?.[r.id] || 0)}` : "المدير"}</span>
             </div>
           ))}
           <p style={{ color: "var(--text3)" }} className="text-[11px] mt-1">⚖ المدير يعتمد نفسه فقط لأن لا أحدَ فوقه في الفرع — ويُدوَّن اعتمادًا ذاتيًّا. وما جعلته الإدارة لها يُقرَّر في التطبيق المركزي ويُنفَّذ هنا.</p>

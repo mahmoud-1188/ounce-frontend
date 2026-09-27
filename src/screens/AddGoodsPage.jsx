@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Barcode, Camera, Check, Landmark, Loader2, Plus, Trash2, Truck } from "lucide-react";
 import { CATEGORY_STATE } from "../core/constants.js";
-import { fmt, fmtW, roundW } from "../core/money.js";
+import { fmt, fmtW, fromHalalas, halalas, roundW } from "../core/money.js";
 import { SET_PIECE_PRESETS } from "../core/workflow.js";
 import { compressImage, emptyRow, inputStyle, itemLabel, remainingQty } from "../domain/helpers.js";
 import { key } from "../domain/key.js";
@@ -78,6 +78,11 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
   // api.createLotItems — راجع تعليق handleAddItems في GoldInventoryApp.jsx)
   // — لازم انتظار النتيجة قبل الطباعة، وإلا كانت created كائن Promise لا
   // مصفوفة الأصناف الفعلية، فتُفتح شاشة الطباعة فارغة أو تفشل بصمت.
+  // مصنعية القطعة الواحدة: للجرام × وزن الذهب، أو كما كُتبت للقطعة
+  const rowWorkmanship = (r) => ((r.wmMode || "gram") === "gram" && r.workmanshipPerGram !== undefined
+    ? fromHalalas(Math.round(halalas(Number(r.workmanshipPerGram) || 0) * (Number(r.weight) || 0)))
+    : Number(r.workmanshipPerUnit) || 0);
+
   const handleSubmit = async () => {
     // ⚠ categoryId لا category: الباك إند يتحقق من category_id حقيقي في
     // جدول categories — إرسال المفتاح القديم (category) كان سيُرفض
@@ -88,7 +93,7 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
       weight: Number(r.weight),
       quantity: Math.max(1, Number(r.quantity) || 1),
       costPerGram: selectedLot.costPerGram,
-      workmanshipPerUnit: Number(r.workmanshipPerUnit) || 0,
+      workmanshipPerUnit: rowWorkmanship(r),
       photoDataUrl: r.photoDataUrl,
       isSet: r.category === "set",
       setPieces: r.category === "set" ? (r.setPieces || []).filter((x) => (x || "").trim()) : [],
@@ -428,9 +433,25 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
                   <Field label="الكمية">
                     <input style={inputStyle} type="text" inputMode="numeric" value={r.quantity} onChange={(e) => updateRow(r.key, "quantity", sanitizeNumeric(e.target.value))} />
                   </Field>
-                  <Field label="مصنعية القطعة الواحدة">
-                    <input style={inputStyle} type="text" inputMode="decimal" value={r.workmanshipPerUnit} onChange={(e) => updateRow(r.key, "workmanshipPerUnit", sanitizeNumeric(e.target.value))} placeholder="0.00" />
+                  <Field label={(r.wmMode || "gram") === "gram" ? "مصنعية الجرام" : "مصنعية القطعة الواحدة"}>
+                    {(r.wmMode || "gram") === "gram"
+                      ? <input style={inputStyle} type="text" inputMode="decimal" value={r.workmanshipPerGram || ""} onChange={(e) => updateRow(r.key, "workmanshipPerGram", sanitizeNumeric(e.target.value))} placeholder="0.00" />
+                      : <input style={inputStyle} type="text" inputMode="decimal" value={r.workmanshipPerUnit} onChange={(e) => updateRow(r.key, "workmanshipPerUnit", sanitizeNumeric(e.target.value))} placeholder="0.00" />}
                   </Field>
+                </div>
+                <div className="flex items-center justify-between gap-2" style={{ marginTop: -4 }}>
+                  <div className="flex gap-1">
+                    {[["gram", "للجرام"], ["unit", "للقطعة"]].map(([m, l]) => (
+                      <button key={m} type="button" onClick={() => updateRow(r.key, "wmMode", m)} className="px-2.5 py-1 rounded-lg text-[11px] font-bold"
+                        style={{ background: (r.wmMode || "gram") === m ? "var(--accentBg)" : "var(--panel)", color: (r.wmMode || "gram") === m ? "var(--accent)" : "var(--text2)", border: "1px solid var(--edge)" }}>{l}</button>
+                    ))}
+                  </div>
+                  {(r.wmMode || "gram") === "gram" && Number(r.workmanshipPerGram) > 0 && Number(r.weight) > 0 && (
+                    <span style={{ color: "var(--accentText)" }} className="text-[11px] font-bold">
+                      المصنعية = {fmt(Number(r.workmanshipPerGram))} × {fmtW(Number(r.weight))} جم = {fmt(rowWorkmanship(r))} {currency} للقطعة
+                      {Math.max(1, Number(r.quantity) || 1) > 1 ? ` · ${fmt(rowWorkmanship(r) * Math.max(1, Number(r.quantity) || 1))} للكمية` : ""}
+                    </span>
+                  )}
                 </div>
                 <p style={{ color: "var(--text3)" }} className="text-[11px] flex items-center gap-1">
                   <Barcode size={12} /> سيُولَّد رمز فريد تلقائيًا لكل قطعة — اطبع ملصقاتها من صفحة الطباعة بعد الحفظ
