@@ -456,14 +456,14 @@ const ROLES = {
   employee: {
     // ⚠ لا «aiAssistant» في القائمة: الذكاء يُفتح لكل مستخدم على حدة
     // من شاشة الصلاحيات، لا لكل من حمل الدور.
-    label: "موظف", allowedTabs: ["sales"], allowedMore: ["showcase", "pieceInquiry", "giftCards"],
+    label: "موظف", allowedTabs: ["sales"], allowedMore: ["showcase", "pieceInquiry", "giftCards", "customOrders"],
     canManageDay: false,
     denyActions: ["openDay", "closeDay"],
   },
   assistant: {
     canBreak: true,
     label: "نائب المدير", allowedTabs: ["sales", "stocktake"],
-    allowedMore: ["showcase", "pieceInquiry", "reorder", "branchTransfers", "giftCards"],
+    allowedMore: ["showcase", "pieceInquiry", "reorder", "branchTransfers", "giftCards", "customOrders"],
     canManageDay: true,
   },
   accountant: {
@@ -498,7 +498,7 @@ const ROLES = {
     // كانت الصفحتان مبنيتين ومُفعَّلتين خادميًّا لكن غير قابلتين للوصول
     // فعليًا من القائمة لأي مدير افتراضي — هذا الإصلاح يضيفهما هنا، ومعهما
     // hqReports (migration 017) مباشرة بلا نفس الفجوة من أول يوم.
-    allowedMore: ["addGoods", "printing", "printerSetup", "salesHistory", "sellerReports", "price", "reports", "journal", "trialBalance", "search", "bankRecon", "supplierLedger", "officeLedger", "salesReturn", "scrap", "scrapIntake", "scrapCustody", "conversions", "itemEdit", "goldOut", "categories", "workday", "customers", "trustAccounts", "reservations", "safeAudit", "integration", "storeLink", "backup", "purchases", "suppliers", "taskirat", "partners", "access", "taxReport", "settings", "financials", "openingCompare", "repairs", "aiAssistant", "navCustomize", "openingBalance", "fixedAssets", "payroll", "attendanceHr", "hqReports", "priceFix", "fullStatements", "anyStatement", "generalLedger", "masterReport", "exchange", "customerReport", "docCycle", "accountantReview", "dashboard", "approvals", "documents", "bankFees", "showcase", "reportsHub", "aiAccountant", "pieceInquiry", "combinedBook", "ifrs", "modules", "reorder", "branchTransfers", "giftCards"],
+    allowedMore: ["addGoods", "printing", "printerSetup", "salesHistory", "sellerReports", "price", "reports", "journal", "trialBalance", "search", "bankRecon", "supplierLedger", "officeLedger", "salesReturn", "scrap", "scrapIntake", "scrapCustody", "conversions", "itemEdit", "goldOut", "categories", "workday", "customers", "trustAccounts", "reservations", "safeAudit", "integration", "storeLink", "backup", "purchases", "suppliers", "taskirat", "partners", "access", "taxReport", "settings", "financials", "openingCompare", "repairs", "aiAssistant", "navCustomize", "openingBalance", "fixedAssets", "payroll", "attendanceHr", "hqReports", "priceFix", "fullStatements", "anyStatement", "generalLedger", "masterReport", "exchange", "customerReport", "docCycle", "accountantReview", "dashboard", "approvals", "documents", "bankFees", "showcase", "reportsHub", "aiAccountant", "pieceInquiry", "combinedBook", "ifrs", "modules", "reorder", "branchTransfers", "giftCards", "amlRegister", "purchaseOrders", "customOrders"],
   },
 };
 

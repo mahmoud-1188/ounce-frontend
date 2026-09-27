@@ -17,8 +17,8 @@ import * as api from "../core/api.js";
 function NewSaleModal({ activeItems, priceData,
   // ⚠ العملة كانت غائبة عن التوقيع: البدل يستخدمها فيسقط بـ
   // «currency is not defined» — والنافذة تُفرَغ بلا رسالة.
-  currency = "ر.س", initialItemId, taxEnabled, taxRate, settings = {}, role, customers = [], reservations = [], dailyCash = null, onClose, onConfirm, onBindEpc }) {
-  const [customerId, setCustomerId] = useState("");
+  currency = "ر.س", initialItemId, taxEnabled, taxRate, settings = {}, role, customers = [], customOrder = null, reservations = [], dailyCash = null, onClose, onConfirm, onBindEpc }) {
+  const [customerId, setCustomerId] = useState(customOrder?.customerId || "");
   // عربون الحجز يُخصم من الفاتورة (المرجع 5.2.0) — حجز القطعة نفسها تلقائيًّا أو حجزٌ يُختار
   const [depositFrom, setDepositFrom] = useState("");
   // بطاقة هدية (وحدة giftCards): رمزها ورصيدها يُخصم من الفاتورة
@@ -26,6 +26,10 @@ function NewSaleModal({ activeItems, priceData,
   const [giftCard, setGiftCard] = useState(null);
   const [giftErr, setGiftErr] = useState("");
   const giftOn = !!settings?.serverModules?.giftCards?.on;
+  // مكافحة غسل الأموال (وحدة aml): هويةٌ للدفع النقدي الذي يبلغ الحدّ
+  const aml = settings?.serverModules?.aml;
+  const [kycName, setKycName] = useState("");
+  const [kycIdNumber, setKycIdNumber] = useState("");
   const lookupGift = async () => {
     setGiftErr(""); setGiftCard(null);
     if (!giftCode.trim()) return;
@@ -123,6 +127,10 @@ function NewSaleModal({ activeItems, priceData,
   const giftPart = giftCard && paymentMethod !== "credit" && paymentMethod !== "scrap"
     ? Math.min(Number(giftCard.balance) || 0, Math.max(0, Math.round((total - depositPart) * 100) / 100)) : 0;
   const dueNow = Math.round((total - depositPart - giftPart) * 100) / 100;
+  const amlTh = aml?.on ? Number(aml?.cfg?.cashThreshold) || 0 : 0;
+  const cashDue = paymentMethod === "cash" && !splitPay ? dueNow : splitPay ? Math.min(Number(cashPart) || 0, dueNow) : 0;
+  const amlCustomer = customers.find((c) => c.id === customerId);
+  const amlNeeded = amlTh > 0 && cashDue >= amlTh && !(amlCustomer && amlCustomer.idNumber);
   const selectedCount = Object.keys(selection).length;
 
   const handleConfirm = () => {
@@ -147,7 +155,10 @@ function NewSaleModal({ activeItems, priceData,
       taxApplicable,
       customerId: customerId || null,
       reservationId: depositRsv ? depositRsv.id : null,
+      customOrderId: customOrder ? customOrder.id : undefined,
       giftCardCode: giftPart > 0 ? giftCard.code : null,
+      kycName: amlNeeded ? kycName.trim() : undefined,
+      kycIdNumber: amlNeeded ? kycIdNumber.trim() : undefined,
       giftAmount: giftPart,
       frozenPrice,
       frozenAt,
@@ -298,6 +309,13 @@ function NewSaleModal({ activeItems, priceData,
           }} />
       )}
 
+      {customOrder && (
+        <Card style={{ padding: 10, marginBottom: 12, border: "1px solid var(--accentLine)" }}>
+          <p className="text-xs font-bold" style={{ color: "var(--accent)", margin: 0 }}>تسليم طلب خاص {customOrder.ref} — {customOrder.customerName}</p>
+          <p className="text-[11px]" style={{ color: "var(--text2)", margin: "3px 0 0" }}>{customOrder.description} · يُخصم العربون المتبقّي {Number(customOrder.depositLeft ?? customOrder.deposit ?? 0).toFixed(2)} {currency} من الفاتورة</p>
+        </Card>
+      )}
+
       {customers.length > 0 && (
         <Field label={paymentMethod === "credit" ? "العميل (إجباري للبيع الآجل)" : "العميل (اختياري — يتيح الإرجاع والضمان لاحقًا)"}>
           <select style={inputStyle} value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
@@ -324,6 +342,15 @@ function NewSaleModal({ activeItems, priceData,
         <p style={{ color: "var(--accent)" }} className="text-[11px] mb-3">
           يُخصم العربون {fmt(depositPart)} — المطلوب من العميل الآن {fmt(dueNow)}{splitPay ? " (يُخصم من الجزء النقدي أولًا)" : ""}
         </p>
+      )}
+      {amlNeeded && (
+        <Card style={{ padding: 10, marginBottom: 12, border: "1px solid var(--accentLine)" }}>
+          <p style={{ color: "var(--accent)" }} className="text-[11px] font-bold mb-1">دفعٌ نقدي {fmt(cashDue)} يبلغ حدّ الهوية {fmt(amlTh)} — اكتب هوية المشتري</p>
+          <div className="grid grid-cols-2 gap-2">
+            <input style={inputStyle} value={kycName || amlCustomer?.name || ""} onChange={(e) => setKycName(e.target.value)} placeholder="الاسم" />
+            <input style={inputStyle} value={kycIdNumber} onChange={(e) => setKycIdNumber(e.target.value.toUpperCase())} placeholder="رقم الهوية / الإقامة" inputMode="numeric" />
+          </div>
+        </Card>
       )}
       {giftOn && paymentMethod !== "credit" && paymentMethod !== "scrap" && (
         <Field label="الدفع ببطاقة هدية (اختياري)">

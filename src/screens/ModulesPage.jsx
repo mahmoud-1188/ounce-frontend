@@ -16,6 +16,9 @@ const INFO = {
   zatca: "رمز QR بصيغة TLV (المرحلة الأولى لهيئة الزكاة) على كل فاتورةٍ ضريبية مبسّطة — يحتاج الرقم الضريبي في تجهيز الفرع.",
   thermalReceipt: "طباعة الفاتورة إيصالًا على طابعة الكاشير الحرارية 80مم.",
   bilingualInvoice: "عناوين الفاتورة المطبوعة بالعربية والإنجليزية.",
+  customOrders: "طلب عميلٍ بمواصفة وعربون وموعد · مراحل الورشة · التسليم بفاتورةٍ يُخصم منها العربون.",
+  purchaseOrders: "أمر شراءٍ للمورد ثم استلامه دفعةً بمعالج الشراء نفسه · مقارنة المطلوب بالمستلم.",
+  aml: "هوية المشتري إلزامية لدفعٍ نقدي يبلغ الحدّ، وتُحفظ على الفاتورة · سجلّ العمليات الكبيرة.",
   gemstones: "القيراط واللون والنقاء والقطع والشهادة لكل قطعة — تُكتب عند التكويد وتظهر في الاستعلام والفاتورة.",
   watches: "الماركة والموديل والرقم التسلسلي ومدّة الضمان لكل ساعة.",
 };
@@ -63,6 +66,11 @@ function ModulesPage({ categories = [], canEdit = false, onSaved, onBack }) {
                     </label>
                   ))}
                 </div>
+              )}
+              {on && id === "aml" && (
+                <label className="block text-[11px] mt-2" style={{ color: "var(--text2)" }}>الحدّ النقدي
+                  <input style={inputStyle} disabled={!canEdit} inputMode="decimal" value={cfgOf(id).cashThreshold} onChange={(e) => setCfg(id, { cashThreshold: e.target.value.replace(/[^\d.]/g, "") })} />
+                </label>
               )}
               {on && id === "loyalty" && (
                 <div className="grid grid-cols-2 gap-2 mt-2">

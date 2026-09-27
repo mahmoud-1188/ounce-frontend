@@ -197,7 +197,7 @@ function normalizeSafeAudits(rows) {
 }
 
 function normalizeCustomers(rows) {
-  return rows.map((c) => ({ id: c.id, ref: c.ref, name: c.name, phone: c.phone, createdBy: c.created_by, createdAt: c.created_at }));
+  return rows.map((c) => ({ id: c.id, ref: c.ref, name: c.name, phone: c.phone, idNumber: c.id_number || "", note: c.note || "", createdBy: c.created_by, createdAt: c.created_at }));
 }
 
 function normalizeSuppliers(rows) {

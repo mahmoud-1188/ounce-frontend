@@ -14,7 +14,7 @@ const TOOL_LABELS = {
   trial_balance: "ميزان المراجعة", account_ledger: "حركة حساب", income_statement: "قائمة الدخل",
   sales_summary: "ملخّص المبيعات", expenses_by_account: "المصروفات بحسابها", cash_position: "النقد الآن",
   inventory_summary: "المخزون", review_queue: "طابور المراجعة", search_journal: "بحث اليومية",
-  supplier_statement: "كشف مورد", propose_journal_entry: "اقتراح قيد",
+  supplier_statement: "كشف مورد", propose_journal_entry: "اقتراح قيد", calculate: "حساب", variance_analysis: "تحليل الفروق", control_recon: "مطابقة الدفاتر", ask_clarification: "سؤال توضيحي", open_screen: "فتح شاشة",
 };
 
 function DraftCard({ draft, canPost, onApprove, onReject }) {
@@ -62,14 +62,14 @@ function DraftCard({ draft, canPost, onApprove, onReject }) {
   );
 }
 
-function AccountantAiPage({ canPost = false, onAsk, onLoadProposals = null, onApprove, onReject, onBack }) {
+function AccountantAiPage({ canPost = false, onAsk, onLoadProposals = null, onApprove, onReject, onOpenScreen = null, onBack }) {
   const [msgs, setMsgs] = useState([]);     // [{role, text, trace?, drafts?}]
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [pending, setPending] = useState([]);
   const endRef = useRef(null);
-  const suggestions = ["راجع طابور المراجعة ولخّص ما فيه", "كم صافي الربح هذا الشهر وممّ يتكوّن؟", "أين النقد الآن؟", "اعرض مصروفات الشهر بحسابها", "هل ميزان المراجعة متوازن؟"];
+  const suggestions = ["هل الدفاتر مطابقة لسجلّاتها؟", "لماذا تغيّرت المبيعات عن الشهر الماضي؟", "راجع طابور المراجعة ولخّص ما فيه", "كم صافي الربح هذا الشهر وممّ يتكوّن؟", "أين النقد الآن؟", "اعرض مصروفات الشهر بحسابها", "هل ميزان المراجعة متوازن؟"];
   useEffect(() => {
     let live = true;
     if (onLoadProposals) onLoadProposals().then((list) => { if (live) setPending((list || []).filter((p) => p.status === "pending")); }).catch(() => {});
@@ -84,7 +84,7 @@ function AccountantAiPage({ canPost = false, onAsk, onLoadProposals = null, onAp
     try {
       const r = await onAsk(next.map((m) => ({ role: m.role, content: m.text })));
       if (r?.error) setErr(r.error);
-      else setMsgs((m) => [...m, { role: "assistant", text: r.text || "—", trace: r.trace || [], drafts: r.drafts || [] }]);
+      else setMsgs((m) => [...m, { role: "assistant", text: r.text || (r.clarify ? r.clarify.question : "—"), trace: r.trace || [], drafts: r.drafts || [], clarify: r.clarify || null, open: r.open || null }]);
     } catch (e) { setErr(String(e?.message || e)); }
     setBusy(false);
   };
@@ -123,6 +123,18 @@ function AccountantAiPage({ canPost = false, onAsk, onLoadProposals = null, onAp
                 </details>
               )}
               {(m.drafts || []).map((d) => <DraftCard key={d.id} draft={d} canPost={canPost} onApprove={onApprove} onReject={onReject} />)}
+              {m.clarify && i === msgs.length - 1 && (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {m.clarify.options.map((o) => (
+                    <button key={o} onClick={() => ask(o)} className="px-3 py-1.5 rounded-full text-[11px] font-bold"
+                      style={{ background: "var(--accentBg)", color: "var(--accent)", border: "1px solid var(--accentLine)" }}>{o}</button>
+                  ))}
+                </div>
+              )}
+              {m.open && onOpenScreen && (
+                <button onClick={() => onOpenScreen(m.open.screen)} className="mt-2 px-3 py-1.5 rounded-lg text-[11px] font-bold"
+                  style={{ background: "var(--panel)", color: "var(--accentText)", border: "1px solid var(--line)" }}>افتح الشاشة ←</button>
+              )}
             </Card>
           </div>
         ))}

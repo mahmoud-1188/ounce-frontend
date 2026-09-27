@@ -7,6 +7,7 @@ import { CommissionRuleForm } from "../ui/CommissionRuleForm.jsx";
 import { EmptyState } from "../ui/EmptyState.jsx";
 import { Field } from "../ui/Field.jsx";
 import { HrFieldsForm } from "../ui/HrFieldsForm.jsx";
+import { HrProfileForm } from "../ui/HrProfileForm.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 
 /**
@@ -35,6 +36,8 @@ function PayrollPage({ currency = "ر.س", safeBalance = {}, canManage, onBack, 
   const [previewLoading, setPreviewLoading] = useState(false);
   const [accruing, setAccruing] = useState(false);
   const [hrEdit, setHrEdit] = useState(null);
+  const [profileEdit, setProfileEdit] = useState(null);
+  const [docAlerts, setDocAlerts] = useState([]);
   const [commissionEdit, setCommissionEdit] = useState(null);
   const [eos, setEos] = useState({ employeeId: "", reason: "termination", atDate: "", note: "", fundingSource: "safe_cash" });
 
@@ -52,7 +55,30 @@ function PayrollPage({ currency = "ر.س", safeBalance = {}, canManage, onBack, 
     }
   }
 
-  useEffect(() => { loadStaffAndRuns(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { loadStaffAndRuns(); api.payrollApi.hrAlerts().then((d) => setDocAlerts(d.alerts || [])).catch(() => {}); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function saveProfile(userId, profile) {
+    try {
+      await api.payrollApi.saveProfile(userId, profile);
+      flashToast?.("حُفظ ملف الموظف");
+      await loadStaffAndRuns();
+      api.payrollApi.hrAlerts().then((d) => setDocAlerts(d.alerts || [])).catch(() => {});
+      return true;
+    } catch (err) {
+      return err?.body?.error === "invalid_iban" ? "الآيبان غير صالح — SA ثم 22 رقمًا" : "تعذّر الحفظ";
+    }
+  }
+
+  async function downloadWps() {
+    try {
+      const d = await api.payrollApi.wps(run.id);
+      const blob = new Blob([d.csv], { type: "text/csv;charset=utf-8" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob); a.download = `WPS-${d.period}.csv`; a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      if (d.missing.length) flashToast?.(`⚠ بلا آيبان صالح: ${d.missing.join("، ")}`);
+    } catch { flashToast?.("تعذّر إنشاء ملف حماية الأجور"); }
+  }
 
   const run = useMemo(
     () => runs.find((r) => String(r.period).slice(0, 7) === period) || null,
@@ -228,6 +254,16 @@ function PayrollPage({ currency = "ر.س", safeBalance = {}, canManage, onBack, 
           </div>
         )}
 
+        {docAlerts.length > 0 && (
+          <Card style={{ padding: 10, marginBottom: 10, border: "1px solid var(--accentLine)" }}>
+            <p style={{ color: "var(--accent)", margin: "0 0 4px" }} className="text-[11px] font-bold">مستنداتٌ تنتهي قريبًا</p>
+            {docAlerts.map((a) => (
+              <p key={`${a.userId}-${a.doc}`} className="text-[11px]" style={{ color: a.daysLeft < 0 ? "var(--bad)" : "var(--text2)", margin: 0 }}>
+                {a.doc} {a.name} — {a.daysLeft < 0 ? `انتهت منذ ${-a.daysLeft} يومًا` : `تنتهي خلال ${a.daysLeft} يومًا`} ({a.date})
+              </p>
+            ))}
+          </Card>
+        )}
         {tab === "run" && (
           <>
             <Card style={{ padding: 12, marginBottom: 10, border: "1px solid var(--accentLine)" }}>
@@ -242,6 +278,10 @@ function PayrollPage({ currency = "ر.س", safeBalance = {}, canManage, onBack, 
               <p style={{ color: "var(--text3)" }} className="text-[10px] mt-2 leading-6">
                 {run ? `احتُسب · ${run.ref}` : previewLoading ? "جارٍ حساب المعاينة…" : "معاينة — لم يُحتسب بعد. الاحتساب يُقيَّد استحقاقًا ويُجمّد الكشف."}
               </p>
+              {run && canManage && (
+                <button onClick={downloadWps} className="w-full mt-2 py-2 rounded-xl text-[11px] font-bold"
+                  style={{ background: "var(--panel)", color: "var(--accentText)", border: "1px solid var(--line)" }}>ملف حماية الأجور (WPS) للبنك</button>
+              )}
               {!run && canManage && slips.length > 0 && (
                 <button onClick={accrue} disabled={accruing} className="w-full mt-2 py-2.5 rounded-xl text-[12px] font-bold"
                   style={{ background: "linear-gradient(135deg,var(--gradFrom),var(--gradTo))", color: "var(--panel)" }}>
@@ -292,7 +332,9 @@ function PayrollPage({ currency = "ر.س", safeBalance = {}, canManage, onBack, 
                 <p style={{ color: "var(--accent)" }} className="text-[11px] font-bold mt-4 mb-1">بيانات الرواتب للموظفين</p>
                 {activeStaff.map((u) => (
                   <Card key={u.id} style={{ padding: 10, marginBottom: 6 }}>
-                    {hrEdit?.id === u.id ? (
+                    {profileEdit?.id === u.id ? (
+                      <HrProfileForm profile={u.hr_profile || {}} onCancel={() => setProfileEdit(null)} onSave={(p) => saveProfile(u.id, p)} />
+                    ) : hrEdit?.id === u.id ? (
                       <HrFieldsForm
                         user={{
                           basicSalary: u.basic_salary, housing: u.housing, transport: u.transport,
@@ -309,6 +351,11 @@ function PayrollPage({ currency = "ر.س", safeBalance = {}, canManage, onBack, 
                             {Number(u.basic_salary) > 0 ? `${fmtMoney(u.basic_salary)} · ${u.nationality === "saudi" ? "سعودي" : "غير سعودي"}` : "بلا راتب — اضغط للإضافة"}
                           </span>
                         </div>
+                      </button>
+                    )}
+                    {profileEdit?.id !== u.id && hrEdit?.id !== u.id && (
+                      <button onClick={() => setProfileEdit(u)} className="text-[10px] mt-1 font-bold" style={{ color: "var(--accentText)" }}>
+                        ملف الموظف{u.hr_profile?.jobTitle ? ` · ${u.hr_profile.jobTitle}` : ""}{u.hr_profile?.iban ? " · آيبان ✓" : ""}
                       </button>
                     )}
                     {commissionEdit === u.id ? (

@@ -29,6 +29,7 @@ function CustomersPage({ customers, sales, returns = [], repairs = [], trustGold
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [note, setNote] = useState("");
+  const [idNumber, setIdNumber] = useState("");
   const [detailId, setDetailId] = useState(null);
   const [search, setSearch] = useState("");
   const [showCollect, setShowCollect] = useState(false);
@@ -291,6 +292,9 @@ function CustomersPage({ customers, sales, returns = [], repairs = [], trustGold
               <Field label="الجوال (اختياري)">
                 <input style={inputStyle} value={phone} onChange={(e) => setPhone(toLatinDigits(e.target.value))} inputMode="numeric" />
               </Field>
+              <Field label="رقم الهوية أو الإقامة (اختياري — يلزم للدفع النقدي الكبير)">
+                <input style={inputStyle} value={idNumber} onChange={(e) => setIdNumber(toLatinDigits(e.target.value).toUpperCase())} />
+              </Field>
               <Field label="ملاحظات (اختياري)">
                 <input style={inputStyle} value={note} onChange={(e) => setNote(e.target.value)} />
               </Field>
@@ -303,7 +307,7 @@ function CustomersPage({ customers, sales, returns = [], repairs = [], trustGold
                 </button>
                 <button
                   disabled={!valid}
-                  onClick={() => { onAdd(name.trim(), phone.trim(), note.trim()); setName(""); setPhone(""); setNote(""); setShowAdd(false); }}
+                  onClick={() => { onAdd(name.trim(), phone.trim(), note.trim(), idNumber.trim()); setName(""); setPhone(""); setNote(""); setIdNumber(""); setShowAdd(false); }}
                   className="py-2 rounded-xl text-xs font-bold"
                   style={{ background: valid ? "linear-gradient(135deg,var(--gradFrom),var(--gradTo))" : "var(--accentBg)", color: valid ? "var(--panel)" : "var(--text3)" }}
                 >

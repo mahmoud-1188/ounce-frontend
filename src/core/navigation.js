@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Layers, Globe2, Gift, Boxes, Repeat, Puzzle, Bot, Gem, Check, Home, Barcode, BarChart3, BookmarkCheck, Building2, CalendarCheck, ClipboardCheck, ClipboardList, Coins, Database, FileMinus, FileText, Flame, Grid, Handshake, Landmark, LayoutGrid, Lock, PiggyBank, Plus, Printer, Receipt, RefreshCw, RotateCcw, Scale, Search, Send, Settings, ShieldCheck, ShoppingCart, Sparkles, Sun, SlidersHorizontal, Tag, Truck, UserRound, Users, Wallet, Warehouse, Wrench } from "lucide-react";
+import { ArrowLeftRight, Layers, Globe2, Gift, Boxes, Repeat, Puzzle, ShieldAlert, ClipboardPen, Hammer, Bot, Gem, Check, Home, Barcode, BarChart3, BookmarkCheck, Building2, CalendarCheck, ClipboardCheck, ClipboardList, Coins, Database, FileMinus, FileText, Flame, Grid, Handshake, Landmark, LayoutGrid, Lock, PiggyBank, Plus, Printer, Receipt, RefreshCw, RotateCcw, Scale, Search, Send, Settings, ShieldCheck, ShoppingCart, Sparkles, Sun, SlidersHorizontal, Tag, Truck, UserRound, Users, Wallet, Warehouse, Wrench } from "lucide-react";
 import { ROLES } from "./constants.js";
 
 const TAB_KIND_IDS = ["home", "inventory", "sales", "cash", "expenses", "stocktake"];
@@ -76,6 +76,9 @@ const NAV_REGISTRY = [
   { id: "reorder", label: "حدود إعادة الطلب", icon: Boxes },
   { id: "branchTransfers", label: "التحويل بين الفروع", icon: Repeat },
   { id: "giftCards", label: "بطاقات الهدايا والولاء", icon: Gift },
+  { id: "customOrders", label: "الطلبات الخاصة", icon: Hammer },
+  { id: "purchaseOrders", label: "أوامر الشراء", icon: ClipboardPen },
+  { id: "amlRegister", label: "سجلّ مكافحة غسل الأموال", icon: ShieldAlert },
   { id: "combinedBook", label: "الذهب والنقد معًا — الدفتر الثالث", icon: Layers },
   { id: "ifrs", label: "المعايير الدولية — IFRS", icon: Globe2 },
   { id: "pieceInquiry", label: "استعلام القطع", icon: Gem },
@@ -255,6 +258,9 @@ const SHORTCUT_HINTS = {
   modules: ["وحدات", "الوحدات", "تفعيل ميزة", "خصائص إضافية"],
   reorder: ["إعادة الطلب", "حد أدنى", "نقص المخزون", "نفد"],
   branchTransfers: ["تحويل", "بين الفروع", "إرسال قطع", "شحنة لفرع"],
+  customOrders: ["طلب خاص", "تصنيع", "طلبات العملاء", "ورشة", "تفصيل"],
+  purchaseOrders: ["أمر شراء", "أوامر الشراء", "طلبية مورد", "po"],
+  amlRegister: ["غسل الأموال", "هوية العميل", "عمليات نقدية كبيرة", "kyc", "aml"],
   giftCards: ["بطاقة هدية", "بطاقات", "ولاء", "نقاط"],
   combinedBook: ["الدفتر الثالث", "ذهب ونقد", "معادل الذهب", "كم نملك"],
   ifrs: ["المعايير الدولية", "ifrs", "ias", "امتثال"],
@@ -305,14 +311,14 @@ const MENU_GROUPS = [
     label: "الشراء والموردين",
     hint: "المشتريات · الموردين · الكسر",
     icon: Truck,
-    items: ["purchases", "suppliers", "taskirat", "scrapIntake", "scrapCustody", "scrap"],
+    items: ["purchases", "purchaseOrders", "suppliers", "taskirat", "scrapIntake", "scrapCustody", "scrap"],
   },
   {
     id: "customers",
     label: "العملاء",
     hint: "الحجوزات · الأمانة · الإصلاحات",
     icon: UserRound,
-    items: ["customers", "reservations", "trustGold", "repairs"],
+    items: ["customers", "reservations", "customOrders", "trustGold", "repairs", "amlRegister"],
   },
   {
     id: "money",

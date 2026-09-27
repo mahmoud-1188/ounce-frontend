@@ -455,6 +455,9 @@ const payrollApi = {
   decideLeave: (id, decision) => apiFetch(`/leave-requests/${id}/decide`, { method: "POST", body: { decision } }),
   preview: (period) => apiFetch(`/payroll/preview?period=${period}`),
   fetchRuns: () => apiFetch("/payroll/runs"),
+  saveProfile: (userId, profile) => apiFetch(`/hr/staff/${userId}/profile`, { method: "PATCH", body: profile }),
+  hrAlerts: () => apiFetch("/hr/alerts"),
+  wps: (runId) => apiFetch(`/payroll/runs/${runId}/wps?format=json`),
   accrue: (period, approvalId = null) => apiFetch("/payroll/runs", { method: "POST", body: { period, ...(approvalId ? { approvalId } : {}) } }),
   pay: (runId, employeeId, fundingSource) =>
     apiFetch(`/payroll/runs/${runId}/pay/${employeeId}`, { method: "POST", body: { fundingSource } }),
@@ -496,6 +499,17 @@ const modulesApi = {
   lookupGiftCard: (code) => apiFetch(`/gift-cards/lookup/${encodeURIComponent(code)}`),
   sellGiftCard: (body) => apiFetch("/gift-cards", { method: "POST", body }),
   voidGiftCard: (id) => apiFetch(`/gift-cards/${id}/void`, { method: "POST", body: {} }),
+  addCustomer: (body) => apiFetch("/customers", { method: "POST", body }),
+  updateCustomer: (id, body) => apiFetch(`/customers/${id}`, { method: "PATCH", body }),
+  amlRegister: () => apiFetch("/aml/register"),
+  purchaseOrders: () => apiFetch("/purchase-orders"),
+  customOrders: () => apiFetch("/custom-orders"),
+  createCustomOrder: (body) => apiFetch("/custom-orders", { method: "POST", body }),
+  customOrderStage: (id, stage) => apiFetch(`/custom-orders/${id}/stage`, { method: "POST", body: { stage } }),
+  cancelCustomOrder: (id) => apiFetch(`/custom-orders/${id}/cancel`, { method: "POST", body: {} }),
+  createPurchaseOrder: (body) => apiFetch("/purchase-orders", { method: "POST", body }),
+  receivePurchaseOrder: (id, body) => apiFetch(`/purchase-orders/${id}/receive`, { method: "POST", body }),
+  cancelPurchaseOrder: (id) => apiFetch(`/purchase-orders/${id}/cancel`, { method: "POST", body: {} }),
   redeemPoints: (customerId, points) => apiFetch("/loyalty/redeem", { method: "POST", body: { customerId, points } }),
 };
 

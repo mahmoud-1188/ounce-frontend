@@ -85,7 +85,10 @@ const API_ERROR_MESSAGES = {
   invalid_opening_kind: "اختر نوع الرصيد وجهته",
   already_voided: "أُلغي من قبل",
   opening_not_found: "الرصيد غير موجود",
+  aml_id_required: "دفعٌ نقدي يبلغ حدّ الهوية — اختر عميلًا بهويته أو اكتب اسم المشتري ورقم هويته",
   discount_over_limit: "الخصم فوق حدّك — يبيعه المدير",
+  custom_order_not_open: "الطلب الخاص مُسلَّم أو ملغى",
+  custom_order_other_customer: "الطلب الخاص لعميلٍ آخر",
   gift_card_not_found: "بطاقة الهدية غير صالحة أو مستعملة",
   gift_card_empty: "لا رصيد في بطاقة الهدية",
   gift_card_payment_method: "بطاقة الهدية لا تُستعمل مع الآجل أو البدل بالكسر",
@@ -315,6 +318,9 @@ import { buildSupplierStatement } from "../domain/buildSupplierStatement.js";
 import { CombinedBookPage } from "../screens/CombinedBookPage.jsx";
 import { IfrsPage } from "../screens/IfrsPage.jsx";
 import { printSaleInvoice } from "../domain/printInvoice.js";
+import { AmlRegisterPage } from "../screens/AmlRegisterPage.jsx";
+import { PurchaseOrdersPage } from "../screens/PurchaseOrdersPage.jsx";
+import { CustomOrdersPage } from "../screens/CustomOrdersPage.jsx";
 import { ModulesPage } from "../screens/ModulesPage.jsx";
 import { ReorderPage } from "../screens/ReorderPage.jsx";
 import { BranchTransfersPage } from "../screens/BranchTransfersPage.jsx";
@@ -488,6 +494,7 @@ export default function GoldInventoryApp() {
   const [showNewSale, setShowNewSale] = useState(false);
   const [quickSaleItemId, setQuickSaleItemId] = useState(null);
   const [viewingSale, setViewingSale] = useState(null);
+  const [pendingCustomOrder, setPendingCustomOrder] = useState(null); // طلبٌ خاص يُسلَّم بالفاتورة القادمة
   const [cashModalType, setCashModalType] = useState(null);
   const [showAiChat, setShowAiChat] = useState(false);
   const [showPartialSale, setShowPartialSale] = useState(false);
@@ -1350,23 +1357,22 @@ export default function GoldInventoryApp() {
     }
   };
 
-  const handleAddCustomer = (name, phone, note) => {
+  // ⚠ العميل على الخادم (migration 055) — كان يُضاف في المتصفح وحده فلا تعرفه الفاتورة الآجلة ولا الحجز
+  const handleAddCustomer = async (name, phone, note, idNumber = "") => {
     if (nameExists(customers, name)) {
       flashToast("يوجد عميل بهذا الاسم");
       return null;
     }
-    const c = {
-      id: Date.now().toString() + "c",
-      ref: nextRef("customer", customers),
-      name: name.trim(),
-      phone: (phone || "").trim(),
-      note: (note || "").trim(),
-      createdAt: new Date().toISOString(),
-      createdBy: currentUser?.name || "",
-    };
-    persistCustomers([c, ...customers]);
-    flashToast(`تمت إضافة العميل ${c.ref}`);
-    return c;
+    try {
+      const r = await api.modulesApi.addCustomer({ name, phone, note, idNumber });
+      const c = { ...r.customer, createdBy: currentUser?.name || "" };
+      setCustomers((prev) => [c, ...prev]);
+      flashToast(`تمت إضافة العميل ${c.ref}`);
+      return c;
+    } catch (err) {
+      flashToast(err?.body?.error === "invalid_id_number" ? "رقم الهوية غير صالح" : apiErrorMessage(err, "تعذّر إضافة العميل"));
+      return null;
+    }
   };
 
   // ── الذهب الأمانة ──
@@ -5302,6 +5308,9 @@ export default function GoldInventoryApp() {
       ...(on("reorderAlerts") ? [] : ["reorder"]),
       ...(on("branchTransfer") ? [] : ["branchTransfers"]),
       ...(on("giftCards") || on("loyalty") ? [] : ["giftCards"]),
+      ...(on("aml") ? [] : ["amlRegister"]),
+      ...(on("purchaseOrders") ? [] : ["purchaseOrders"]),
+      ...(on("customOrders") ? [] : ["customOrders"]),
     ];
   }, [appSettings.serverModules]);
 
@@ -5864,6 +5873,9 @@ export default function GoldInventoryApp() {
       customerId: draft.customerId || null,
       reservationId: draft.reservationId || null,
       giftCardCode: draft.giftCardCode || null,
+      customOrderId: draft.customOrderId || undefined,
+      kycName: draft.kycName || undefined,
+      kycIdNumber: draft.kycIdNumber || undefined,
       giftAmount: Number(draft.giftAmount) || 0,
       lines: draft.lines.map((l) => ({ itemId: l.itemId, quantity: l.quantity, unitPrice: l.unitPrice })),
       taxApplicable: !!draft.taxApplicable,
@@ -5887,7 +5899,8 @@ export default function GoldInventoryApp() {
     const srvSale = res.sale;
     // ⚠ فاتورةٌ خُصم منها عربون: الصندوق والحجز والدفتر تغيّرت على الخادم بغير ما
     //   تحسبه الشاشة — نعيد التحميل كي لا تُعرض أرقامٌ لم تقع.
-    if (Number(srvSale.depositApplied) > 0 || Number(srvSale.giftApplied) > 0) {
+    if (draft.customOrderId) setPendingCustomOrder(null);
+    if (Number(srvSale.depositApplied) > 0 || Number(srvSale.giftApplied) > 0 || draft.customOrderId) {
       setShowNewSale(false);
       setQuickSaleItemId(null);
       flashToast(`تم إنشاء الفاتورة — خُصم ${Number(srvSale.depositApplied) > 0 ? `عربون ${fmtMoney(srvSale.depositApplied)}` : ""}${Number(srvSale.giftApplied) > 0 ? ` بطاقة ${fmtMoney(srvSale.giftApplied)}` : ""} والمقبوض ${fmtMoney(srvSale.payable)}${srvSale.pointsEarned ? ` · +${srvSale.pointsEarned} نقطة` : ""}`);
@@ -8281,6 +8294,14 @@ export default function GoldInventoryApp() {
           <ModulesPage categories={categories} canEdit={role === "manager"}
             onSaved={(mods) => setAppSettings((prev) => ({ ...prev, serverModules: mods }))} onBack={() => setMorePage(null)} />
         )}
+        {morePage === "customOrders" && (
+          <CustomOrdersPage customers={customers} currency={priceData.currency || "ر.س"} canCancel={["manager", "assistant"].includes(role)}
+            onSell={(o) => { setPendingCustomOrder(o); setMorePage(null); setShowNewSale(true); }} onBack={() => setMorePage(null)} />
+        )}
+        {morePage === "purchaseOrders" && (
+          <PurchaseOrdersPage suppliers={suppliers} currency={priceData.currency || "ر.س"} onReceived={() => loadBootstrap(currentUser).catch(() => {})} onBack={() => setMorePage(null)} />
+        )}
+        {morePage === "amlRegister" && <AmlRegisterPage currency={priceData.currency || "ر.س"} onBack={() => setMorePage(null)} />}
         {morePage === "reorder" && <ReorderPage onBack={() => setMorePage(null)} onOpenModules={role === "manager" ? () => setMorePage("modules") : null} />}
         {morePage === "branchTransfers" && (
           <BranchTransfersPage currency={priceData.currency || "ر.س"} canMove={["manager", "assistant"].includes(role)}
@@ -8846,6 +8867,7 @@ export default function GoldInventoryApp() {
         {morePage === "aiAccountant" && (
           <AccountantAiPage
             canPost={role === "manager" || role === "accountant"}
+            onOpenScreen={(id) => openPage(id)}
             onAsk={async (messages) => {
               try { return await api.aiApi.accountant(messages); }
               catch (err) { return { error: apiErrorMessage(err, "تعذّر الوصول للمساعد المحاسبي") }; }
@@ -9213,6 +9235,7 @@ export default function GoldInventoryApp() {
             settings={appSettings}
             role={role}
           customers={customers}
+          customOrder={pendingCustomOrder}
           reservations={reservations}
           activeItems={activeItems}
           priceData={priceData}
@@ -9224,6 +9247,7 @@ export default function GoldInventoryApp() {
           onClose={() => {
             setShowNewSale(false);
             setQuickSaleItemId(null);
+            setPendingCustomOrder(null);
           }}
           onConfirm={handleCreateSale}
           onBindEpc={handleBindEpc}
