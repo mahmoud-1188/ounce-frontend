@@ -266,6 +266,8 @@ import { AiActionSheet } from "../modals/AiActionSheet.jsx";
 import { BundleSheet } from "../modals/BundleSheet.jsx";
 import { CashModal } from "../modals/CashModal.jsx";
 import { EntitySheet } from "../modals/EntitySheet.jsx";
+import { BudgetsPage } from "../screens/BudgetsPage.jsx";
+import { VatReturnPage } from "../screens/VatReturnPage.jsx";
 import { NewSaleModal } from "../modals/NewSaleModal.jsx";
 import { PartialSaleModal } from "../modals/PartialSaleModal.jsx";
 import { SaleDetailModal } from "../modals/SaleDetailModal.jsx";
@@ -6472,6 +6474,7 @@ export default function GoldInventoryApp() {
         note: entry.note || "",
         employeeId: emp?.id || null,
         periodMonth: isPayroll ? entry.periodMonth || new Date().toISOString().slice(0, 7) : null,
+        installments: entry.category === "advance" ? Number(entry.installments) || 1 : undefined,
         nameId: entry.nameId || null,
       });
       if (res.approvalPending) { notePendingApproval(res.approvalPending); return null; }
@@ -8301,6 +8304,8 @@ export default function GoldInventoryApp() {
         {morePage === "purchaseOrders" && (
           <PurchaseOrdersPage suppliers={suppliers} currency={priceData.currency || "ر.س"} onReceived={() => loadBootstrap(currentUser).catch(() => {})} onBack={() => setMorePage(null)} />
         )}
+        {morePage === "budgets" && <BudgetsPage currency={priceData.currency || "ر.س"} canEdit={role === "manager"} onBack={() => setMorePage(null)} />}
+        {morePage === "vatReturn" && <VatReturnPage currency={priceData.currency || "ر.س"} onBack={() => setMorePage(null)} />}
         {morePage === "amlRegister" && <AmlRegisterPage currency={priceData.currency || "ر.س"} onBack={() => setMorePage(null)} />}
         {morePage === "reorder" && <ReorderPage onBack={() => setMorePage(null)} onOpenModules={role === "manager" ? () => setMorePage("modules") : null} />}
         {morePage === "branchTransfers" && (

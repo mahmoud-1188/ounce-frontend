@@ -16,6 +16,7 @@ function AddExpenseForm({ expenseNames = [], users = [], onAddExpenseName, onCan
   const [recurring, setRecurring] = useState(false);
   const [fundingSource, setFundingSource] = useState("daily_cash");
   const [note, setNote] = useState("");
+  const [installments, setInstallments] = useState("1");
   const isPayroll = category === "salaries" || category === "advance";
   // الراتب أو السلفة بلا موظف رقم بلا معنى — لا يمكن نسبه لأحد لاحقًا.
   const valid = Number(amount) > 0 && (isPayroll ? !!employeeId : name.trim().length > 0);
@@ -121,6 +122,15 @@ function AddExpenseForm({ expenseNames = [], users = [], onAddExpenseName, onCan
       <Field label="المبلغ">
         <input style={inputStyle} type="text" inputMode="decimal" value={amount} onChange={(e) => setAmount(sanitizeNumeric(e.target.value))} placeholder="0.00" />
       </Field>
+      {category === "advance" && (
+        <Field label="عدد الأقساط (تُخصم من الرواتب القادمة)">
+          <input style={inputStyle} type="text" inputMode="numeric" value={installments}
+            onChange={(e) => setInstallments(e.target.value.replace(/\D/g, "").slice(0, 2))} placeholder="1" />
+          {Number(installments) > 1 && Number(amount) > 0 && (
+            <p className="text-[11px] mt-1" style={{ color: "var(--text3)" }}>القسط الشهري ≈ {fmtMoney(Number(amount) / Number(installments))} على {Math.min(60, Number(installments))} شهرًا</p>
+          )}
+        </Field>
+      )}
       <Field label="الدفع من">
         <select style={inputStyle} value={fundingSource} onChange={(e) => setFundingSource(e.target.value)}>
           {FUNDING_SOURCES.map((s) => (
@@ -152,6 +162,7 @@ function AddExpenseForm({ expenseNames = [], users = [], onAddExpenseName, onCan
               // لموظف أبدًا مهما اختير من القائمة أعلاه.
               name: name.trim(),
               employeeId: isPayroll ? employeeId : null,
+              installments: category === "advance" ? Math.min(60, Math.max(1, Number(installments) || 1)) : undefined,
             })
           }
           className="py-2 rounded-xl text-xs font-bold"

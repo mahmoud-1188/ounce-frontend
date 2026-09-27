@@ -457,6 +457,9 @@ const payrollApi = {
   fetchRuns: () => apiFetch("/payroll/runs"),
   saveProfile: (userId, profile) => apiFetch(`/hr/staff/${userId}/profile`, { method: "PATCH", body: profile }),
   hrAlerts: () => apiFetch("/hr/alerts"),
+  loans: () => apiFetch("/hr/loans"),
+  evaluations: (period) => apiFetch(`/hr/evaluations${period ? `?period=${period}` : ""}`),
+  saveEvaluation: (body) => apiFetch("/hr/evaluations", { method: "POST", body }),
   wps: (runId) => apiFetch(`/payroll/runs/${runId}/wps?format=json`),
   accrue: (period, approvalId = null) => apiFetch("/payroll/runs", { method: "POST", body: { period, ...(approvalId ? { approvalId } : {}) } }),
   pay: (runId, employeeId, fundingSource) =>
@@ -486,6 +489,14 @@ const priceFixApi = {
 // في المرجع (راجع تعليق الهجرة). الفرع يبدأ خمسة أنواع، ويستلم اثنين
 // فقط (goods_from_hq, send_for_coding) بعد اعتماد الإدارة أو مباشرةً.
 /** استعلام القطع — بطاقة لكل رمز من الخادم (migration 045) */
+// الموازنات وإقرار الضريبة (migration 060)
+const budgetsApi = {
+  get: (period) => apiFetch(`/budgets?period=${period}`),
+  save: (period, lines) => apiFetch("/budgets", { method: "PUT", body: { period, lines } }),
+  copy: (from, to) => apiFetch("/budgets/copy", { method: "POST", body: { from, to } }),
+  vatReturn: (from, to) => apiFetch(`/vat-return?from=${from}&to=${to}`),
+};
+
 // الوحدات الاختيارية (migrations 050–052)
 const modulesApi = {
   get: () => apiFetch("/settings/modules"),
@@ -570,6 +581,7 @@ export {
   supplierOpeningApi,
   hiddenApi,
   modulesApi,
+  budgetsApi,
   controlApi,
   ApiError,
   getAuthToken,

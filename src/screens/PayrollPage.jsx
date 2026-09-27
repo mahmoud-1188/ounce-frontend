@@ -8,6 +8,7 @@ import { EmptyState } from "../ui/EmptyState.jsx";
 import { Field } from "../ui/Field.jsx";
 import { HrFieldsForm } from "../ui/HrFieldsForm.jsx";
 import { HrProfileForm } from "../ui/HrProfileForm.jsx";
+import { EvaluationsPanel, LoansPanel } from "../ui/HrLoansEvals.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 
 /**
@@ -231,11 +232,11 @@ function PayrollPage({ currency = "ر.س", safeBalance = {}, canManage, onBack, 
     <div>
       <SubPageHeader title="الرواتب" onBack={onBack} />
       <div className="px-4 pt-3">
-        <div className="grid grid-cols-3 gap-2 mb-3">
-          {[["run", "الشهر"], ["gosi", "التأمينات"], ["eos", "نهاية الخدمة"]].map(([id, lbl]) => {
+        <div className="grid grid-cols-5 gap-1.5 mb-3">
+          {[["run", "الشهر"], ["gosi", "التأمينات"], ["eos", "نهاية الخدمة"], ["loans", "السلف"], ["evals", "التقييم"]].map(([id, lbl]) => {
             const on = tab === id;
             return (
-              <button key={id} onClick={() => setTab(id)} className="py-2 rounded-xl text-xs font-bold"
+              <button key={id} onClick={() => setTab(id)} className="py-2 rounded-xl text-[11px] font-bold"
                 style={{ background: on ? "var(--accentBg)" : "var(--panel)", color: on ? "var(--accent)" : "var(--text2)", border: "1px solid var(--line)" }}>
                 {lbl}
               </button>
@@ -243,7 +244,7 @@ function PayrollPage({ currency = "ر.س", safeBalance = {}, canManage, onBack, 
           })}
         </div>
 
-        {tab !== "eos" && (
+        {tab !== "eos" && tab !== "loans" && (
           <div className="flex gap-1.5 mb-3 overflow-x-auto">
             {months.map((m) => (
               <button key={m} onClick={() => setPeriod(m)} className="px-3 py-1.5 rounded-full text-[11px] font-bold shrink-0"
@@ -380,6 +381,8 @@ function PayrollPage({ currency = "ر.س", safeBalance = {}, canManage, onBack, 
           </>
         )}
 
+        {tab === "loans" && <LoansPanel currency={currency} />}
+        {tab === "evals" && <EvaluationsPanel staff={staff.filter((s) => s.active !== false)} period={period} canManage={canManage} />}
         {tab === "gosi" && (
           <>
             {!run ? (
