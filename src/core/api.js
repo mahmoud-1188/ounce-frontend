@@ -226,6 +226,13 @@ function createPurchase(payload) {
 // لا وجود له في جدول suppliers الحقيقي، ويختفي المورد والشراء معًا عند
 // أي refresh لأن loadBootstrap يستبدل suppliers بالكامل بما يرجعه
 // الخادم. هذا يضيف المورد فعليًا في قاعدة البيانات (POST /api/suppliers).
+// جردٌ من الإدارة (migration 061)
+const remoteStocktakeApi = {
+  list: () => apiFetch("/stocktake/remote"),
+  apply: (id, price24) => apiFetch(`/stocktake/remote/${id}/apply`, { method: "POST", body: { price24 } }),
+  reject: (id, note) => apiFetch(`/stocktake/remote/${id}/reject`, { method: "POST", body: { note } }),
+};
+
 // POST /stocktake/apply — اعتماد الجرد وقيد فروقاته
 function applyStocktake(entries, price24) {
   return apiFetch("/stocktake/apply", { method: "POST", body: { entries, price24 } });
@@ -602,6 +609,7 @@ export {
   createSupplier,
   fetchSupplierStatements,
   applyStocktake,
+  remoteStocktakeApi,
   createLotItems,
   reconcileCategories,
   rfid,

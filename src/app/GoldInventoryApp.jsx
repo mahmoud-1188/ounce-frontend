@@ -269,6 +269,7 @@ import { EntitySheet } from "../modals/EntitySheet.jsx";
 import { BudgetsPage } from "../screens/BudgetsPage.jsx";
 import { VatReturnPage } from "../screens/VatReturnPage.jsx";
 import { NewSaleModal } from "../modals/NewSaleModal.jsx";
+import { RemoteStocktakeInbox } from "../ui/RemoteStocktakeInbox.jsx";
 import { PartialSaleModal } from "../modals/PartialSaleModal.jsx";
 import { SaleDetailModal } from "../modals/SaleDetailModal.jsx";
 import { SetPriceModal } from "../modals/SetPriceModal.jsx";
@@ -7829,6 +7830,10 @@ export default function GoldInventoryApp() {
             onDeleteExpenseName={handleDeleteExpenseName} expenses={expenses} totals={expensesTotals} currency={priceData.currency} onAdd={handleAddExpense} flashToast={flashToast} />
         )}
 
+        {morePage === null && tab === "stocktake" && (
+          <RemoteStocktakeInbox items={activeItems} price24={priceData.current} canDecide={role === "manager"}
+            onApplied={() => loadBootstrap(currentUser).catch(() => {})} flashToast={flashToast} />
+        )}
         {morePage === null && tab === "stocktake" && (
           <StocktakeSubPage
             lock={stocktakeLock}
