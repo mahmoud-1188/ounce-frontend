@@ -12,6 +12,7 @@ import { Hallmark } from "../ui/Hallmark.jsx";
 import { ModalShell } from "../ui/ModalShell.jsx";
 import { NumericInput } from "../ui/NumericInput.jsx";
 import { ScanField } from "../ui/ScanField.jsx";
+import * as api from "../core/api.js";
 
 function NewSaleModal({ activeItems, priceData,
   // ⚠ العملة كانت غائبة عن التوقيع: البدل يستخدمها فيسقط بـ
@@ -20,6 +21,20 @@ function NewSaleModal({ activeItems, priceData,
   const [customerId, setCustomerId] = useState("");
   // عربون الحجز يُخصم من الفاتورة (المرجع 5.2.0) — حجز القطعة نفسها تلقائيًّا أو حجزٌ يُختار
   const [depositFrom, setDepositFrom] = useState("");
+  // بطاقة هدية (وحدة giftCards): رمزها ورصيدها يُخصم من الفاتورة
+  const [giftCode, setGiftCode] = useState("");
+  const [giftCard, setGiftCard] = useState(null);
+  const [giftErr, setGiftErr] = useState("");
+  const giftOn = !!settings?.serverModules?.giftCards?.on;
+  const lookupGift = async () => {
+    setGiftErr(""); setGiftCard(null);
+    if (!giftCode.trim()) return;
+    try {
+      const r = await api.modulesApi.lookupGiftCard(giftCode.trim());
+      if (r.card.status !== "active" || !(r.card.balance > 0)) setGiftErr("البطاقة مستعملة أو ملغاة");
+      else setGiftCard(r.card);
+    } catch { setGiftErr("لا بطاقة بهذا الرمز"); }
+  };
   const [scanCode, setScanCode] = useState("");
   // ── تجميد السعر ──
   // الفاتورة قد تستغرق دقائق، وسعر الذهب يتحرك خلالها. التجميد يثبّت
@@ -105,7 +120,9 @@ function NewSaleModal({ activeItems, priceData,
   const depositPart = depositRsv
     ? Math.min(total, Math.round(((Number(depositRsv.deposit) || 0) - (Number(depositRsv.depositUsed) || 0)) * 100) / 100)
     : 0;
-  const dueNow = Math.round((total - depositPart) * 100) / 100;
+  const giftPart = giftCard && paymentMethod !== "credit" && paymentMethod !== "scrap"
+    ? Math.min(Number(giftCard.balance) || 0, Math.max(0, Math.round((total - depositPart) * 100) / 100)) : 0;
+  const dueNow = Math.round((total - depositPart - giftPart) * 100) / 100;
   const selectedCount = Object.keys(selection).length;
 
   const handleConfirm = () => {
@@ -130,6 +147,8 @@ function NewSaleModal({ activeItems, priceData,
       taxApplicable,
       customerId: customerId || null,
       reservationId: depositRsv ? depositRsv.id : null,
+      giftCardCode: giftPart > 0 ? giftCard.code : null,
+      giftAmount: giftPart,
       frozenPrice,
       frozenAt,
     });
@@ -305,6 +324,16 @@ function NewSaleModal({ activeItems, priceData,
         <p style={{ color: "var(--accent)" }} className="text-[11px] mb-3">
           يُخصم العربون {fmt(depositPart)} — المطلوب من العميل الآن {fmt(dueNow)}{splitPay ? " (يُخصم من الجزء النقدي أولًا)" : ""}
         </p>
+      )}
+      {giftOn && paymentMethod !== "credit" && paymentMethod !== "scrap" && (
+        <Field label="الدفع ببطاقة هدية (اختياري)">
+          <div className="flex gap-2">
+            <input style={{ ...inputStyle, flex: 1 }} value={giftCode} onChange={(e) => { setGiftCode(e.target.value); setGiftCard(null); }} placeholder="GC-…" />
+            <button type="button" onClick={lookupGift} className="px-3 rounded-xl text-xs font-bold" style={{ background: "var(--panel)", color: "var(--accentText)", border: "1px solid var(--line)" }}>تحقّق</button>
+          </div>
+          {giftErr && <p style={{ color: "var(--bad)" }} className="text-[11px] mt-1">{giftErr}</p>}
+          {giftCard && <p style={{ color: "var(--accent)" }} className="text-[11px] mt-1">رصيد البطاقة {fmt(giftCard.balance)} — يُخصم {fmt(giftPart)} · المطلوب الآن {fmt(dueNow)}</p>}
+        </Field>
       )}
       {paymentMethod === "credit" && !customerId && (
         <p style={{ color: "var(--bad)" }} className="text-[11px] mb-3">

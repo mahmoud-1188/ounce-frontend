@@ -57,6 +57,9 @@ function normalizeItems(itemRows, itemUnitRows) {
     // ⚠ migration 013 — لم يكن هناك عمود لهذا قبلها؛ الحجز كان يُعلَّم
     // محليًا فقط (reservedFor) فلا يمنع أي شيء فعليًا بعد إعادة التحميل.
     reservedFor: it.reserved_for || null,
+    // خصائص الحجر والساعة (migration 054)
+    gem: it.attrs?.gem || null,
+    watch: it.attrs?.watch || null,
     units: unitsByItem.get(it.id) || [],
   }));
 }
@@ -99,6 +102,8 @@ function normalizeSales(saleRows, saleLineRows) {
     taxAmount: toMoney(s.tax_amount),
     netAmount: toMoney(s.net_amount),
     tradeInValue: toMoney(s.trade_in_value),
+    depositApplied: toMoney(s.deposit_applied),
+    giftPart: toMoney(s.gift_applied),
     exchangeOfSaleId: s.exchange_of_sale_id || null,
     sellerId: s.seller_id,
     sellerName: s.seller_name,
@@ -713,6 +718,8 @@ function normalizeBootstrap(boot) {
           approvalsEnabled: boot.settings.approvals_enabled !== false,
           approvalThresholds: boot.settings.approval_thresholds || {},
           periodLocks: { lockAll: boot.settings.lock_all || null, lockPosted: boot.settings.lock_posted || null },
+          // الوحدات الاختيارية من الخادم (migration 050) — { id: { on, cfg } }
+          serverModules: boot.settings.modules || {},
         }
       : null,
     expenses: normalizeExpenses(boot.expenses || [], usersFullById),

@@ -118,6 +118,8 @@ function PieceInquiryPage({ price24 = 0, currency = "ر.س", canManageHeld = fal
               {c.cost != null && <Row k="التكلفة" v={`${currency}${fmtMoney(c.cost)} (${currency}${fmtMoney(c.costPerGram)}/جم + مصنعية ${currency}${fmtMoney(c.workmanship)})`} />}
               <Row k="قيمة اليوم" v={price24 ? `${currency}${fmtMoney(Math.round((c.fine * price24 + (c.workmanship || 0)) * 100) / 100)}` : ""} />
               <Row k="من الصنف" v={`${c.siblings.available} متاحة من ${c.siblings.total}`} />
+              {c.gem && <Row k="الحجر" v={[c.gem.carat ? `${c.gem.carat} قيراط` : "", c.gem.color, c.gem.clarity, c.gem.cut, c.gem.certNo ? `${c.gem.lab || "شهادة"} ${c.gem.certNo}` : ""].filter(Boolean).join(" · ")} />}
+              {c.watch && <Row k="الساعة" v={[c.watch.brand, c.watch.model, c.watch.serial ? `رقم ${c.watch.serial}` : "", c.watch.warrantyMonths ? `ضمان ${c.watch.warrantyMonths} شهرًا` : ""].filter(Boolean).join(" · ")} />}
               {c.sale && <Row k="البيع" v={`${c.sale.ref} · ${dt(c.sale.date)} · ${c.sale.customer}${c.sale.price ? ` · ${currency}${fmtMoney(c.sale.price)}` : ""}${c.sale.seller ? ` · البائع ${c.sale.seller}` : ""}`} />}
               {c.status === "sold" && !c.sale && <Row k="البيع" v="مباعة قبل ربط الوحدة بفاتورتها" />}
               {c.held && <Row k="معلّقة" v={`${c.held.ref} · ${dt(c.held.at)}${c.held.by ? ` · ${c.held.by}` : ""}${c.held.note ? ` · ${c.held.note}` : ""} — تُكمَل بالبيع`} />}

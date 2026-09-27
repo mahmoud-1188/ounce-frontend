@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Layers, Globe2, Bot, Gem, Check, Home, Barcode, BarChart3, BookmarkCheck, Building2, CalendarCheck, ClipboardCheck, ClipboardList, Coins, Database, FileMinus, FileText, Flame, Grid, Handshake, Landmark, LayoutGrid, Lock, PiggyBank, Plus, Printer, Receipt, RefreshCw, RotateCcw, Scale, Search, Send, Settings, ShieldCheck, ShoppingCart, Sparkles, Sun, SlidersHorizontal, Tag, Truck, UserRound, Users, Wallet, Warehouse, Wrench } from "lucide-react";
+import { ArrowLeftRight, Layers, Globe2, Gift, Boxes, Repeat, Puzzle, Bot, Gem, Check, Home, Barcode, BarChart3, BookmarkCheck, Building2, CalendarCheck, ClipboardCheck, ClipboardList, Coins, Database, FileMinus, FileText, Flame, Grid, Handshake, Landmark, LayoutGrid, Lock, PiggyBank, Plus, Printer, Receipt, RefreshCw, RotateCcw, Scale, Search, Send, Settings, ShieldCheck, ShoppingCart, Sparkles, Sun, SlidersHorizontal, Tag, Truck, UserRound, Users, Wallet, Warehouse, Wrench } from "lucide-react";
 import { ROLES } from "./constants.js";
 
 const TAB_KIND_IDS = ["home", "inventory", "sales", "cash", "expenses", "stocktake"];
@@ -72,6 +72,10 @@ const NAV_REGISTRY = [
   { id: "masterReport", label: "التقارير الموحّدة", icon: LayoutGrid },
   { id: "anyStatement", label: "كشف حساب — أي شيء", icon: Search },
   { id: "fullStatements", label: "القوائم المالية الكاملة", icon: FileText },
+  { id: "modules", label: "الوحدات الاختيارية", icon: Puzzle },
+  { id: "reorder", label: "حدود إعادة الطلب", icon: Boxes },
+  { id: "branchTransfers", label: "التحويل بين الفروع", icon: Repeat },
+  { id: "giftCards", label: "بطاقات الهدايا والولاء", icon: Gift },
   { id: "combinedBook", label: "الذهب والنقد معًا — الدفتر الثالث", icon: Layers },
   { id: "ifrs", label: "المعايير الدولية — IFRS", icon: Globe2 },
   { id: "pieceInquiry", label: "استعلام القطع", icon: Gem },
@@ -248,6 +252,10 @@ const SHORTCUT_HINTS = {
   masterReport: ["تقرير موحد", "تقارير موحدة", "تقرير شامل"],
   anyStatement: ["كشف حساب", "كشف", "اي شخص", "أي شخص"],
   fullStatements: ["قوائم مالية كاملة", "قوائم كاملة", "الميزانية العمومية"],
+  modules: ["وحدات", "الوحدات", "تفعيل ميزة", "خصائص إضافية"],
+  reorder: ["إعادة الطلب", "حد أدنى", "نقص المخزون", "نفد"],
+  branchTransfers: ["تحويل", "بين الفروع", "إرسال قطع", "شحنة لفرع"],
+  giftCards: ["بطاقة هدية", "بطاقات", "ولاء", "نقاط"],
   combinedBook: ["الدفتر الثالث", "ذهب ونقد", "معادل الذهب", "كم نملك"],
   ifrs: ["المعايير الدولية", "ifrs", "ias", "امتثال"],
   pieceInquiry: ["استعلام القطع", "استعلام قطعة", "بطاقة القطعة", "من كود", "تتبع قطعة"],
@@ -276,7 +284,7 @@ const MENU_GROUPS = [
     label: "المبيعات",
     hint: "الاستعراض · السجل · المرتجعات والاستبدال · البائعون",
     icon: Receipt,
-    items: ["showcase", "salesHistory", "salesReturn", "sellerReports"],
+    items: ["showcase", "salesHistory", "salesReturn", "sellerReports", "giftCards"],
   },
   {
     id: "reports",
@@ -290,7 +298,7 @@ const MENU_GROUPS = [
     label: "المخزون والتكويد",
     hint: "التكويد · الطباعة · التحويلات",
     icon: Warehouse,
-    items: ["pieceInquiry", "addGoods", "codingReport", "categories", "printing", "printerSetup", "rfidReader", "rfidSettings", "itemEdit", "conversions"],
+    items: ["pieceInquiry", "addGoods", "codingReport", "categories", "printing", "printerSetup", "rfidReader", "rfidSettings", "itemEdit", "conversions", "reorder", "branchTransfers"],
   },
   {
     id: "purchasing",
@@ -325,7 +333,7 @@ const MENU_GROUPS = [
     label: "النظام",
     hint: "الإعدادات · الصلاحيات · النسخ",
     icon: Settings,
-    items: ["workday", "settings", "access", "navCustomize", "backup"],
+    items: ["workday", "settings", "modules", "access", "navCustomize", "backup"],
   },
 ];
 

@@ -1,11 +1,11 @@
 import React, { useMemo } from "react";
-import { RefreshCw, RotateCcw } from "lucide-react";
+import { Printer, RefreshCw, RotateCcw } from "lucide-react";
 import { fmt, fmtW } from "../core/money.js";
 import { saleLineProvenance } from "../domain/helpers.js";
 import { Card } from "../ui/Card.jsx";
 import { ModalShell } from "../ui/ModalShell.jsx";
 
-function SaleDetailModal({ sale, currency, returns = [], items = [], lots = [], suppliers = [], canReturn, onReturn, onClose }) {
+function SaleDetailModal({ sale, currency, returns = [], items = [], lots = [], suppliers = [], canReturn, onReturn, onPrint = null, onClose }) {
   // ⚠ الإرجاع والاستبدال في شاشتهما الواحدة («المرتجعات والاستبدال»)
   //   والفاتورة محدَّدة سلفًا — لا نموذج إرجاعٍ ثانٍ هنا بمحاسبةٍ مختلفة.
   const lines = sale?.lines || [];
@@ -105,6 +105,13 @@ function SaleDetailModal({ sale, currency, returns = [], items = [], lots = [], 
             أُرجعت الفاتورة كاملة
           </p>
         </Card>
+      )}
+
+      {onPrint && (
+        <button onClick={() => onPrint(sale)} className="w-full py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 mb-2"
+          style={{ background: "var(--panel)", color: "var(--accentText)", border: "1px solid var(--line)" }}>
+          <Printer size={14} /> طباعة الفاتورة
+        </button>
       )}
 
       {/* الإرجاع أو الاستبدال — في شاشتهما الواحدة والفاتورة محدَّدة */}

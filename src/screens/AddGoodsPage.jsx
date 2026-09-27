@@ -16,7 +16,9 @@ import { QuickLotForm } from "../ui/QuickLotForm.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 
 function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions = [], onSetPrinted, onCreateSupplierLot, onDeleteItem, onBack, flashToast,
-  openingMode = false, onCreateOpeningLot = null, currency = "ر.س", price24 = 0 }) {
+  openingMode = false, onCreateOpeningLot = null, currency = "ر.س", price24 = 0, modules = {} }) {
+  const gemOn = !!modules?.gemstones?.on, watchOn = !!modules?.watches?.on;
+  const defWarranty = Number(modules?.watches?.cfg?.warrantyMonths) || 24;
   const [detailItem, setDetailItem] = useState(null);
   const [justEntered, setJustEntered] = useState(null); // الأصناف المُدخلة للتو، بانتظار الطباعة
   const [showSessions, setShowSessions] = useState(false);
@@ -97,6 +99,7 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
       photoDataUrl: r.photoDataUrl,
       isSet: r.category === "set",
       setPieces: r.category === "set" ? (r.setPieces || []).filter((x) => (x || "").trim()) : [],
+      attrs: (gemOn && r.gem) || (watchOn && r.watch) ? { gem: gemOn ? r.gem : undefined, watch: watchOn ? r.watch : undefined } : null,
     }));
     setSaving(true);
     try {
@@ -453,6 +456,27 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
                     </span>
                   )}
                 </div>
+                {gemOn && (
+                  <details className="text-[11px]" style={{ color: "var(--text2)" }}>
+                    <summary className="font-bold" style={{ color: "var(--accentText)" }}>حجرٌ كريم (اختياري)</summary>
+                    <div className="grid grid-cols-3 gap-2 mt-2">
+                      {[["carat", "القيراط"], ["color", "اللون"], ["clarity", "النقاء"], ["cut", "القطع"], ["lab", "المختبر"], ["certNo", "رقم الشهادة"]].map(([k, l]) => (
+                        <input key={k} style={inputStyle} placeholder={l} value={r.gem?.[k] || ""} onChange={(e) => updateRow(r.key, "gem", { ...(r.gem || {}), [k]: e.target.value })} />
+                      ))}
+                    </div>
+                  </details>
+                )}
+                {watchOn && (
+                  <details className="text-[11px]" style={{ color: "var(--text2)" }}>
+                    <summary className="font-bold" style={{ color: "var(--accentText)" }}>ساعة (اختياري)</summary>
+                    <div className="grid grid-cols-2 gap-2 mt-2">
+                      {[["brand", "الماركة"], ["model", "الموديل"], ["serial", "الرقم التسلسلي"], ["warrantyMonths", "الضمان بالأشهر"]].map(([k, l]) => (
+                        <input key={k} style={inputStyle} placeholder={l} value={r.watch?.[k] ?? (k === "warrantyMonths" && r.watch ? defWarranty : "")}
+                          onChange={(e) => updateRow(r.key, "watch", { warrantyMonths: defWarranty, ...(r.watch || {}), [k]: e.target.value })} />
+                      ))}
+                    </div>
+                  </details>
+                )}
                 <p style={{ color: "var(--text3)" }} className="text-[11px] flex items-center gap-1">
                   <Barcode size={12} /> سيُولَّد رمز فريد تلقائيًا لكل قطعة — اطبع ملصقاتها من صفحة الطباعة بعد الحفظ
                 </p>

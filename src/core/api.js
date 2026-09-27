@@ -483,6 +483,22 @@ const priceFixApi = {
 // في المرجع (راجع تعليق الهجرة). الفرع يبدأ خمسة أنواع، ويستلم اثنين
 // فقط (goods_from_hq, send_for_coding) بعد اعتماد الإدارة أو مباشرةً.
 /** استعلام القطع — بطاقة لكل رمز من الخادم (migration 045) */
+// الوحدات الاختيارية (migrations 050–052)
+const modulesApi = {
+  get: () => apiFetch("/settings/modules"),
+  save: (modules) => apiFetch("/settings/modules", { method: "PUT", body: { modules } }),
+  reorder: () => apiFetch("/reorder/status"),
+  transfers: () => apiFetch("/branch-transfers"),
+  sendTransfer: (body) => apiFetch("/branch-transfers", { method: "POST", body }),
+  receiveTransfer: (id) => apiFetch(`/branch-transfers/${id}/receive`, { method: "POST", body: {} }),
+  cancelTransfer: (id) => apiFetch(`/branch-transfers/${id}/cancel`, { method: "POST", body: {} }),
+  giftCards: () => apiFetch("/gift-cards"),
+  lookupGiftCard: (code) => apiFetch(`/gift-cards/lookup/${encodeURIComponent(code)}`),
+  sellGiftCard: (body) => apiFetch("/gift-cards", { method: "POST", body }),
+  voidGiftCard: (id) => apiFetch(`/gift-cards/${id}/void`, { method: "POST", body: {} }),
+  redeemPoints: (customerId, points) => apiFetch("/loyalty/redeem", { method: "POST", body: { customerId, points } }),
+};
+
 // الوضع الخفي (migration 047)
 const hiddenApi = {
   hold: (codes, note = "") => apiFetch("/hidden/hold", { method: "POST", body: { codes, note } }),
@@ -539,6 +555,7 @@ export {
   pieceInquiryApi,
   supplierOpeningApi,
   hiddenApi,
+  modulesApi,
   controlApi,
   ApiError,
   getAuthToken,

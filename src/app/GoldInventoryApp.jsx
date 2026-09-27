@@ -85,6 +85,11 @@ const API_ERROR_MESSAGES = {
   invalid_opening_kind: "اختر نوع الرصيد وجهته",
   already_voided: "أُلغي من قبل",
   opening_not_found: "الرصيد غير موجود",
+  discount_over_limit: "الخصم فوق حدّك — يبيعه المدير",
+  gift_card_not_found: "بطاقة الهدية غير صالحة أو مستعملة",
+  gift_card_empty: "لا رصيد في بطاقة الهدية",
+  gift_card_payment_method: "بطاقة الهدية لا تُستعمل مع الآجل أو البدل بالكسر",
+  module_off: "الوحدة مطفأة — فعّلها من «الوحدات الاختيارية»",
   credit_sale_requires_credit_refund: "الفاتورة آجلة — الردّ يُخصم من دَين العميل لا نقدًا",
   zero_amount: "قيمة المرتجع صفر — راجع الأسطر",
   no_new_lines: "اختر القطعة الجديدة",
@@ -309,6 +314,11 @@ import { HiddenModeBar } from "../ui/HiddenModeBar.jsx";
 import { buildSupplierStatement } from "../domain/buildSupplierStatement.js";
 import { CombinedBookPage } from "../screens/CombinedBookPage.jsx";
 import { IfrsPage } from "../screens/IfrsPage.jsx";
+import { printSaleInvoice } from "../domain/printInvoice.js";
+import { ModulesPage } from "../screens/ModulesPage.jsx";
+import { ReorderPage } from "../screens/ReorderPage.jsx";
+import { BranchTransfersPage } from "../screens/BranchTransfersPage.jsx";
+import { GiftCardsPage } from "../screens/GiftCardsPage.jsx";
 import { PieceInquiryPage } from "../screens/PieceInquiryPage.jsx";
 import { CodingReportPage } from "../screens/CodingReportPage.jsx";
 import { QueryBuilderPage } from "../screens/QueryBuilderPage.jsx";
@@ -4523,7 +4533,7 @@ export default function GoldInventoryApp() {
       // ⚠ دمج لا استبدال: appSettings يحمل أيضًا تفضيلات محلية بحتة
       // (الثيم، طباعة، requirePin...) لا وجود لها في الباك إند بعد —
       // استبدال الكائن كاملًا كان سيمحوها.
-      setAppSettings((prev) => ({ ...prev, taxEnabled: n.appSettings.taxEnabled, taxRate: n.appSettings.taxRate, cardFees: n.appSettings.cardFees, workdayMode: n.appSettings.workdayMode, openingMode: n.appSettings.openingMode, openingFinishedAt: n.appSettings.openingFinishedAt, approvalsEnabled: n.appSettings.approvalsEnabled, approvalThresholds: n.appSettings.approvalThresholds, periodLocks: n.appSettings.periodLocks }));
+      setAppSettings((prev) => ({ ...prev, taxEnabled: n.appSettings.taxEnabled, taxRate: n.appSettings.taxRate, cardFees: n.appSettings.cardFees, workdayMode: n.appSettings.workdayMode, openingMode: n.appSettings.openingMode, openingFinishedAt: n.appSettings.openingFinishedAt, approvalsEnabled: n.appSettings.approvalsEnabled, approvalThresholds: n.appSettings.approvalThresholds, periodLocks: n.appSettings.periodLocks, serverModules: n.appSettings.serverModules || {} }));
     }
   };
 
@@ -5285,6 +5295,16 @@ export default function GoldInventoryApp() {
     return { physical: { inventory: worked, inTransit: 0, scrap: unworked, atOffices: 0 }, goldOwed: { total: supOwed } };
   }, [items, scrapEntries, safeGoldTx, suppliers, lots, taskirEntries, cashTx, supplierOpenings]);
 
+  // صفحات الوحدات المطفأة لا تُعرض في القائمة (الوحدات نفسها تبقى للمدير)
+  const moduleHiddenPages = useMemo(() => {
+    const on = (id) => !!appSettings.serverModules?.[id]?.on;
+    return [
+      ...(on("reorderAlerts") ? [] : ["reorder"]),
+      ...(on("branchTransfer") ? [] : ["branchTransfers"]),
+      ...(on("giftCards") || on("loyalty") ? [] : ["giftCards"]),
+    ];
+  }, [appSettings.serverModules]);
+
   const goldEquivalent = useMemo(() => {
     const price24 = priceData.current || 0;
     const liquidity = cashBalance.total + safeBalance.total + scrapCustodyBalance.total;
@@ -5843,6 +5863,8 @@ export default function GoldInventoryApp() {
       cardNetwork: draft.cardNetwork || null,
       customerId: draft.customerId || null,
       reservationId: draft.reservationId || null,
+      giftCardCode: draft.giftCardCode || null,
+      giftAmount: Number(draft.giftAmount) || 0,
       lines: draft.lines.map((l) => ({ itemId: l.itemId, quantity: l.quantity, unitPrice: l.unitPrice })),
       taxApplicable: !!draft.taxApplicable,
       cashPart: Number(draft.cashPart) || 0,
@@ -5865,10 +5887,10 @@ export default function GoldInventoryApp() {
     const srvSale = res.sale;
     // ⚠ فاتورةٌ خُصم منها عربون: الصندوق والحجز والدفتر تغيّرت على الخادم بغير ما
     //   تحسبه الشاشة — نعيد التحميل كي لا تُعرض أرقامٌ لم تقع.
-    if (Number(srvSale.depositApplied) > 0) {
+    if (Number(srvSale.depositApplied) > 0 || Number(srvSale.giftApplied) > 0) {
       setShowNewSale(false);
       setQuickSaleItemId(null);
-      flashToast(`تم إنشاء الفاتورة — خُصم عربون ${fmtMoney(srvSale.depositApplied)} والمقبوض ${fmtMoney(srvSale.payable)}`);
+      flashToast(`تم إنشاء الفاتورة — خُصم ${Number(srvSale.depositApplied) > 0 ? `عربون ${fmtMoney(srvSale.depositApplied)}` : ""}${Number(srvSale.giftApplied) > 0 ? ` بطاقة ${fmtMoney(srvSale.giftApplied)}` : ""} والمقبوض ${fmtMoney(srvSale.payable)}${srvSale.pointsEarned ? ` · +${srvSale.pointsEarned} نقطة` : ""}`);
       loadBootstrap(currentUser).catch(() => {});
       return;
     }
@@ -7821,13 +7843,14 @@ export default function GoldInventoryApp() {
             order={menuOrder}
             custom={customGroups}
             recent={recentPages}
-            disabled={appSettings.bankReconEnabled ? [] : ["bankRecon"]}
+            disabled={[...(appSettings.bankReconEnabled ? [] : ["bankRecon"]), ...moduleHiddenPages]}
             onLogout={() => setShowLogoutConfirm(true)}
           />
         )}
 
         {morePage === "addGoods" && (
           <AddGoodsPage
+            modules={appSettings.serverModules || {}}
             items={items}
             lots={lots}
             suppliers={suppliers}
@@ -8253,6 +8276,18 @@ export default function GoldInventoryApp() {
             onBack={() => setMorePage(null)}
             flashToast={flashToast}
           />
+        )}
+        {morePage === "modules" && (
+          <ModulesPage categories={categories} canEdit={role === "manager"}
+            onSaved={(mods) => setAppSettings((prev) => ({ ...prev, serverModules: mods }))} onBack={() => setMorePage(null)} />
+        )}
+        {morePage === "reorder" && <ReorderPage onBack={() => setMorePage(null)} onOpenModules={role === "manager" ? () => setMorePage("modules") : null} />}
+        {morePage === "branchTransfers" && (
+          <BranchTransfersPage currency={priceData.currency || "ر.س"} canMove={["manager", "assistant"].includes(role)}
+            onChanged={() => loadBootstrap(currentUser).catch(() => {})} onBack={() => setMorePage(null)} />
+        )}
+        {morePage === "giftCards" && (
+          <GiftCardsPage customers={customers} currency={priceData.currency || "ر.س"} isManager={role === "manager"} onBack={() => setMorePage(null)} />
         )}
         {morePage === "combinedBook" && (
           <CombinedBookPage goldPosition={combinedGold} journal={journal} price24={priceData.current || 0} currency={priceData.currency || "ر.س"}
@@ -9204,6 +9239,11 @@ export default function GoldInventoryApp() {
           suppliers={suppliers}
           canReturn={(permsNow.allowedMore || []).includes("salesReturn")}
           onReturn={(saleId, mode) => { setReturnPreset({ saleId, mode }); setViewingSale(null); openPage("salesReturn"); }}
+          onPrint={(s) => {
+            const info = { ...(branchProvision?.profile || {}), name: branchIdentity?.name || "" };
+            const withAttrs = { ...s, lines: (s.lines || []).map((l) => { const it = items.find((x) => x.id === l.itemId); return { ...l, itemName: it ? `${categoryLabel(l.category)} ع${l.karatSnapshot}` : undefined, gem: it?.gem || null, watch: it?.watch || null }; }) };
+            if (!printSaleInvoice(withAttrs, { info, currency: priceData.currency || "ر.س", modules: appSettings.serverModules || {} })) flashToast("اسمح بالنوافذ المنبثقة للطباعة");
+          }}
           onClose={() => setViewingSale(null)}
         />
       )}
