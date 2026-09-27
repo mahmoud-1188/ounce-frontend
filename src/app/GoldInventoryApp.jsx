@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Banknote, ChevronUp, FileText, Handshake, Loader2, Lock, LogOut, Menu, Mic, Package, PackageMinus, Plus, Printer, Receipt, RotateCcw, Scale, Search, ShoppingCart, Truck, Wrench, X } from "lucide-react";
+import { AlertTriangle, Banknote, ChevronRight, ChevronUp, FileText, Handshake, Loader2, Lock, LogOut, Menu, Mic, Package, PackageMinus, Plus, Printer, Receipt, RotateCcw, Scale, Search, ShoppingCart, Truck, Wrench, X } from "lucide-react";
 import { CHART_OF_ACCOUNTS, POSTING_RULES } from "../core/chart.js";
 import { AUTO_WORKDAY, APP_MODES, CATEGORY_STATE, DEFAULT_APP_MODE, DEFAULT_CATEGORIES, DEFAULT_INTEGRATION, DEFAULT_OPENING_BALANCE, DEFAULT_PRINTER, DEFAULT_SETTINGS, DEFAULT_STORE, DEFAULT_USERS, EXPENSE_CATEGORIES, ISSUE_REASONS, MIGRATION_FLAG, PARTNER_REQUIRED, PUBLISH_CAP, REVIEW_VERDICTS, RFID_DEFAULTS, ROLES, TRUST_MOVES } from "../core/constants.js";
 import { DEFAULT_COMMISSION } from "../core/erp.js";
@@ -232,7 +232,7 @@ function saveCategoriesErrorMessage(err) {
     default: return "تعذّر حفظ التصنيفات";
   }
 }
-import { applyTheme, effectiveTheme } from "../core/theme.js";
+import { applyTheme, designOfTheme, effectiveTheme } from "../core/theme.js";
 import { FUNDING_SOURCES, SCRAP_STAGES } from "../core/workflow.js";
 import { auditHash } from "../domain/auditHash.js";
 import { buildAiChatContext } from "../domain/buildAiChatContext.js";
@@ -247,7 +247,7 @@ import { buildWeightEntries } from "../domain/buildWeightEntries.js";
 import { computeCommission } from "../domain/computeCommission.js";
 import { computeReturnAmounts } from "../domain/computeReturnAmounts.js";
 import { hashPin } from "../domain/hashPin.js";
-import { applyHqMarkup, markupLabel, documentIndex, aiAllowedFor, aiScope, branchDataKey, branchSnapshotKey, bundleById, cardFeeOf, cashAccountFor, categoryLabel, contentWidth, exchangeKind, expenseAccountFor, exportTablesPdf, fetchGoldPriceSAR, generateUnitCode, goldDestLabel, goldProfit, inPeriod, isBundle, isLiveScrap, itemLabel, lotAllocatedWeight, migrateLegacyKeys, modeAllowsAction, modeAllowsPage, modeAllowsTab, nameExists, navPerRow, normalizeFundingSource, normalizeName, r2, r3, remainingQty, saleProfitOf, saveAttachment, setRuntimeCategories, streamBase, trustBalance, unitCostBasis, unitCurrentValue, useViewport, weightTrialBalance } from "../domain/helpers.js";
+import { applyHqMarkup, sellPrice24, markupLabel, documentIndex, aiAllowedFor, aiScope, branchDataKey, branchSnapshotKey, bundleById, cardFeeOf, cashAccountFor, categoryLabel, contentWidth, exchangeKind, expenseAccountFor, exportTablesPdf, fetchGoldPriceSAR, generateUnitCode, goldDestLabel, goldProfit, inPeriod, isBundle, isLiveScrap, itemLabel, lotAllocatedWeight, migrateLegacyKeys, modeAllowsAction, modeAllowsPage, modeAllowsTab, nameExists, navPerRow, normalizeFundingSource, normalizeName, r2, r3, remainingQty, saleProfitOf, saveAttachment, setRuntimeCategories, streamBase, trustBalance, unitCostBasis, unitCurrentValue, useViewport, weightTrialBalance } from "../domain/helpers.js";
 import { isPeriodClosed } from "../domain/isPeriodClosed.js";
 import { key } from "../domain/key.js";
 import { nextCashRef } from "../domain/nextCashRef.js";
@@ -4549,7 +4549,8 @@ export default function GoldInventoryApp() {
   //   تُطبَّق مرّةً لكل اعتمادٍ جديد، وعلى كل دخولٍ ما دام التجهيز مقفولًا.
   useEffect(() => {
     const p = branchProvision;
-    if (!p?.at) return;
+    // ⚠ قبل تحميل الإعدادات المحفوظة: الكتابة هنا تدوس اختيارات الجهاز (الشكل…) بالقيم الافتراضية
+    if (!storesLoaded || !p?.at) return;
     if (!p.locked && appSettings?.hqProvisionAt === p.at) return;
     const local = p.local || {};
     const next = { ...appSettings, ...local, hqProvisionAt: p.at };
@@ -4558,7 +4559,7 @@ export default function GoldInventoryApp() {
     if (p.profile?.storeName) next.storeName = p.profile.storeName;
     if (JSON.stringify(next) !== JSON.stringify(appSettings)) persistSettings(next);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [branchProvision]);
+  }, [branchProvision, storesLoaded]);
 
   // جلب فعلي من الشبكة + تطبيق + تحديث النسخة المخزّنة محليًا.
   const loadBootstrap = async (user) => {
@@ -7344,7 +7345,7 @@ export default function GoldInventoryApp() {
   }
 
   return (
-    <div dir="rtl" style={{ background: "var(--bg)", minHeight: "100vh", fontFamily: "'Cairo','Tajawal',system-ui,sans-serif" }}>
+    <div dir="rtl" className="ons-root" style={{ background: "var(--bg)", minHeight: "100vh", fontFamily: "'Cairo','Tajawal',system-ui,sans-serif" }}>
       {lockOverlay}
       {enrollFor && (
         <EnrollQrSheet user={enrollFor} onIssue={handleIssueEnroll} onClose={() => setEnrollFor(null)} />
@@ -7708,6 +7709,10 @@ export default function GoldInventoryApp() {
             priceData={priceData}
             openDay={openDay}
             permitted={[...(permsNow.allowedTabs || []), ...(permsNow.allowedMore || [])]}
+            design={designOfTheme(effectiveTheme(appSettings))}
+            sell24={sellPrice24(appSettings, priceData.current)}
+            alerts={reviewQueue.filter((it) => it.severity === "block").length}
+            approvalsPending={approvals.filter((a) => a.status === "pending").length}
             onSell={() => {
               if (!openDay) { openPage("sales"); return; }
               if (stocktakeLock) { flashToast("المخزون مقفل للجرد"); return; }
@@ -7853,7 +7858,7 @@ export default function GoldInventoryApp() {
               ...effectivePerms(role, currentUser).allowedTabs.filter((id) => id !== "more"),
               ...effectivePerms(role, currentUser).allowedMore,
             ])}
-            mainIds={layoutIds(navLayout[role])}
+            mainIds={designOfTheme(effectiveTheme(appSettings)) === "simple" ? [] : layoutIds(navLayout[role])}
             userName={currentUser?.name}
             roleLabel={ROLES[role]?.label}
             order={menuOrder}
@@ -8964,6 +8969,20 @@ export default function GoldInventoryApp() {
 
       {/* bottom nav — fully customizable per role via "تخصيص القائمة" */}
       {(() => {
+        // التصميم البسيط بلا شريطٍ سفلي (المرجع 2026-09-27): الرئيسية تحمل الأزرار و☰ أعلى الشاشة يحمل الباقي.
+        //   من حالة الإعدادات لا من جذر الصفحة: الرسم يسبق تطبيق السمة.
+        //   وشاشات التبويب (المخزون · البيع · النقد…) بلا زرّ رجوع — فزرٌّ عائم صغير يعيد للرئيسية.
+        if (designOfTheme(effectiveTheme(appSettings)) === "simple") {
+          if (morePage !== null || tab === "home") return null;
+          return (
+            <button onClick={() => { setMorePage(null); setTab("home"); }} aria-label="الرئيسية"
+              className="fixed flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-bold"
+              style={{ zIndex: 40, insetInlineStart: 16, bottom: "calc(16px + env(safe-area-inset-bottom, 0px))", background: "var(--accentBg)", color: "var(--accentText)",
+                border: "1px solid var(--accentLine)", boxShadow: "var(--cardShadow)" }}>
+              <ChevronRight size={16} /> الرئيسية
+            </button>
+          );
+        }
         // ⚠ `permsNow` لا `effectivePerms` مباشرةً.
         //
         // الثانية تُعيد صلاحية الدور خامًا بلا تصفية الوضع، فيظهر

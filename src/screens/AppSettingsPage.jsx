@@ -3,7 +3,7 @@ import { Check, ShieldCheck } from "lucide-react";
 import { APP_MODES, DEFAULT_APP_MODE, DEFAULT_SETTINGS } from "../core/constants.js";
 import { KARATS, fmt, pricePerGram } from "../core/money.js";
 import { CARD_NETWORKS, DEFAULT_CARD_FEES, DEFAULT_MARGINS } from "../core/money-rules.js";
-import { THEMES, applyTheme, effectiveTheme } from "../core/theme.js";
+import { THEMES, THEME_DESIGNS, applyTheme, designOfTheme, effectiveTheme, isDarkTheme } from "../core/theme.js";
 import { hashPin } from "../domain/hashPin.js";
 import { generateRecoveryCode, inputStyle, normalizeRecovery, openWhatsApp, prettyPhone, toIntlPhone } from "../domain/helpers.js";
 import { sanitizeNumeric } from "../domain/sanitizeNumeric.js";
@@ -86,8 +86,32 @@ function AppSettingsPage({ settings, onSave, branchIdentity, onSaveBranch, hqPer
         <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">
           شكل التطبيق
         </p>
+        {/* ① التصميم: البسيط · المُضيء · الحديث · الكلاسيكي — ثم ② الإضاءة داخله */}
+        <div className="grid grid-cols-2 gap-2 mb-2" role="radiogroup" aria-label="التصميم">
+          {Object.entries(THEME_DESIGNS).map(([d, info]) => {
+            const cur = effectiveTheme(settings);
+            const on = designOfTheme(cur) === d;
+            return (
+              <button key={d} role="radio" aria-checked={on}
+                onClick={() => {
+                  if (on) return;
+                  const id = isDarkTheme(cur) ? info.dark : info.light;
+                  applyTheme(id);
+                  onSave({ ...settings, theme: id, themePicked: true });
+                }}
+                className={`text-right rounded-2xl p-3${info.isNew ? " col-span-2" : ""}`}
+                style={{ background: on ? "var(--accentBg)" : info.isNew ? "linear-gradient(120deg, rgba(255,200,61,.16), rgba(139,61,255,.12), rgba(0,200,220,.12))" : "var(--panel)", border: `1px solid ${on ? "var(--accentLine)" : "var(--line)"}` }}>
+                <p style={{ color: on ? "var(--accent)" : "var(--text)", margin: 0 }} className="text-sm font-black">
+                  {on ? "✓ " : ""}التصميم {info.label}
+                  {info.isNew && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ marginInlineStart: 6, background: "linear-gradient(135deg,#FFC83D,#FF8A00)", color: "#141A33" }}>جديد</span>}
+                </p>
+                <p style={{ color: "var(--text3)", margin: "2px 0 0" }} className="text-[11px] leading-snug">{info.hint}</p>
+              </button>
+            );
+          })}
+        </div>
         <div className="grid grid-cols-2 gap-2 mb-2">
-          {Object.entries(THEMES).map(([id, t]) => {
+          {Object.entries(THEMES).filter(([id]) => designOfTheme(id) === designOfTheme(effectiveTheme(settings))).map(([id, t]) => {
             const on = effectiveTheme(settings) === id;
             return (
               <button
@@ -134,7 +158,7 @@ function AppSettingsPage({ settings, onSave, branchIdentity, onSaveBranch, hqPer
           })}
         </div>
         <p style={{ color: "var(--text3)" }} className="text-[10px] mb-4">
-          الذهبي الداكن هو الأصل — لا يبهر العين في إضاءة المحل ساعات العمل الطويلة.
+          «البسيط الداكن» هو الشكل الأساسي — ويبقى ما تختاره هنا على هذا الجهاز.
         </p>
 
         {onSaveControls && (

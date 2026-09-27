@@ -9,5 +9,29 @@ html, body, #root {
 body {
   margin: 0;
   font-family: "Cairo", "Tajawal", system-ui, sans-serif;
-  background: var(--bg, #12100c);
+  background: var(--bg, #1b1a17);
 }
+
+/* التصميم المُضيء (data-design="radiant"): ضوءٌ يتحرّك خلف الشاشة · حوافّ متوهّجة · لمعةٌ على الفعل الأوّل · ضغطةٌ تُضيء.
+   الألوان من متغيّرات السمة (--aurora1..3 · --glow) — والحركة تتوقّف لمن طلب تقليلها من نظامه. */
+[data-design="radiant"]{background:var(--bg)!important}
+[data-design="radiant"] body{background:transparent!important}
+[data-design="radiant"] .frame,[data-design="radiant"] .ons-root{background:transparent!important}
+[data-design="radiant"] .ons-hero,[data-design="radiant"] .ons-hero span{color:#1A1405!important}
+[data-design="radiant"] body::before{content:"";position:fixed;inset:-25%;z-index:-1;pointer-events:none;
+  background:radial-gradient(38% 32% at 18% 12%,var(--aurora1),transparent 70%),radial-gradient(42% 38% at 88% 28%,var(--aurora2),transparent 72%),radial-gradient(48% 42% at 45% 92%,var(--aurora3),transparent 72%);
+  animation:rdAurora 26s ease-in-out infinite alternate}
+@keyframes rdAurora{0%{transform:translate3d(0,0,0) rotate(0deg) scale(1)}50%{transform:translate3d(-5%,4%,0) rotate(9deg) scale(1.1)}100%{transform:translate3d(4%,-3%,0) rotate(-7deg) scale(1.05)}}
+[data-design="radiant"] button:active:not(:disabled){transform:scale(.95);box-shadow:0 0 0 4px var(--accentBg),0 0 26px -4px var(--glow)}
+[data-design="radiant"] .ons-hero{position:relative;overflow:hidden;isolation:isolate;box-shadow:0 0 0 1px rgba(255,255,255,.25) inset,0 14px 34px -12px var(--glow),0 0 44px -10px var(--glow)!important}
+[data-design="radiant"] .ons-hero::after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(110deg,transparent 32%,rgba(255,255,255,.5) 50%,transparent 68%);transform:translateX(-130%);animation:rdShine 3.8s ease-in-out infinite}
+@keyframes rdShine{0%,50%{transform:translateX(-130%)}80%,100%{transform:translateX(130%)}}
+[data-design="radiant"] .ons-live{animation:rdPulse 2.6s ease-in-out infinite}
+@keyframes rdPulse{0%,100%{box-shadow:0 0 0 0 var(--glow)}50%{box-shadow:0 0 0 9px transparent}}
+[data-design="radiant"] .ons-tile{transition:transform .18s ease,box-shadow .25s ease}
+[data-design="radiant"] .ons-tile:hover{transform:translateY(-2px);box-shadow:0 12px 28px -14px var(--glow)}
+[data-design="radiant"] .ons-glowicon{box-shadow:0 0 18px -4px currentColor}
+[data-design="radiant"] .ons-in{animation:rdIn .5s cubic-bezier(.2,.8,.2,1) both}
+@keyframes rdIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+[data-design="radiant"] .ons-dot{animation:rdPulse 2s ease-in-out infinite}
+@media (prefers-reduced-motion:reduce){[data-design="radiant"] body::before,[data-design="radiant"] .ons-hero::after,[data-design="radiant"] .ons-live,[data-design="radiant"] .ons-in,[data-design="radiant"] .ons-dot{animation:none!important}}

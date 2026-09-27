@@ -2,6 +2,11 @@ import React from "react";
 import { ClipboardCheck, Flame, Plus, Receipt, RotateCcw } from "lucide-react";
 import { PURITY, fmtMoney, fmtW } from "../core/money.js";
 import { markupLabel } from "../domain/helpers.js";
+import { BRANCH_LANES, SIMPLE_BRANCH } from "../core/simpleLayout.js";
+import { branchNowTasks } from "../domain/nowTasks.js";
+import { PriorityNow } from "./PriorityNow.jsx";
+import { SectionLanes } from "./SectionLanes.jsx";
+import { SimpleHome } from "./SimpleHome.jsx";
 
 /// الرئيسية بعد الرقم السري — ما يحتاجه صاحب المحل صباحًا في نظرة:
 /// الذهب كلّه بمكافئ عيار 21، والنقد الآن، وثلاثة أفعال (بيع · كسر · جرد).
@@ -10,7 +15,7 @@ import { markupLabel } from "../domain/helpers.js";
 ///   تتبع الصلاحية: ما لا يملكه الدور لا يظهر.
 function HomeScreen({ userName = "", totals = {}, scrapTotals = {}, safeGoldBalance = {},
   cashBalance = {}, safeBalance = {}, custodyBalance = {}, priceData = {}, openDay = null,
-  permitted = [], onSell, onScrap = null, onGo, notices = [] }) {
+  permitted = [], onSell, onScrap = null, onGo, notices = [], design = "modern", sell24 = 0, alerts = 0, approvalsPending = 0 }) {
   const currency = priceData.currency || "ر.س";
   const p21 = PURITY[21];
   const to21 = (fine) => (Number(fine) || 0) / p21;
@@ -42,6 +47,38 @@ function HomeScreen({ userName = "", totals = {}, scrapTotals = {}, safeGoldBala
       <p style={{ color: "var(--text3)", margin: 0, opacity: 0.8 }} className="text-[10px]">{fmtW(w)} جم خام</p>
     </div>
   );
+  // «الآن» (المرجع 2026-09-27): ما يوقف العمل ← ما ينتظرك ← ما حان وقته
+  const tasks = branchNowTasks({ openDay, has, priceOk: Number(priceData.current) > 0, alerts, approvals: approvalsPending, hour });
+  // البسيط: صفحةٌ واحدة — الأسعار ← مختصر المخزون ← ما ينتظر ← الأزرار بملحقاتها
+  if (design === "simple") {
+    return (
+      <SimpleHome layout={SIMPLE_BRANCH} has={has} sell24={sell24 || Number(priceData.current) || 0} currency={currency} tasks={tasks}
+        stock={{ title: "المخزون الآن · مكافئ عيار 21", value: fmtW(to21(allFine)), unit: "جم21", go: has("inventory") ? "inventory" : null,
+          chips: [["القطع", totals.pieces || 0], ["مشغول", fmtW(to21(invFine))], ["كسر", fmtW(to21(scrapFine + safeFine))]] }}
+        onSell={onSell} onScrap={onScrap} onGo={(id) => onGo(id)} />
+    );
+  }
+  const radiant = design === "radiant";
+  const actions = (primary.length > 0 && (
+        <div className="grid gap-3 mb-4" style={{ gridTemplateColumns: `repeat(${primary.length}, minmax(0, 1fr))` }}>
+          {primary.map((b) => {
+            const Icon = b.icon;
+            return (
+              <button key={b.id} onClick={b.onClick} className={`flex flex-col items-center gap-2 py-4 ${b.hero ? `ons-hero${openDay ? " ons-live" : ""}` : "ons-tile"}`}
+                style={b.hero
+                  ? { background: "linear-gradient(135deg, var(--gradFrom), var(--gradTo))", color: "var(--bg)", borderRadius: 20, boxShadow: "0 8px 22px -10px var(--gradFrom)" }
+                  : { ...soft, color: "var(--text)" }}>
+                <span className="flex items-center justify-center" style={{ width: 44, height: 44, borderRadius: 14,
+                  background: b.hero ? "rgba(0,0,0,.12)" : "var(--accentBg)", color: b.hero ? "var(--bg)" : "var(--accent)" }}>
+                  <Icon size={22} />
+                </span>
+                <span className="text-sm font-extrabold">{b.label}</span>
+                <span className="text-[11px]" style={{ opacity: 0.75 }}>{b.hint}</span>
+              </button>
+            );
+          })}
+        </div>
+      ));
   return (
     <div className="px-4 pt-3 pb-28">
       {/* ── التحيّة ── */}
@@ -58,6 +95,10 @@ function HomeScreen({ userName = "", totals = {}, scrapTotals = {}, safeGoldBala
           📣 {n.text} <span style={{ color: "var(--text3)" }}>— {n.by || "الإدارة"} · {new Date(n.at).toLocaleDateString("en-GB")}</span>
         </div>
       ))}
+
+      {radiant && <PriorityNow tasks={tasks} onPick={(t) => (t.id === "openDay" ? onSell() : onGo(t.id))} />}
+      {radiant && actions}
+      {radiant && <SectionLanes lanes={BRANCH_LANES} has={has} onGo={onGo} />}
 
       {/* ── الذهب ── */}
       <div style={{ ...soft, padding: "16px 16px 12px", marginBottom: 12 }}>
@@ -91,28 +132,8 @@ function HomeScreen({ userName = "", totals = {}, scrapTotals = {}, safeGoldBala
         </div>
       </div>
 
-      {/* ── الأفعال ── */}
-      {primary.length > 0 && (
-        <div className="grid gap-3 mb-4" style={{ gridTemplateColumns: `repeat(${primary.length}, minmax(0, 1fr))` }}>
-          {primary.map((b) => {
-            const Icon = b.icon;
-            return (
-              <button key={b.id} onClick={b.onClick} className="flex flex-col items-center gap-2 py-4"
-                style={b.hero
-                  ? { background: "linear-gradient(135deg, var(--gradFrom), var(--gradTo))", color: "var(--bg)", borderRadius: 20, boxShadow: "0 8px 22px -10px var(--gradFrom)" }
-                  : { ...soft, color: "var(--text)" }}>
-                <span className="flex items-center justify-center" style={{ width: 44, height: 44, borderRadius: 14,
-                  background: b.hero ? "rgba(0,0,0,.12)" : "var(--accentBg)", color: b.hero ? "var(--bg)" : "var(--accent)" }}>
-                  <Icon size={22} />
-                </span>
-                <span className="text-sm font-extrabold">{b.label}</span>
-                <span className="text-[11px]" style={{ opacity: 0.75 }}>{b.hint}</span>
-              </button>
-            );
-          })}
-        </div>
-      )}
-      {quick.length > 0 && (
+      {!radiant && actions}
+      {!radiant && quick.length > 0 && (
         <div className="flex gap-2 mb-3">
           {quick.map(([id, label, Icon]) => (
             <button key={id} onClick={() => onGo(id)} className="flex-1 py-2.5 rounded-full text-[11px] font-bold flex items-center justify-center gap-1.5"
