@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Bot, Gem, Check, Home, Barcode, BarChart3, BookmarkCheck, Building2, CalendarCheck, ClipboardCheck, ClipboardList, Coins, Database, FileMinus, FileText, Flame, Grid, Handshake, Landmark, LayoutGrid, Lock, PiggyBank, Plus, Printer, Receipt, RefreshCw, RotateCcw, Scale, Search, Send, Settings, ShieldCheck, ShoppingCart, Sparkles, Sun, SlidersHorizontal, Tag, Truck, UserRound, Users, Wallet, Warehouse, Wrench } from "lucide-react";
+import { ArrowLeftRight, Layers, Globe2, Bot, Gem, Check, Home, Barcode, BarChart3, BookmarkCheck, Building2, CalendarCheck, ClipboardCheck, ClipboardList, Coins, Database, FileMinus, FileText, Flame, Grid, Handshake, Landmark, LayoutGrid, Lock, PiggyBank, Plus, Printer, Receipt, RefreshCw, RotateCcw, Scale, Search, Send, Settings, ShieldCheck, ShoppingCart, Sparkles, Sun, SlidersHorizontal, Tag, Truck, UserRound, Users, Wallet, Warehouse, Wrench } from "lucide-react";
 import { ROLES } from "./constants.js";
 
 const TAB_KIND_IDS = ["home", "inventory", "sales", "cash", "expenses", "stocktake"];
@@ -72,6 +72,8 @@ const NAV_REGISTRY = [
   { id: "masterReport", label: "التقارير الموحّدة", icon: LayoutGrid },
   { id: "anyStatement", label: "كشف حساب — أي شيء", icon: Search },
   { id: "fullStatements", label: "القوائم المالية الكاملة", icon: FileText },
+  { id: "combinedBook", label: "الذهب والنقد معًا — الدفتر الثالث", icon: Layers },
+  { id: "ifrs", label: "المعايير الدولية — IFRS", icon: Globe2 },
   { id: "pieceInquiry", label: "استعلام القطع", icon: Gem },
   { id: "exchange", label: "التبادل مع الأنظمة", icon: RefreshCw },
   { id: "customerReport", label: "تقرير العملاء", icon: Users },
@@ -136,7 +138,7 @@ const NAV_BUNDLES = [
     label: "التقارير",
     icon: BarChart3,
     hint: "كل التقارير واليومية",
-    items: ["reportsHub", "dashboard", "aiAccountant", "accountantReview", "approvals", "documents", "bankFees", "reports", "journal", "generalLedger", "salesReturn", "trialBalance", "fullStatements", "anyStatement", "masterReport", "supplierLedger", "officeLedger", "salesReturn", "bankRecon", "search",
+    items: ["reportsHub", "dashboard", "aiAccountant", "accountantReview", "approvals", "documents", "bankFees", "reports", "journal", "generalLedger", "salesReturn", "trialBalance", "fullStatements", "combinedBook", "ifrs", "anyStatement", "masterReport", "supplierLedger", "officeLedger", "salesReturn", "bankRecon", "search",
             "inventory", "salesHistory", "sellerReports", "taxReport", "financials", "openingCompare"],
   },
   {
@@ -246,6 +248,8 @@ const SHORTCUT_HINTS = {
   masterReport: ["تقرير موحد", "تقارير موحدة", "تقرير شامل"],
   anyStatement: ["كشف حساب", "كشف", "اي شخص", "أي شخص"],
   fullStatements: ["قوائم مالية كاملة", "قوائم كاملة", "الميزانية العمومية"],
+  combinedBook: ["الدفتر الثالث", "ذهب ونقد", "معادل الذهب", "كم نملك"],
+  ifrs: ["المعايير الدولية", "ifrs", "ias", "امتثال"],
   pieceInquiry: ["استعلام القطع", "استعلام قطعة", "بطاقة القطعة", "من كود", "تتبع قطعة"],
   exchange: ["تبادل", "استيراد", "تصدير", "ربط أنظمة"],
   customerReport: ["تقرير عملاء", "تقرير العملاء", "كشف عملاء"],
@@ -279,7 +283,7 @@ const MENU_GROUPS = [
     label: "التقارير",
     hint: "كل التقارير والقوائم",
     icon: BarChart3,
-    items: ["reportsHub", "dashboard", "aiAccountant", "accountantReview", "approvals", "documents", "bankFees", "reports", "journal", "generalLedger", "trialBalance", "fullStatements", "anyStatement", "masterReport", "queryBuilder", "customerReport", "docCycle", "search", "bankRecon", "supplierLedger", "officeLedger", "taxReport", "financials"],
+    items: ["reportsHub", "dashboard", "aiAccountant", "accountantReview", "approvals", "documents", "bankFees", "reports", "journal", "generalLedger", "trialBalance", "fullStatements", "combinedBook", "ifrs", "anyStatement", "masterReport", "queryBuilder", "customerReport", "docCycle", "search", "bankRecon", "supplierLedger", "officeLedger", "taxReport", "financials"],
   },
   {
     id: "inventory",

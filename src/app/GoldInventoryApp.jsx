@@ -224,7 +224,7 @@ function saveCategoriesErrorMessage(err) {
     default: return "تعذّر حفظ التصنيفات";
   }
 }
-import { DEFAULT_THEME, applyTheme } from "../core/theme.js";
+import { applyTheme, effectiveTheme } from "../core/theme.js";
 import { FUNDING_SOURCES, SCRAP_STAGES } from "../core/workflow.js";
 import { auditHash } from "../domain/auditHash.js";
 import { buildAiChatContext } from "../domain/buildAiChatContext.js";
@@ -305,6 +305,10 @@ import { PayrollPage } from "../screens/PayrollPage.jsx";
 import { AttendanceHrPage } from "../screens/AttendanceHrPage.jsx";
 import { HqReportPage } from "../screens/HqReportPage.jsx";
 import { HqTransactionsPage } from "../screens/HqTransactionsPage.jsx";
+import { HiddenModeBar } from "../ui/HiddenModeBar.jsx";
+import { buildSupplierStatement } from "../domain/buildSupplierStatement.js";
+import { CombinedBookPage } from "../screens/CombinedBookPage.jsx";
+import { IfrsPage } from "../screens/IfrsPage.jsx";
 import { PieceInquiryPage } from "../screens/PieceInquiryPage.jsx";
 import { CodingReportPage } from "../screens/CodingReportPage.jsx";
 import { QueryBuilderPage } from "../screens/QueryBuilderPage.jsx";
@@ -371,6 +375,7 @@ export default function GoldInventoryApp() {
   // ⚠ من له تبويبات يهبط على «الرئيسية» (ملخص الذهب والنقد وأفعال اليوم)،
   //   وأزرارها تتبع صلاحيته.
   const landingFor = (r) => {
+    if (r === "hidden") return { tab: "inventory", more: null };
     const def = ROLES[r] || {};
     if ((def.allowedTabs || []).length) return { tab: "home", more: null };
     const first = (def.allowedMore || [])[0];
@@ -681,8 +686,8 @@ export default function GoldInventoryApp() {
   // تطبيقها بعد الرسم يُظهر وميض السمة الافتراضية لحظةً — يراه
   // المستخدم كخلل في كل فتح.
   useEffect(() => {
-    applyTheme(appSettings?.theme || DEFAULT_THEME);
-  }, [appSettings?.theme]);
+    applyTheme(effectiveTheme(appSettings));
+  }, [appSettings?.theme, appSettings?.themePicked]);
   // ⚠ نافذة أخرى تكتب على المخزن نفسه — التبويبان يتنازعان
   const [otherTab, setOtherTab] = useState(false);
   // { branchId, branchRef, branchName } بعد الحل الناجح، null أثناء
@@ -1555,6 +1560,7 @@ export default function GoldInventoryApp() {
         const { assetId, ...body } = p;
         await api.fixedAssetsApi.dispose(assetId, body);
       } else if (ap.kind === "payroll_run") await api.payrollApi.accrue(p.period, ap.id);
+      else if (ap.kind === "hq_purchase") await api.hiddenApi.execHqPurchase(ap.id);
       else {
         flashToast("نوع طلبٍ لا يُنفَّذ من هنا");
         return false;
@@ -2546,10 +2552,23 @@ export default function GoldInventoryApp() {
     return { ...base, allowedTabs: [...tabs, "more"], allowedMore: more };
   };
 
+  // آخر الشاشات المفتوحة في هذا الجهاز — تظهر أوّل القائمة للعودة بضغطة (تفضيلٌ للجهاز لا بيانات)
+  const [recentPages, setRecentPages] = useState(() => {
+    try { const v = JSON.parse(localStorage.getItem("ounce_nav_recent_v1") || "[]"); return Array.isArray(v) ? v.slice(0, 6) : []; } catch { return []; }
+  });
+  const noteRecentPage = (id) => {
+    if (!id || id === "more" || id === "home") return;
+    setRecentPages((prev) => {
+      const next = [id, ...prev.filter((x) => x !== id)].slice(0, 6);
+      try { localStorage.setItem("ounce_nav_recent_v1", JSON.stringify(next)); } catch { /* تفضيلٌ فقط */ }
+      return next;
+    });
+  };
   const openPage = (id) => {
     // ⚠ نعدّ من أين جئت لا ما فتحت وحده: «اليومية» تُفتح من التقارير
     // ومن البحث، وخلطهما يجعل ضغطة المخزون المطوّلة تفتح اليومية.
     notePageOpen(morePage || tab, id);
+    noteRecentPage(id);
     if (TAB_KIND_IDS.includes(id)) {
       setMorePage(null);
       setTab(id);
@@ -4607,6 +4626,41 @@ export default function GoldInventoryApp() {
       return false;
     }
   };
+  // ══ الوضع الخفي (migration 047) ══
+  const handleHiddenHold = async (codes, note) => {
+    try {
+      const r = await api.hiddenApi.hold(codes, note);
+      const set = new Set(r.codes);
+      setItems((prev) => prev.map((it) => ((it.units || []).some((u) => set.has(String(u.code).toUpperCase()))
+        ? { ...it, units: it.units.map((u) => (set.has(String(u.code).toUpperCase()) ? { ...u, held: true, heldRef: r.ref } : u)) }
+        : it)));
+      return r;
+    } catch (err) {
+      throw new Error(err?.body?.errors?.[0] || apiErrorMessage(err, "تعذّر الإخراج"));
+    }
+  };
+  const handleHiddenExit = async (pin) => {
+    let res;
+    try {
+      res = await api.hiddenApi.exit(pin);
+    } catch (err) {
+      throw new Error(err?.status === 401 ? "رقم المدير وحده يُخرج من الوضع الخفي" : apiErrorMessage(err, "تعذّر الخروج"));
+    }
+    const myEpoch = ++sessionEpoch.current;
+    setLoading(true);
+    try { await loadBootstrap(res.user); } finally { if (myEpoch === sessionEpoch.current) setLoading(false); }
+    setCurrentUser(res.user);
+    const land = landingFor(res.user.role);
+    setMorePage(land.more);
+    setTab(land.tab);
+  };
+  // الوضع الخفي لا يرى غير المخزون والجرد — أي تنقّلٍ آخر يُعاد إلى المخزون
+  useEffect(() => {
+    if (role !== "hidden") return;
+    if (morePage !== null) setMorePage(null);
+    if (!["inventory", "stocktake"].includes(tab)) setTab("inventory");
+  }, [role, tab, morePage]);
+
   const handleLogout = () => {
     // ⚠ يزيد الجيل أولًا: أي عملية دخول/استعادة جلسة لا تزال قيد
     // التنفيذ (fetch معلق) ستلاحظ عند انتهائها أن جيلها تغيّر، فتتجاهل
@@ -5211,6 +5265,25 @@ export default function GoldInventoryApp() {
     });
   }, [scrapEntries, safeGoldTx, items, sales, lots, weightAdjustments, goldLedger,
       cashBalance, safeBalance, scrapCustodyBalance, priceData.current]);
+
+  // الدفتر الثالث: الذهب المملوك بما تعرضه شاشة المخزون (قطعٌ غير مباعة · كسرٌ قائم · ذهب الخزنة)
+  //   ناقص ما علينا ذهبًا للموردين من كشوفهم (مع أرصدتهم الافتتاحية) — معادل 24
+  const combinedGold = useMemo(() => {
+    let worked = 0, unworked = 0;
+    items.forEach((it) => {
+      const q = (it.units || []).filter((u) => !u.sold && !u.issued).length;
+      if (q > 0) worked += fine24((Number(it.weight) || 0) * q, it.karat);
+    });
+    scrapEntries.forEach((e) => {
+      if (e.consumed || e.status === "converted" || e.stage === "used" || e.status === "rejected" || e.status === "cancelled") return;
+      unworked += fine24(Number(e.weight) || 0, e.karat);
+    });
+    const safeByK = {};
+    safeGoldTx.forEach((t) => { safeByK[t.karat] = (safeByK[t.karat] || 0) + (t.type === "in" ? 1 : -1) * (Number(t.weight) || 0); });
+    Object.entries(safeByK).forEach(([k, w]) => { if (w > 0) unworked += fine24(w, Number(k)); });
+    const supOwed = suppliers.reduce((a, sp) => a + Math.max(0, buildSupplierStatement(sp, { lots, taskirEntries, safeGoldTx, cashTx, openings: supplierOpenings }).now.gold), 0);
+    return { physical: { inventory: worked, inTransit: 0, scrap: unworked, atOffices: 0 }, goldOwed: { total: supOwed } };
+  }, [items, scrapEntries, safeGoldTx, suppliers, lots, taskirEntries, cashTx, supplierOpenings]);
 
   const goldEquivalent = useMemo(() => {
     const price24 = priceData.current || 0;
@@ -7388,13 +7461,13 @@ export default function GoldInventoryApp() {
             >
               <Menu size={17} />
             </button>
-            <button
+            {role !== "hidden" && <button
               onClick={() => setShowLogoutConfirm(true)}
               className="flex items-center justify-center"
               style={{ width: 30, height: 30, borderRadius: "50%", background: "var(--panel)", border: "1px solid var(--line)", color: "var(--bad)" }}
             >
               <LogOut size={14} />
-            </button>
+            </button>}
           </div>
         </div>
         {/* ── شريط السعر الحيّ ── */}
@@ -7426,7 +7499,8 @@ export default function GoldInventoryApp() {
           إظهاره حين لا يوجد يومٌ فقط يعني أن البائع لا يرى متى فُتح
           ولا كم مضى عليه — ويكتشف عند الإقفال أنه يعمل على يوم أمس.
           ⚠ على الرئيسية لا شريطَ لليوم المغلق: لها سطرها وزرّ البيع يوجّه لفتحه. */}
-      {!(tab === "home" && morePage === null && !openDay) && (
+      {role === "hidden" && <HiddenModeBar onHold={handleHiddenHold} onExit={handleHiddenExit} />}
+      {role !== "hidden" && !(tab === "home" && morePage === null && !openDay) && (
       <DayControl
         compact
         openDay={realOpenDay}
@@ -7746,6 +7820,7 @@ export default function GoldInventoryApp() {
             roleLabel={ROLES[role]?.label}
             order={menuOrder}
             custom={customGroups}
+            recent={recentPages}
             disabled={appSettings.bankReconEnabled ? [] : ["bankRecon"]}
             onLogout={() => setShowLogoutConfirm(true)}
           />
@@ -8179,6 +8254,14 @@ export default function GoldInventoryApp() {
             flashToast={flashToast}
           />
         )}
+        {morePage === "combinedBook" && (
+          <CombinedBookPage goldPosition={combinedGold} journal={journal} price24={priceData.current || 0} currency={priceData.currency || "ر.س"}
+            baseKarat={appSettings?.baseKarat || 21} onBack={() => setMorePage(null)} />
+        )}
+        {morePage === "ifrs" && (
+          <IfrsPage journal={journal} fixedAssets={fixedAssets || []} currency={priceData.currency || "ر.س"}
+            periodStart={latestClosure ? latestClosure.closedAt : null} onBack={() => setMorePage(null)} />
+        )}
         {morePage === "fullStatements" && (
           <FullStatementsPage
             journal={journal}
@@ -8494,7 +8577,7 @@ export default function GoldInventoryApp() {
           />
         )}
         {morePage === "pieceInquiry" && (
-          <PieceInquiryPage price24={priceData.current || 0} currency={priceData.currency} onBack={() => setMorePage(null)} />
+          <PieceInquiryPage price24={priceData.current || 0} currency={priceData.currency} canManageHeld={role === "manager"} flashToast={flashToast} onBack={() => setMorePage(null)} />
         )}
         {morePage === "hqDocs" && (
           <HqTransactionsPage
@@ -8859,8 +8942,15 @@ export default function GoldInventoryApp() {
             // لكل ضغطة — والرصيف الجانبي أقرب وأثبت.
             // ظلّ علويّ خفيف يفصله عن المحتوى
             style={{
-              background: "var(--panel)",
-              borderTop: "1px solid var(--edge)",
+              background: "var(--navBg, var(--panel))",
+              // الكلاسيكي: خطٌّ علويّ وحده · الحديث: شريطٌ عائمٌ زجاجيّ بإطارٍ خفيف
+              border: "var(--navBorder, none)",
+              borderTop: "var(--navBorder, 1px solid var(--edge))",
+              borderRadius: "var(--navRadius, 0)",
+              margin: "var(--navMargin, 0)",
+              boxShadow: "var(--navShadow, none)",
+              backdropFilter: "var(--navBlur, none)",
+              WebkitBackdropFilter: "var(--navBlur, none)",
               paddingBottom: "env(safe-area-inset-bottom, 0px)",
             }}
             // السحب لأعلى يفتح الصف الثاني، ولأسفل يطويه — أسرع من

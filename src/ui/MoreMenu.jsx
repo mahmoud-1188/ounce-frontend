@@ -1,12 +1,15 @@
 import React, { useState } from "react";
-import { ChevronLeft, Folder, LogOut } from "lucide-react";
+import { ChevronLeft, FileText, Folder, LogOut, Search } from "lucide-react";
 import { MENU_GROUPS, NAV_REGISTRY } from "../core/navigation.js";
 import { bundleById, isBundle } from "../domain/helpers.js";
+import { findScreens } from "../domain/findScreens.js";
+import { navTone } from "./navTone.js";
 import { AiLogoBadge } from "./AiLogoBadge.jsx";
 import { Card } from "./Card.jsx";
 
-function MoreMenu({ onSelect, permitted, mainIds, onLogout, userName, roleLabel, order, custom = [], disabled = [] }) {
+function MoreMenu({ onSelect, permitted, mainIds, onLogout, userName, roleLabel, order, custom = [], disabled = [], recent = [] }) {
   const [group, setGroup] = useState(null);
+  const [q, setQ] = useState("");
 
   // ترتيب المستخدم يسبق الافتراضي. مجموعة أو عنصر أُضيف بعد حفظ ترتيبه
   // يُلحق بالآخر بدل أن يختفي.
@@ -91,11 +94,11 @@ function MoreMenu({ onSelect, permitted, mainIds, onLogout, userName, roleLabel,
                     <div
                       style={{
                         width: 38, height: 38, borderRadius: 11, flexShrink: 0,
-                        background: "var(--panel)", border: "1px solid var(--line)",
+                        background: navTone(id).bg, border: "1px solid var(--line)",
                         display: "grid", placeItems: "center",
                       }}
                     >
-                      <Icon size={18} color="var(--accentText)" />
+                      <Icon size={18} color={navTone(id).fg} />
                     </div>
                     <span
                       style={{ color: "var(--text)", fontFamily: "'Cairo', sans-serif" }}
@@ -141,6 +144,51 @@ function MoreMenu({ onSelect, permitted, mainIds, onLogout, userName, roleLabel,
         </div>
       </div>
 
+      {/* ابحث عن شاشة — بالاسم أو بما يقوله الناس («وش عندي» · «الكاش» · «الزكاة») */}
+      <div className="mb-3" style={{ position: "relative" }}>
+        <Search size={15} color="var(--text3)" style={{ position: "absolute", right: 12, top: 12 }} />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="ابحث عن شاشة…" aria-label="ابحث عن شاشة"
+          className="w-full rounded-xl text-sm" style={{ padding: "10px 36px 10px 12px", background: "var(--panel)", color: "var(--text)", border: "1px solid var(--line)" }} />
+      </div>
+      {q.trim() ? (() => {
+        const hits = findScreens(q, (id) => permitted.has(id) && !(disabled || []).includes(id));
+        return (
+          <div className="flex flex-col gap-2 mb-3">
+            {hits.length === 0 && <p style={{ color: "var(--text3)" }} className="text-xs text-center py-4">لا شاشة بهذا الاسم ضمن صلاحياتك</p>}
+            {hits.map((h) => {
+              const Icon = h.icon || FileText;
+              return (
+                <button key={h.id} onClick={() => { setQ(""); onSelect(h.id); }} className="w-full text-right">
+                  <Card style={{ padding: 12 }}>
+                    <div className="flex items-center gap-3">
+                      <Icon size={17} color="var(--accentText)" />
+                      <div className="flex-1">
+                        <p style={{ color: "var(--text)", margin: 0 }} className="text-sm font-bold">{h.label}</p>
+                        <p style={{ color: "var(--text3)", margin: 0 }} className="text-[11px]">{h.where}</p>
+                      </div>
+                    </div>
+                  </Card>
+                </button>
+              );
+            })}
+          </div>
+        );
+      })() : (recent || []).filter((id) => permitted.has(id)).length > 0 && (
+        <div className="mb-3">
+          <p style={{ color: "var(--text3)", margin: "0 0 6px" }} className="text-[11px]">فتحتها مؤخّرًا</p>
+          <div className="flex flex-wrap gap-1.5">
+            {(recent || []).filter((id) => permitted.has(id)).slice(0, 6).map((id) => {
+              const o = itemById(id);
+              return o ? (
+                <button key={id} onClick={() => onSelect(id)} className="px-3 py-1.5 rounded-full text-[11px] font-bold"
+                  style={{ background: "var(--accentBg)", color: "var(--accent)", border: "1px solid var(--accentLine)" }}>{o.label}</button>
+              ) : null;
+            })}
+          </div>
+        </div>
+      )}
+
+      {q.trim() ? null : <>
       {/* المساعد الذكي — مميّز */}
       {ai && (
         <button onClick={() => onSelect("aiAssistant")} className="w-full text-right mb-3">
@@ -196,11 +244,11 @@ function MoreMenu({ onSelect, permitted, mainIds, onLogout, userName, roleLabel,
                   <div
                     style={{
                       width: 40, height: 40, borderRadius: 12, flexShrink: 0,
-                      background: "var(--panel)", border: "1px solid var(--line)",
+                      background: navTone(g.id).bg, border: "1px solid var(--line)",
                       display: "grid", placeItems: "center",
                     }}
                   >
-                    <GIcon size={19} color="var(--accentText)" />
+                    <GIcon size={19} color={navTone(g.id).fg} />
                   </div>
                   <div className="flex-1">
                     <p style={{ color: "var(--text)", fontFamily: "'Cairo', sans-serif", margin: 0 }} className="text-sm font-bold">
@@ -233,11 +281,11 @@ function MoreMenu({ onSelect, permitted, mainIds, onLogout, userName, roleLabel,
                   <div
                     style={{
                       width: 40, height: 40, borderRadius: 12, flexShrink: 0,
-                      background: "var(--panel)", border: "1px solid var(--line)",
+                      background: navTone(o.id).bg, border: "1px solid var(--line)",
                       display: "grid", placeItems: "center",
                     }}
                   >
-                    <Icon size={19} color="var(--accentText)" />
+                    <Icon size={19} color={navTone(o.id).fg} />
                   </div>
                   <span
                     style={{ color: "var(--text)", fontFamily: "'Cairo', sans-serif" }}
@@ -252,6 +300,7 @@ function MoreMenu({ onSelect, permitted, mainIds, onLogout, userName, roleLabel,
           );
         })}
       </div>
+      </>}
 
       {/* الخروج — في المنتصف */}
       {onLogout && (

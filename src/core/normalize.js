@@ -27,6 +27,11 @@ function normalizeItems(itemRows, itemUnitRows) {
       issued: !!u.issued,
       epc: u.epc || null,
       epcBoundAt: u.epc_bound_at || null,
+      // الوضع الخفي (migration 047): خرجت من الرفّ لا من الدفتر — حتى يُكمَل بيعها
+      held: !!u.held,
+      heldAt: u.held_at || null,
+      heldBy: u.held_by || "",
+      heldRef: u.held_ref || "",
     });
     unitsByItem.set(u.item_id, list);
   }

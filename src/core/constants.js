@@ -445,6 +445,14 @@ const ROLES = {
       "convertScrap", "addItem", "refund", "issueOut",
     ],
   },
+  // الوضع الخفي (المرجع 5.2.0 · migration 047): الجهاز فُتح برقم الوضع الخفي —
+  //   المخزون والجرد وحدهما، وما يُخرجه يُعلَّق حتى يُكمَل بيعه. الخروج برقم المدير.
+  hidden: {
+    label: "الوضع الخفي", system: true,
+    allowedTabs: ["inventory", "stocktake"], allowedMore: [],
+    canManageDay: false,
+    denyActions: ["openDay", "closeDay", "sale", "expense", "cashMove", "addItem", "issueOut", "settleSupplier"],
+  },
   employee: {
     // ⚠ لا «aiAssistant» في القائمة: الذكاء يُفتح لكل مستخدم على حدة
     // من شاشة الصلاحيات، لا لكل من حمل الدور.
@@ -464,7 +472,7 @@ const ROLES = {
     canManageDay: false,
     canBreak: false,
     allowedTabs: ["more"],
-    allowedMore: ["accountantReview", "dashboard", "approvals", "documents", "bankFees", "aiAccountant", "journal", "generalLedger", "trialBalance", "fullStatements", "anyStatement",
+    allowedMore: ["accountantReview", "dashboard", "approvals", "documents", "bankFees", "aiAccountant", "journal", "generalLedger", "trialBalance", "fullStatements", "combinedBook", "ifrs", "anyStatement",
       "financials", "docCycle", "reportsHub", "reports", "bankRecon", "supplierLedger", "officeLedger", "salesHistory",
       "purchases", "customers", "safeAudit", "openingCompare", "masterReport", "codingReport", "queryBuilder", "search",
       "taxReport", "customerReport", "suppliers", "partners", "fixedAssets", "payroll", "workday", "pieceInquiry"],
@@ -490,7 +498,7 @@ const ROLES = {
     // كانت الصفحتان مبنيتين ومُفعَّلتين خادميًّا لكن غير قابلتين للوصول
     // فعليًا من القائمة لأي مدير افتراضي — هذا الإصلاح يضيفهما هنا، ومعهما
     // hqReports (migration 017) مباشرة بلا نفس الفجوة من أول يوم.
-    allowedMore: ["addGoods", "printing", "printerSetup", "salesHistory", "sellerReports", "price", "reports", "journal", "trialBalance", "search", "bankRecon", "supplierLedger", "officeLedger", "salesReturn", "scrap", "scrapIntake", "scrapCustody", "conversions", "itemEdit", "goldOut", "categories", "workday", "customers", "trustAccounts", "reservations", "safeAudit", "integration", "storeLink", "backup", "purchases", "suppliers", "taskirat", "partners", "access", "taxReport", "settings", "financials", "openingCompare", "repairs", "aiAssistant", "navCustomize", "openingBalance", "fixedAssets", "payroll", "attendanceHr", "hqReports", "priceFix", "fullStatements", "anyStatement", "generalLedger", "masterReport", "exchange", "customerReport", "docCycle", "accountantReview", "dashboard", "approvals", "documents", "bankFees", "showcase", "reportsHub", "aiAccountant", "pieceInquiry"],
+    allowedMore: ["addGoods", "printing", "printerSetup", "salesHistory", "sellerReports", "price", "reports", "journal", "trialBalance", "search", "bankRecon", "supplierLedger", "officeLedger", "salesReturn", "scrap", "scrapIntake", "scrapCustody", "conversions", "itemEdit", "goldOut", "categories", "workday", "customers", "trustAccounts", "reservations", "safeAudit", "integration", "storeLink", "backup", "purchases", "suppliers", "taskirat", "partners", "access", "taxReport", "settings", "financials", "openingCompare", "repairs", "aiAssistant", "navCustomize", "openingBalance", "fixedAssets", "payroll", "attendanceHr", "hqReports", "priceFix", "fullStatements", "anyStatement", "generalLedger", "masterReport", "exchange", "customerReport", "docCycle", "accountantReview", "dashboard", "approvals", "documents", "bankFees", "showcase", "reportsHub", "aiAccountant", "pieceInquiry", "combinedBook", "ifrs"],
   },
 };
 

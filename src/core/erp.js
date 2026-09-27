@@ -124,6 +124,8 @@ const APPROVAL_RULES = [
     hint: "السداد الكبير يُعتمد" },
   { id: "refund", label: "ردّ مبلغ", threshold: 1000, approver: "manager",
     hint: "الردّ الكبير يُعتمد" },
+  { id: "hq_purchase", label: "شراء من الإدارة على حساب الفرع", threshold: 0, approver: "manager",
+    hint: "مدير الفرع يوافق قبل الخصم من خزنته" },
 ];
 
 const APPROVAL_STATUS = {

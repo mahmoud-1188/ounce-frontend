@@ -3,7 +3,7 @@ import { Check, ShieldCheck } from "lucide-react";
 import { APP_MODES, DEFAULT_APP_MODE, DEFAULT_SETTINGS } from "../core/constants.js";
 import { KARATS, fmt, pricePerGram } from "../core/money.js";
 import { CARD_NETWORKS, DEFAULT_CARD_FEES, DEFAULT_MARGINS } from "../core/money-rules.js";
-import { DEFAULT_THEME, THEMES, applyTheme } from "../core/theme.js";
+import { THEMES, applyTheme, effectiveTheme } from "../core/theme.js";
 import { hashPin } from "../domain/hashPin.js";
 import { generateRecoveryCode, inputStyle, normalizeRecovery, openWhatsApp, prettyPhone, toIntlPhone } from "../domain/helpers.js";
 import { sanitizeNumeric } from "../domain/sanitizeNumeric.js";
@@ -14,6 +14,7 @@ import { Field } from "../ui/Field.jsx";
 import { MgrFeeSettingsCard } from "../ui/MgrFeeSettingsCard.jsx";
 import { NumericInput } from "../ui/NumericInput.jsx";
 import { RfidSettingsCard } from "../ui/RfidSettingsCard.jsx";
+import { HiddenModeSettingsCard } from "../ui/HiddenModeSettingsCard.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 
 function AppSettingsPage({ settings, onSave, branchIdentity, onSaveBranch, hqPermissions, priceData = {}, onBackfill, canEditControls = false, onSaveControls = null, hqManaged = null, onBack }) {
@@ -79,13 +80,15 @@ function AppSettingsPage({ settings, onSave, branchIdentity, onSaveBranch, hqPer
           كل شيء كما تركه.
         </p>
 
+        {canEditControls && <HiddenModeSettingsCard />}
+
         {/* ── السمة ── */}
         <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">
           شكل التطبيق
         </p>
         <div className="grid grid-cols-2 gap-2 mb-2">
           {Object.entries(THEMES).map(([id, t]) => {
-            const on = (settings.theme || DEFAULT_THEME) === id;
+            const on = effectiveTheme(settings) === id;
             return (
               <button
                 key={id}
@@ -95,7 +98,7 @@ function AppSettingsPage({ settings, onSave, branchIdentity, onSaveBranch, hqPer
                   // ⚠ نُطبّقها ونحفظها معًا: الإعدادات هنا تُحفظ فورًا
                   // لا بزرّ، فتأجيل الحفظ يجعل الاختيار يضيع بالخروج.
                   applyTheme(id);
-                  onSave({ ...settings, theme: id });
+                  onSave({ ...settings, theme: id, themePicked: true });
                 }}
                 aria-pressed={on}
                 className="text-right rounded-2xl p-3"

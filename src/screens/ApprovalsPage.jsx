@@ -12,7 +12,7 @@ import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 ///
 /// المدير يقرّر؛ والمعتمَد يُنفَّذ فورًا بحمولته مرةً واحدة (الخادم يختم
 /// التنفيذ في معاملته)، والمرفوض يبقى شاهدًا.
-const LIVE_KINDS = ["expense", "refund", "supplier_settle", "asset_purchase", "asset_disposal", "payroll_run"];
+const LIVE_KINDS = ["expense", "refund", "supplier_settle", "asset_purchase", "asset_disposal", "payroll_run", "hq_purchase"];
 
 function ApprovalsPage({ approvals = [], currency, canDecide = false, settings = {}, routing = {}, onDecide, onExecute, onBack }) {
   const [tab, setTab] = useState("pending");
@@ -36,6 +36,7 @@ function ApprovalsPage({ approvals = [], currency, canDecide = false, settings =
     if (a.kind === "asset_purchase") return `شراء أصل · ${p.name || ""}${p.fundingSource ? ` · من ${p.fundingSource}` : ""}`;
     if (a.kind === "asset_disposal") return `استبعاد أصل · ${a.note || ""}${p.reason === "scrap" ? " · إتلاف" : p.proceeds ? ` · بيع ${fmtMoney(p.proceeds)}` : ""}`;
     if (a.kind === "payroll_run") return `مسيّر رواتب ${p.period || ""}`;
+    if (a.kind === "hq_purchase") return `شراء الإدارة من ${p.supplierName || "مورد"} · ${(p.lines || []).reduce((x, l) => x + (Number(l.weight) || 0), 0)} جم · من ${p.payFrom === "safe_network" ? "شبكة الخزنة" : "نقد الخزنة"}${p.by ? ` · ${p.by}` : ""}`;
     return a.kindLabel;
   };
   const decide = async (a, decision) => {

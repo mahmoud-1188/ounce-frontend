@@ -483,6 +483,21 @@ const priceFixApi = {
 // في المرجع (راجع تعليق الهجرة). الفرع يبدأ خمسة أنواع، ويستلم اثنين
 // فقط (goods_from_hq, send_for_coding) بعد اعتماد الإدارة أو مباشرةً.
 /** استعلام القطع — بطاقة لكل رمز من الخادم (migration 045) */
+// الوضع الخفي (migration 047)
+const hiddenApi = {
+  hold: (codes, note = "") => apiFetch("/hidden/hold", { method: "POST", body: { codes, note } }),
+  exit: async (pin) => {
+    const r = await apiFetch("/auth/hidden-exit", { method: "POST", body: { pin } });
+    setAuthToken(r.token);
+    return r;
+  },
+  heldUnits: () => apiFetch("/held-units"),
+  execHqPurchase: (approvalId) => apiFetch("/hq-purchase/execute", { method: "POST", body: { approvalId } }),
+  release: (code, note = "") => apiFetch("/held-units/release", { method: "POST", body: { code, note } }),
+  settings: () => apiFetch("/settings/hidden-mode"),
+  saveSettings: (body) => apiFetch("/settings/hidden-mode", { method: "PUT", body }),
+};
+
 // أرصدة الموردين الافتتاحية (migration 046)
 const supplierOpeningApi = {
   list: () => apiFetch("/suppliers/openings"),
@@ -523,6 +538,7 @@ const controlApi = {
 export {
   pieceInquiryApi,
   supplierOpeningApi,
+  hiddenApi,
   controlApi,
   ApiError,
   getAuthToken,

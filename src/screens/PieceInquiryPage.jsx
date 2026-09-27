@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Gem, Search, X } from "lucide-react";
 import * as api from "../core/api.js";
 import { fmtMoney, fmtW, roundW } from "../core/money.js";
+import { HeldUnitsCard } from "../ui/HeldUnitsCard.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 
 /// استعلام القطع (المرجع 5.2.0) — امسح أو اكتب أو الصق عدّة رموز فتظهر لكل قطعةٍ
@@ -10,6 +11,7 @@ import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 /// محجوزة). قراءةٌ فقط؛ التكلفة يرسلها الخادم لمن يراها وحده.
 const STATUS = {
   available: { label: "متاحة", tone: "var(--good)" },
+  held: { label: "معلّقة", tone: "var(--accent)" },
   sold: { label: "مباعة", tone: "var(--accent)" },
   issued: { label: "مُخرَجة", tone: "var(--bad)" },
   reserved: { label: "محجوزة", tone: "var(--accentText)" },
@@ -17,7 +19,7 @@ const STATUS = {
 const splitCodes = (t) => String(t || "").split(/[\s,،;]+/).map((x) => x.trim().toUpperCase()).filter(Boolean);
 const dt = (v) => (v ? String(v).slice(0, 10) : "—");
 
-function PieceInquiryPage({ price24 = 0, currency = "ر.س", onBack }) {
+function PieceInquiryPage({ price24 = 0, currency = "ر.س", canManageHeld = false, flashToast = null, onBack }) {
   const [input, setInput] = useState("");
   const [cards, setCards] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -55,6 +57,7 @@ function PieceInquiryPage({ price24 = 0, currency = "ر.س", onBack }) {
     <div className="pb-24">
       <SubPageHeader title="استعلام القطع" onBack={onBack} />
       <div className="px-4">
+        {canManageHeld && <HeldUnitsCard flashToast={flashToast} />}
         <div className="flex gap-2">
           <textarea ref={inputRef} value={input} rows={2} aria-label="رموز القطع"
             onChange={(e) => setInput(e.target.value)}
@@ -117,6 +120,7 @@ function PieceInquiryPage({ price24 = 0, currency = "ر.س", onBack }) {
               <Row k="من الصنف" v={`${c.siblings.available} متاحة من ${c.siblings.total}`} />
               {c.sale && <Row k="البيع" v={`${c.sale.ref} · ${dt(c.sale.date)} · ${c.sale.customer}${c.sale.price ? ` · ${currency}${fmtMoney(c.sale.price)}` : ""}${c.sale.seller ? ` · البائع ${c.sale.seller}` : ""}`} />}
               {c.status === "sold" && !c.sale && <Row k="البيع" v="مباعة قبل ربط الوحدة بفاتورتها" />}
+              {c.held && <Row k="معلّقة" v={`${c.held.ref} · ${dt(c.held.at)}${c.held.by ? ` · ${c.held.by}` : ""}${c.held.note ? ` · ${c.held.note}` : ""} — تُكمَل بالبيع`} />}
               {c.issued && <Row k="الإخراج" v={`${c.issued.reason}${c.issued.ref ? ` · ${c.issued.ref}` : ""} · ${dt(c.issued.at)}${c.issued.by ? ` · ${c.issued.by}` : ""}${c.issued.note ? ` · ${c.issued.note}` : ""}`} />}
               {c.reservation && <Row k="محجوزة" v={`${c.reservation.ref} · ${c.reservation.customer}`} />}
             </div>

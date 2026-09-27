@@ -14,8 +14,9 @@ function Card({ children, style, className = "" }) {
       className={className}
       style={{
         background: "var(--panel)",
-        border: "1px solid var(--edge)",
-        borderRadius: 16,
+        border: "var(--cardBorder, 1px solid var(--edge))",
+        borderRadius: "var(--cardRadius, 16px)",
+        boxShadow: "var(--cardShadow, none)",
         ...style,
       }}
     >
