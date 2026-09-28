@@ -9,7 +9,7 @@ import { ScanField } from "../ui/ScanField.jsx";
 ///
 /// ⚠ الرمز يُتحقَّق منه على الخادم عند الحفظ (POST /enroll/claim): صلاحيته
 ///   ومرّته الواحدة وأن الرقم لا يتكرّر في الفرع. هنا شكلُه فقط.
-const CODE_RE = /^OQE1[A-Z0-9]{10}$/;
+const CODE_RE = /^OQ[ED]1[A-Z0-9]{10}$/;   // OQE1 جهاز موظّف · OQD1 جهاز الفرع المشترك (بلا رقم سري)
 
 function EnrollClaimSheet({ branchName = "", onClaim, onClose }) {
   const [step, setStep] = useState("scan");     // scan | pin
@@ -22,8 +22,19 @@ function EnrollClaimSheet({ branchName = "", onClaim, onClose }) {
 
   const read = (text) => {
     const c = String(text || "").trim().toUpperCase().replace(/\s+/g, "");
-    if (!CODE_RE.test(c)) { setErr("ليس رمز ربط أونصة — الرمز يبدأ بـOQE1 وطوله 14"); return; }
-    setCode(c); setErr(""); setStep("pin");
+    if (!CODE_RE.test(c)) { setErr("ليس رمز ربط أونصة — الرمز يبدأ بـOQE1 أو OQD1 وطوله 14"); return; }
+    setCode(c); setErr("");
+    // جهاز الفرع المشترك: لا رقم سري — يُربط مباشرةً
+    if (c.startsWith("OQD1")) { claimShared(c); return; }
+    setStep("pin");
+  };
+  const claimShared = async (c) => {
+    setBusy(true);
+    try {
+      const r = await onClaim(c, null);
+      if (r?.error) { setErr(r.error); return; }
+      onClose();
+    } finally { setBusy(false); }
   };
   const valid = /^\d{4,6}$/.test(pin) && pin === pin2;
   const submit = async () => {
@@ -55,7 +66,7 @@ function EnrollClaimSheet({ branchName = "", onClaim, onClose }) {
               className="w-full mt-2 py-2.5 rounded-xl text-[12px] font-bold"
               style={{ background: raw.trim() ? "linear-gradient(135deg,var(--gradFrom),var(--gradTo))" : "var(--field)",
                        color: raw.trim() ? "var(--panel)" : "var(--text3)" }}>
-              اقرأ الرمز
+              {busy ? "جارٍ الربط…" : "اقرأ الرمز"}
             </button>
           </>
         )}

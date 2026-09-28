@@ -8,7 +8,7 @@ import { Hallmark } from "./Hallmark.jsx";
 import { AwnsahLogo } from "./AwnsahLogo.jsx";
 import { PriceHero } from "./PriceHero.jsx";
 
-function PriceLoginScreen({ priceData, autoUpdating, autoError, lastAutoFetch, onRefreshNow, onLogin, requirePin = true, users = [], onDirectLogin }) {
+function PriceLoginScreen({ priceData, autoUpdating, autoError, lastAutoFetch, onRefreshNow, onLogin, requirePin = true, users = [], onDirectLogin, deviceUser = null }) {
   const [showPinPad, setShowPinPad] = useState(false);
   const [pin, setPin] = useState("");
   const [error, setError] = useState(false);
@@ -177,7 +177,11 @@ function PriceLoginScreen({ priceData, autoUpdating, autoError, lastAutoFetch, o
               حتى لون ظاهر مختلف عن الخلفية) — عمليًا غير مرئي لأي مستخدم
               لا يعرف مسبقًا مكانه بالضبط. الآن زر واضح بنص "تسجيل الدخول". */}
           <button
-            onClick={() => setShowPinPad(true)}
+            onClick={() => {
+              // جهازٌ شخصي مربوط (migration 062): يعرف صاحبه — الرقم السري وحده
+              if (deviceUser && requirePin) setSelectedUser(users.find((u) => u.id === deviceUser.id) || deviceUser);
+              setShowPinPad(true);
+            }}
             aria-label="تسجيل الدخول"
             className="flex items-center gap-2 font-bold"
             style={{
@@ -339,6 +343,11 @@ function PriceLoginScreen({ priceData, autoUpdating, autoError, lastAutoFetch, o
           <p style={{ color: "var(--text2)" }} className="text-xs mb-4">
             أدخل الرقم السري للدخول
           </p>
+          {deviceUser && selectedUser.id === deviceUser.id && (
+            <button onClick={() => { setSelectedUser(null); setPin(""); }} className="text-[11px] mb-3" style={{ color: "var(--text3)", textDecoration: "underline" }}>
+              ليس أنت؟ ادخل برمز موظفٍ آخر
+            </button>
+          )}
           <div className="flex items-center gap-3 mb-6" style={{ animation: shake ? "shakeX 0.4s" : "none" }}>
             {[0, 1, 2, 3, 4, 5].map((i) => (
               <div

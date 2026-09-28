@@ -102,6 +102,10 @@ async function apiFetch(path, { method = "GET", body, headers } = {}) {
     // 401 هنا يعني توكن منتهي/غير صالح — لا يوجد تجديد تلقائي (refresh
     // token) في هذا الباك إند بعد؛ الشاشة المستدعية مسؤولة عن معالجة
     // ApiError.status === 401 بإعادة المستخدم لشاشة الدخول.
+    // الجهاز أُلغي أو صار الفرع يشترط جهازًا مربوطًا — التطبيق يُخرج المستخدم برسالةٍ واضحة
+    if (res.status === 401 && ["device_revoked", "device_not_enrolled"].includes(payload?.error) && typeof window !== "undefined") {
+      try { window.dispatchEvent(new CustomEvent("ounce:device-revoked", { detail: payload })); } catch { /* تجاهل */ }
+    }
     throw new ApiError(res.status, payload);
   }
   return payload;
@@ -126,10 +130,23 @@ function resolveBranchByRef(ref) {
 }
 
 /** POST /auth/login — يرجّع {token, user}. */
+// ── جهاز الدخول المربوط (migration 062): مفتاحٌ لكل فرع يحفظه هذا الجهاز ──
+const DEVICE_KEY = "awnsah_device_v1";
+function getDevice(branchId) {
+  try { return (JSON.parse(localStorage.getItem(DEVICE_KEY) || "{}") || {})[branchId] || null; } catch { return null; }
+}
+function saveDevice(branchId, dev) {
+  try {
+    const all = JSON.parse(localStorage.getItem(DEVICE_KEY) || "{}") || {};
+    if (dev) all[branchId] = dev; else delete all[branchId];
+    localStorage.setItem(DEVICE_KEY, JSON.stringify(all));
+  } catch { /* تخزينٌ غير متاح — الجهاز يُعامَل كغير مربوط */ }
+}
+
 async function login({ branchId, userId, pin }) {
   const result = await apiFetch("/auth/login", {
     method: "POST",
-    body: { branchId, userId, pin },
+    body: { branchId, userId, pin, deviceToken: getDevice(branchId)?.token || undefined },
   });
   setAuthToken(result.token);
   return result;
@@ -535,7 +552,9 @@ const modulesApi = {
 const hiddenApi = {
   hold: (codes, note = "") => apiFetch("/hidden/hold", { method: "POST", body: { codes, note } }),
   exit: async (pin) => {
-    const r = await apiFetch("/auth/hidden-exit", { method: "POST", body: { pin } });
+    let deviceToken;
+    try { deviceToken = Object.values(JSON.parse(localStorage.getItem(DEVICE_KEY) || "{}"))[0]?.token; } catch { /* لا جهاز */ }
+    const r = await apiFetch("/auth/hidden-exit", { method: "POST", body: { pin, deviceToken } });
     setAuthToken(r.token);
     return r;
   },
@@ -579,11 +598,16 @@ const controlApi = {
   enrollInvite: (userId) => apiFetch(`/users/${userId}/enroll-invite`, { method: "POST" }),
   // عامّ بلا توكن — الفرع من رابط الدخول المحفوظ على الجهاز
   enrollClaim: (branchId, code, pin) => apiFetch("/enroll/claim", { method: "POST", body: { branchId, code, pin } }),
+  devices: () => apiFetch("/devices"),
+  revokeDevice: (id) => apiFetch(`/devices/${id}/revoke`, { method: "POST", body: {} }),
+  sharedDeviceInvite: () => apiFetch("/devices/shared-invite", { method: "POST", body: {} }),
   bankFees: (period) => apiFetch(`/bank-fees?period=${encodeURIComponent(period)}`),
   settleBankFees: (payload) => apiFetch("/bank-fees/settle", { method: "POST", body: payload }),
 };
 
 export {
+  getDevice,
+  saveDevice,
   pieceInquiryApi,
   supplierOpeningApi,
   hiddenApi,

@@ -87,6 +87,8 @@ const API_ERROR_MESSAGES = {
   opening_not_found: "الرصيد غير موجود",
   aml_id_required: "دفعٌ نقدي يبلغ حدّ الهوية — اختر عميلًا بهويته أو اكتب اسم المشتري ورقم هويته",
   discount_over_limit: "الخصم فوق حدّك — يبيعه المدير",
+  device_not_enrolled: "هذا الجهاز غير مربوط بحسابك — اطلب رمز ربط من المدير أو الإدارة",
+  device_revoked: "أُلغي ربط هذا الجهاز — اطلب رمز ربط جديدًا",
   custom_order_not_open: "الطلب الخاص مُسلَّم أو ملغى",
   custom_order_other_customer: "الطلب الخاص لعميلٍ آخر",
   gift_card_not_found: "بطاقة الهدية غير صالحة أو مستعملة",
@@ -270,6 +272,7 @@ import { BudgetsPage } from "../screens/BudgetsPage.jsx";
 import { VatReturnPage } from "../screens/VatReturnPage.jsx";
 import { NewSaleModal } from "../modals/NewSaleModal.jsx";
 import { RemoteStocktakeInbox } from "../ui/RemoteStocktakeInbox.jsx";
+import { DevicesCard } from "../ui/DevicesCard.jsx";
 import { PartialSaleModal } from "../modals/PartialSaleModal.jsx";
 import { SaleDetailModal } from "../modals/SaleDetailModal.jsx";
 import { SetPriceModal } from "../modals/SetPriceModal.jsx";
@@ -1653,6 +1656,7 @@ export default function GoldInventoryApp() {
 
   const handleIssueEnroll = async (user) => {
     try {
+      if (user?.shared) return await api.controlApi.sharedDeviceInvite();
       return await api.controlApi.enrollInvite(user.id);
     } catch (err) {
       return { error: apiErrorMessage(err, "تعذّر إصدار رمز الربط") };
@@ -1663,13 +1667,42 @@ export default function GoldInventoryApp() {
     if (!branchLink?.branchId) return { error: "افتح رابط دخول الفرع على هذا الجهاز أولًا" };
     try {
       const res = await api.controlApi.enrollClaim(branchLink.branchId, code, pin);
-      flashToast(`رُبط الجهاز — ادخل باسم ${res.user?.name || ""} ورقمك الجديد`);
+      // جهاز الفرع المشترك: يُحفظ مفتاحه، وكل موظفٍ يدخل منه باسمه ورقمه
+      if (res.shared) {
+        api.saveDevice(branchLink.branchId, { token: res.deviceToken, shared: true });
+        flashToast("صار هذا الجهاز «جهاز الفرع» — يدخل منه أي موظفٍ برمزه ورقمه");
+        return res;
+      }
+      // جهازٌ شخصي: يُحفظ صاحبه، ويدخل الموظّف مباشرةً — والمرّات القادمة بالرقم السري وحده
+      api.saveDevice(branchLink.branchId, { token: res.deviceToken, userId: res.user.id, userName: res.user.name });
+      api.setAuthToken(res.token);
+      const myEpoch = ++sessionEpoch.current;
+      setLoading(true);
+      try { await loadBootstrap(res.user); } finally { if (myEpoch === sessionEpoch.current) setLoading(false); }
+      if (myEpoch !== sessionEpoch.current) return res;
+      setCurrentUser(res.user);
+      const land = landingFor(res.user.role);
+      setMorePage(land.more);
+      setTab(land.tab);
+      flashToast(`أهلًا ${res.user.name} — رُبط جهازك، والدخول القادم برقمك السري وحده`);
       return res;
     } catch (err) {
       const c = err?.body?.error;
       return { error: apiErrorMessage(err, "تعذّر ربط الجهاز"), back: ["invalid_enroll_code", "enroll_code_used", "enroll_code_expired"].includes(c) };
     }
   };
+
+  // جهازٌ أُلغي من الإدارة أو المدير: خروجٌ فوري برسالة
+  useEffect(() => {
+    const on = (e) => {
+      const c = e.detail?.error;
+      if (c === "device_revoked" && branchLink?.branchId) api.saveDevice(branchLink.branchId, null);
+      flashToast(c === "device_revoked" ? "أُلغي ربط هذا الجهاز — اطلب رمز ربط جديدًا" : "هذا الجهاز غير مربوط بحسابك — اطلب رمز ربط");
+      handleLogout?.();
+    };
+    window.addEventListener("ounce:device-revoked", on);
+    return () => window.removeEventListener("ounce:device-revoked", on);
+  }, [branchLink?.branchId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ⚠ الفرع مقفلٌ من الإدارة: أي طلبٍ يُرفض بـ423 يحجب التطبيق كلّه بشاشة قفل
   useEffect(() => {
@@ -4636,6 +4669,10 @@ export default function GoldInventoryApp() {
         failedTries.current = Math.max(0, failedTries.current - 1);
       } else if (e instanceof api.ApiError && e.status === 401) {
         // رقم سري خاطئ — الرسالة الافتراضية في PriceLoginScreen تكفي.
+      } else if (e instanceof api.ApiError && e.body?.error === "device_not_enrolled") {
+        // الرقم صحيح لكن الفرع يشترط جهازًا مربوطًا — لا تُحسب محاولةً فاشلة
+        failedTries.current = Math.max(0, failedTries.current - 1);
+        flashToast(apiErrorMessage(e));
       } else if (e instanceof api.ApiError && SUBSCRIPTION_ERRORS.has(e.body?.error)) {
         // الرقم صحيح لكن اشتراك المحل موقوف/منتهٍ — سببٌ واضح لا «رقم خاطئ».
         failedTries.current = Math.max(0, failedTries.current - 1);
@@ -7328,6 +7365,7 @@ export default function GoldInventoryApp() {
           requirePin={appSettings.requirePin !== false}
           users={users}
           onDirectLogin={handleDirectLogin}
+          deviceUser={(() => { const d = branchLink?.branchId ? api.getDevice(branchLink.branchId) : null; return d && !d.shared ? { id: d.userId, name: d.userName } : null; })()}
         />
         {/* ⚠ جهاز الموظّف: يُربط برمزٍ من المدير، ويضع الموظّف رقمه بنفسه */}
         <div className="fixed bottom-3 inset-x-0 flex justify-center" style={{ zIndex: 30 }}>
@@ -8058,6 +8096,9 @@ export default function GoldInventoryApp() {
             onFetchLog={async () => (await api.controlApi.permissionLog()).log || []}
             onBack={() => setMorePage(null)}
           />
+        )}
+        {morePage === "access" && role === "manager" && (
+          <DevicesCard flashToast={flashToast} onSharedInvite={() => setEnrollFor({ id: "__shared__", name: "جهاز الفرع", shared: true })} />
         )}
         {morePage === "taxReport" && (
           <TaxReportPage taxTotals={taxTotals} currency={priceData.currency} onBack={() => setMorePage(null)} />
