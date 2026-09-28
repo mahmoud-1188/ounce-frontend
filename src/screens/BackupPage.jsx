@@ -32,7 +32,7 @@ function BackupPage({ onBackup, onRestore, onLoadDemo, onResetAll, onBack }) {
       try {
         const parsed = JSON.parse(reader.result);
         if (parsed.app !== "ounce-branch") {
-          setError("هذا الملف ليس نسخة أوقية");
+          setError("هذا الملف ليس نسخة أونصة");
           return;
         }
         setPayload(parsed);

@@ -107,7 +107,7 @@ function AiChatTab({ ctx, currency, onOpenScreen, voiceFirst = false, onVoiceCon
     onVoiceConsumed?.();
     const hour = new Date().getHours();
     const hi = hour < 12 ? "صباح الخير" : hour < 18 ? "مساء الخير" : "مساء الخير";
-    const line = `${hi} عزيزي. أنا مساعد أوقية. اسألني بصوتك عن أي شيء في التطبيق أو عن أرقام محلك.`;
+    const line = `${hi} عزيزي. أنا مساعد أونصة. اسألني بصوتك عن أي شيء في التطبيق أو عن أرقام محلك.`;
     setGreeted(true);
     setMsgs((m) => (m.length ? m : [{ role: "ai", text: line, screens: [], followups: [
       "كيف أبيع قطعة؟", "كم بعت اليوم؟", "اشرح لي الشاشة الرئيسية" ], clarify: [] }]));

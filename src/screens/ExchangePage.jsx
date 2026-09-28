@@ -33,7 +33,7 @@ function ExchangePage({
   }) : null), [dir, kind, from, to, sales, returns, expenses, receipts, cashTx, safeTx, journal, items, customers, suppliers]);
 
   const download = (fmt) => {
-    const name = `oqiyyah-${kind}-${from}_${to}`;
+    const name = `awnsah-${kind}-${from}_${to}`;
     const blob = fmt === "csv"
       ? new Blob([toCsv(ex.columns, ex.rows)], { type: "text/csv;charset=utf-8" })
       : new Blob([JSON.stringify(ex, null, 1)], { type: "application/json" });
@@ -50,7 +50,7 @@ function ExchangePage({
     if (!text) return;
     let cols = [], rws = [], k = kind;
     if (text.startsWith("{")) {
-      // ⚠ JSON من أوقية: يحمل نوعه وأعمدته، فلا يُخمَّن
+      // ⚠ JSON من أونصة: يحمل نوعه وأعمدته، فلا يُخمَّن
       try {
         const o = JSON.parse(text);
         if (o.v !== EXCHANGE_VERSION) { setCheck({ ok: false, fatal: `إصدار ${o.v} غير مدعوم` }); return; }
@@ -152,7 +152,7 @@ function ExchangePage({
               <p style={{ color: "var(--text3)", margin: 0, direction: "ltr", fontFamily: "monospace" }}
                 className="text-[9px]">{def?.cols.join(",")}</p>
               <p style={{ color: "var(--text3)", margin: "4px 0 0" }} className="text-[10px] leading-6">
-                الصف الأول عناوين. يُقبل CSV أو JSON من أوقية. <b>ترتيب الأعمدة لا يهمّ</b> —
+                الصف الأول عناوين. يُقبل CSV أو JSON من أونصة. <b>ترتيب الأعمدة لا يهمّ</b> —
                 تُقرأ بأسمائها.
               </p>
             </Card>

@@ -26,7 +26,7 @@ function ReportsHubPage({ data, currency = "ر.س", onOpen, onBack }) {
   // ⚠ تصدير Excel: كل الأقسام والبطاقات والصفوف في ملفٍّ واحد — بترتيب الشاشة نفسه،
   //   والفترة في أوّله (جدولٌ بلا فترته ورقةٌ لا معنى لها بعد أسبوع).
   const exportCsv = () => {
-    const rows = [["مركز التقارير — أوقية"], [`الفترة: ${period.label}`, period.from.slice(0, 10), period.to.slice(0, 10)], [],
+    const rows = [["مركز التقارير — أونصة"], [`الفترة: ${period.label}`, period.from.slice(0, 10), period.to.slice(0, 10)], [],
       ["القسم", "التقرير", "الرقم الرئيسي", "البند", "القيمة", "ملاحظة"]];
     for (const g of hub.glance) rows.push(["نظرة سريعة", g.label, g.value, "", "", g.pct != null ? `${g.pct > 0 ? "▲" : "▼"} ${Math.abs(g.pct)}٪` : ""]);
     for (const sec of hub.sections) for (const cd of sec.cards) {

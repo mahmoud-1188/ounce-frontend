@@ -9,8 +9,8 @@
     "build": "vite build && cp serve.json dist/serve.json",
     "preview": "vite preview",
     "start": "serve -s dist -l $PORT",
-    "build:hq": "cross-env OQIYYAH_EDITION=hq vite build --outDir dist-hq && cp serve.json dist-hq/serve.json",
-    "dev:hq": "cross-env OQIYYAH_EDITION=hq vite"
+    "build:hq": "cross-env AWNSAH_EDITION=hq vite build --outDir dist-hq && cp serve.json dist-hq/serve.json",
+    "dev:hq": "cross-env AWNSAH_EDITION=hq vite"
   },
   "dependencies": {
     "lucide-react": "0.383.0",

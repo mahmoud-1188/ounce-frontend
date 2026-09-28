@@ -1537,7 +1537,7 @@ export default function GoldInventoryApp() {
         `استبدال ${res.return.ref} → ${res.sale.ref} · ` +
         (x.diff > 0 ? `يدفع ${fmtMoney(x.diff)}` : x.diff < 0 ? `يُردّ ${fmtMoney(-x.diff)}` : "متعادل")
       );
-      loadBootstrap(currentUser).catch((e) => console.warn("[أوقية] تعذّر تحديث البيانات بعد الاستبدال:", e));
+      loadBootstrap(currentUser).catch((e) => console.warn("[أونصة] تعذّر تحديث البيانات بعد الاستبدال:", e));
       return { ok: true, ref: res.return.ref, saleRef: res.sale.ref, amounts: x };
     } catch (err) {
       const msg = apiErrorMessage(err, "تعذّر تسجيل الاستبدال");
@@ -1590,7 +1590,7 @@ export default function GoldInventoryApp() {
       flashToast(`اعتُمد ${ap.ref} وتعذّر تنفيذه: ${apiErrorMessage(err, "خطأ غير متوقع")}`);
       return false;
     } finally {
-      loadBootstrap(currentUser).catch((e) => console.warn("[أوقية] تعذّر تحديث البيانات بعد الاعتماد:", e));
+      loadBootstrap(currentUser).catch((e) => console.warn("[أونصة] تعذّر تحديث البيانات بعد الاعتماد:", e));
     }
   };
 
@@ -2395,7 +2395,7 @@ export default function GoldInventoryApp() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `نسخة_أوقية${password ? "_مشفّرة" : ""}_${new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-")}.json`;
+      a.download = `نسخة_أونصة${password ? "_مشفّرة" : ""}_${new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-")}.json`;
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 4000);
       flashToast(`نُزّلت النسخة${password ? " مشفّرة" : ""} — ${Object.keys(data).length} مخزن`);
@@ -3439,7 +3439,7 @@ export default function GoldInventoryApp() {
   const shareTrustReceipt = (holder, row, bal) => {
     const C = priceData.currency;
     const parts = [
-      `*${branchIdentity?.name || "أوقية"}*`,
+      `*${branchIdentity?.name || "أونصة"}*`,
       `سند ${row.moveLabel}`,
       `المرجع: ${row.ref}`,
       `التاريخ: ${new Date(row.date).toLocaleString("en-GB")}`,
@@ -4739,7 +4739,7 @@ export default function GoldInventoryApp() {
     } catch (e) {
       // نسخة مخزّنة تالفة/بشكل غير متوقع — لا توقف التطبيق، نتجاهل الكاش ونكمل
       // المسار العادي (التحقق الحقيقي من الشبكة أدناه) كأنه لا كاش أصلًا.
-      console.warn("[أوقية] تجاهل نسخة bootstrap المخزّنة:", e);
+      console.warn("[أونصة] تجاهل نسخة bootstrap المخزّنة:", e);
       shownFromCache = false;
     }
 
@@ -8152,7 +8152,7 @@ export default function GoldInventoryApp() {
               cashTx,
               safeTx,
               custodyTx: scrapCustodyTx,
-              // ⚠ الحقول التالية لمحادثة أوقية (buildAiSnapshot) وحدها —
+              // ⚠ الحقول التالية لمحادثة أونصة (buildAiSnapshot) وحدها —
               // تدقيق الحسابات (runAuditChecks) لا يقرأها، فإضافتها هنا
               // آمنة ولا تُغيّر سلوك تبويب التدقيق.
               priceData,
@@ -9169,11 +9169,11 @@ export default function GoldInventoryApp() {
         const acts = [];
         if (aiAllowedFor(role, currentUser))
           acts.push({
-            id: "ai", label: "مساعد أوقية — اضغط مطوّلًا للأسئلة السريعة",
+            id: "ai", label: "مساعد أونصة — اضغط مطوّلًا للأسئلة السريعة",
             node: <AiLogoBadge width={30} />,
             // ⚠ نقرة = فتح شاشة المساعد صوتيًّا مباشرة، وضغطة مطوّلة =
             // ورقة الأوامر السريعة. كانت النقرة العادية تفتح الورقة فقط
-            // وتترك «مساعد أوقية» بابًا لا يُصل إليه بلمسةٍ واحدة.
+            // وتترك «مساعد أونصة» بابًا لا يُصل إليه بلمسةٍ واحدة.
             onPress: () => { setAiVoiceFirst(true); openPage("aiAssistant"); },
             onLongPress: () => setShowAiSheet(true),
           });

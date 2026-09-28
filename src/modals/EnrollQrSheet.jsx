@@ -62,7 +62,7 @@ function EnrollQrSheet({ user, onIssue, onClose }) {
                 style={{ background: "var(--field)", color: "var(--text2)", border: "1px solid var(--line)" }}>
                 انسخ الرمز
               </button>
-              <button onClick={() => openWhatsApp("", `رمز ربط ${user.name} — أوقية\n\n${code}`)}
+              <button onClick={() => openWhatsApp("", `رمز ربط ${user.name} — أونصة\n\n${code}`)}
                 className="flex-1 py-2 rounded-xl text-[11px]"
                 style={{ background: "var(--field)", color: "var(--text2)", border: "1px solid var(--line)" }}>
                 أرسل بواتساب

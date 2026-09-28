@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { fmt } from "../core/money.js";
-import { OqiyyahLogo } from "./OqiyyahLogo.jsx";
+import { AwnsahLogo } from "./AwnsahLogo.jsx";
 import { markupLabel } from "../domain/helpers.js";
 
 function PriceHero({ chartData = [], price, prevPrice, currency, updatedAt, karat = 24, compact = false, world24 = 0, markup = null }) {
@@ -67,7 +67,7 @@ function PriceHero({ chartData = [], price, prevPrice, currency, updatedAt, kara
       {!compact && (
         <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center",
           pointerEvents: "none", opacity: 0.07, zIndex: 0 }} aria-hidden="true">
-          <OqiyyahLogo size={180} still glow={false} />
+          <AwnsahLogo size={180} still glow={false} />
         </div>
       )}
       {/* الخلفية: المنحنى */}

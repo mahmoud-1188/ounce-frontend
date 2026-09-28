@@ -6,9 +6,9 @@ import react from "@vitejs/plugin-react";
 // ⚠ __EDITION__: يسمح ببناء نسختين (فرع/مركز) من نفس المصدر بدون تفريع
 // الكود — نفس الفكرة الموجودة عند العميل، لكن هنا كمتغيّر Vite عادي بدل
 // أداة بناء منفصلة، لأن هذا المشروع بيتصلح ويُطوَّر يدويًا وليس مولَّدًا
-// من ملف واحد ضخم. القيمة تُقرأ من OQIYYAH_EDITION وقت البناء، وتساوي
+// من ملف واحد ضخم. القيمة تُقرأ من AWNSAH_EDITION وقت البناء، وتساوي
 // "branch" افتراضيًا حتى لا يتأثر أي أمر بناء حالي.
-const EDITION = process.env.OQIYYAH_EDITION || "branch";
+const EDITION = process.env.AWNSAH_EDITION || "branch";
 
 export default defineConfig({
   plugins: [react()],

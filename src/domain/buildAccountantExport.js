@@ -3,7 +3,7 @@ import { fromHalalas, halalas, roundW } from "../core/money.js";
 
 /// صيغ التصدير لمكتب المحاسبة — من المرجع (ACCOUNTANT_FORMATS).
 ///
-/// ⚠ «أوقية — بدفترين» الصيغة الوحيدة التي تحمل الوزن: غيرها يُسقطه،
+/// ⚠ «أونصة — بدفترين» الصيغة الوحيدة التي تحمل الوزن: غيرها يُسقطه،
 /// ومحاسبٌ خارجيّ لا يرى إلا الريال فيظنّ المحل خاسرًا وهو رابحٌ بالجرام.
 const ACCOUNTANT_FORMATS = [
   { id: "generic", label: "عام — عمودان لكل سطر",
@@ -18,7 +18,7 @@ const ACCOUNTANT_FORMATS = [
     cols: ["!TRNS", "DATE", "ACCNT", "AMOUNT", "MEMO", "DOCNUM"],
     row: (e, l, acc) => ["TRNS", String(e.at || e.date).slice(0, 10), acc,
       fromHalalas(halalas(l.debit) - halalas(l.credit)), e.note || e.label || "", e.refDoc || e.ref || ""] },
-  { id: "dual", label: "أوقية — بدفترين",
+  { id: "dual", label: "أونصة — بدفترين",
     cols: ["التاريخ", "المرجع", "اليومية", "الحساب", "اسم الحساب", "مدين", "دائن", "وزن داخل", "وزن خارج", "البيان"],
     row: (e, l, acc) => [String(e.at || e.date).slice(0, 10), e.refDoc || e.ref || "",
       (JOURNALS.find((j) => j.id === e.journalId)

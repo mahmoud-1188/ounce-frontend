@@ -17,7 +17,7 @@ function DocCyclePage({ branchName = "", preparedBy = "", onBack }) {
   }, [q]);
 
   const exportPdf = () => exportTablesPdf({
-    title: "الدورة المستندية — نظام أوقية",
+    title: "الدورة المستندية — نظام أونصة",
     subtitle: `${branchName ? branchName + " · " : ""}${new Date().toISOString().slice(0, 10)}${preparedBy ? " · " + preparedBy : ""}`,
     branchName, landscape: false,
     sections: [

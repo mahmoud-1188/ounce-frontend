@@ -53,7 +53,7 @@ function buildExchange({ kind, from, to, sales = [], returns = [], expenses = []
   const def = exchangeKind(kind);
   return {
     v: EXCHANGE_VERSION, kind, label: def?.label || kind,
-    source: "oqiyyah", branchCode, branchName,
+    source: "awnsah", branchCode, branchName,
     period: { from: from || null, to: to || null },
     at: new Date().toISOString(),
     columns: def?.cols || [],

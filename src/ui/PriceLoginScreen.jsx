@@ -5,7 +5,7 @@ import { GRAMS_PER_OUNCE, KARATS, fmt, pricePerGram } from "../core/money.js";
 import { Card } from "./Card.jsx";
 import { GoldPriceChart } from "./GoldPriceChart.jsx";
 import { Hallmark } from "./Hallmark.jsx";
-import { OqiyyahLogo } from "./OqiyyahLogo.jsx";
+import { AwnsahLogo } from "./AwnsahLogo.jsx";
 import { PriceHero } from "./PriceHero.jsx";
 
 function PriceLoginScreen({ priceData, autoUpdating, autoError, lastAutoFetch, onRefreshNow, onLogin, requirePin = true, users = [], onDirectLogin }) {
@@ -100,7 +100,7 @@ function PriceLoginScreen({ priceData, autoUpdating, autoError, lastAutoFetch, o
       `}</style>
       <div className="mx-auto px-4 pt-6 pb-10">
         <div className="flex items-center gap-3 mb-4">
-          <OqiyyahLogo size={64} />
+          <AwnsahLogo size={64} />
           <h1 style={{ fontFamily: "'Cairo', sans-serif", color: "var(--text)", margin: 0 }} className="text-2xl font-extrabold">
             أسعار الذهب
           </h1>

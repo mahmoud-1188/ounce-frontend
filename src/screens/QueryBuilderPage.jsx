@@ -58,7 +58,7 @@ function QueryBuilderPage({ journal = [], goldLedger = [], accounts = [],
          fmtMoney(r.debit), fmtMoney(r.credit), r.by, r.note]));
     // ⚠ الوصف سطرٌ في الملف: جدولُ أرقامٍ بلا سؤاله ورقةٌ لا معنى لها
     // بعد أسبوع، والمراجع الذي يستلمه يحتاج أن يعرف بأي شرطٍ استُخرج.
-    const csv = toCsv(["استعلام أوقية"], [[desc], [`${res.count} سطرًا · ${res.entries} عملية`], [], head, ...rows]);
+    const csv = toCsv(["استعلام أونصة"], [[desc], [`${res.count} سطرًا · ${res.entries} عملية`], [], head, ...rows]);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);

@@ -623,7 +623,7 @@ function AppSettingsPage({ settings, onSave, branchIdentity, onSaveBranch, hqPer
             وتضغط إرسال — التطبيق لا يُرسل بنفسك.
           </p>
           {settings.whatsapp && toIntlPhone(settings.whatsapp).length >= 11 && (
-            <button onClick={() => openWhatsApp(settings.whatsapp, "رسالة تجربة من تطبيق أوقية ✓")}
+            <button onClick={() => openWhatsApp(settings.whatsapp, "رسالة تجربة من تطبيق أونصة ✓")}
               className="w-full mt-2 py-2 rounded-xl text-[11px] font-bold"
               style={{ background: "var(--field)", color: "var(--text2)", border: "1px solid var(--line)" }}>
               جرّب الإرسال

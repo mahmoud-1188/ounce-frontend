@@ -3620,7 +3620,7 @@ function readPlateEpc(hex) {
   let code = "";
   for (let i = 0; i < 8; i++) if (b[i]) code += String.fromCharCode(b[i]);
   const valid = code.length >= 4 && /^[A-Z2-9]+$/.test(code);
-  if (!valid) return { ok: false, why: "ليست بترميز أوقية", raw: h };
+  if (!valid) return { ok: false, why: "ليست بترميز أونصة", raw: h };
   const out = { ok: true, code, bits: h.length >= 32 ? 128 : 96 };
   if (h.length >= 24) {
     out.storeId = (b[8] << 8) | b[9];
@@ -3685,7 +3685,7 @@ function rfidSessionText(sess) {
   ];
   if (sess.missing_items) lines.push(`❌ مفقودة: ${sess.missing_items}`);
   if (sess.unknown_items) lines.push(`❓ غير معروفة: ${sess.unknown_items}`);
-  lines.push("------------------", `تم ${sess.kind === "stocktake" ? "الجرد" : "المسح"} بنجاح عبر نظام أوقية.${sess.user ? ` — ${sess.user}` : ""}`);
+  lines.push("------------------", `تم ${sess.kind === "stocktake" ? "الجرد" : "المسح"} بنجاح عبر نظام أونصة.${sess.user ? ` — ${sess.user}` : ""}`);
   return lines.join("\n");
 }
 

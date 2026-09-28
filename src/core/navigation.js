@@ -59,7 +59,7 @@ const NAV_REGISTRY = [
   { id: "openingCompare", label: "مقارنة بالافتتاحي", icon: BarChart3 },
   { id: "financials", label: "القوائم المالية والزكاة", icon: BarChart3 },
   { id: "repairs", label: "إصلاحات", icon: Wrench },
-  { id: "aiAssistant", label: "أوقية", icon: Sparkles },
+  { id: "aiAssistant", label: "أونصة", icon: Sparkles },
   { id: "navCustomize", label: "تخصيص القائمة", icon: LayoutGrid },
   { id: "openingBalance", label: "الرصيد الافتتاحي", icon: PiggyBank },
   { id: "fixedAssets", label: "الأصول الثابتة", icon: Landmark },

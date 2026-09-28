@@ -113,7 +113,7 @@ function PrinterSettingsPage({ config, onSave, sampleItem, currency, price24, on
   };
   const step2 = async () => { setError(""); setBusy("2"); try { await sendRaw("SELFTEST\r\n", "SELFTEST"); setStatus("② إن طُبعت صفحة الإعدادات فالوصل سليم"); } catch (e) { setError(String(e?.message || e)); log(`✗ ${e?.message || e}`); } finally { setBusy(""); } };
   const step3 = async () => { setError(""); setBusy("3"); try {
-    await sendRaw(`SIZE ${cfg.labelWidthMm || 50} mm, ${cfg.labelHeightMm || 30} mm\r\nGAP ${cfg.gapMm ?? 2} mm, 0 mm\r\nCLS\r\nTEXT 30,30,"3",0,1,1,"OQIYYAH TEST"\r\nBARCODE 30,80,"128",60,1,0,2,2,"R7K2M9PQ"\r\nPRINT 1,1\r\n`, "TSPL نصّ");
+    await sendRaw(`SIZE ${cfg.labelWidthMm || 50} mm, ${cfg.labelHeightMm || 30} mm\r\nGAP ${cfg.gapMm ?? 2} mm, 0 mm\r\nCLS\r\nTEXT 30,30,"3",0,1,1,"AWNSAH TEST"\r\nBARCODE 30,80,"128",60,1,0,2,2,"R7K2M9PQ"\r\nPRINT 1,1\r\n`, "TSPL نصّ");
     setStatus("③ إن طُبع نصٌّ وباركود فـTSPL يعمل — الخلل في الصورة أو RFID"); } catch (e) { setError(String(e?.message || e)); log(`✗ ${e?.message || e}`); } finally { setBusy(""); } };
 
   /// يجعل الطابعة تقيس الورق بنفسها وتحفظ المقاس.

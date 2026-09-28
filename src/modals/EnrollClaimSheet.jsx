@@ -22,7 +22,7 @@ function EnrollClaimSheet({ branchName = "", onClaim, onClose }) {
 
   const read = (text) => {
     const c = String(text || "").trim().toUpperCase().replace(/\s+/g, "");
-    if (!CODE_RE.test(c)) { setErr("ليس رمز ربط أوقية — الرمز يبدأ بـOQE1 وطوله 14"); return; }
+    if (!CODE_RE.test(c)) { setErr("ليس رمز ربط أونصة — الرمز يبدأ بـOQE1 وطوله 14"); return; }
     setCode(c); setErr(""); setStep("pin");
   };
   const valid = /^\d{4,6}$/.test(pin) && pin === pin2;
