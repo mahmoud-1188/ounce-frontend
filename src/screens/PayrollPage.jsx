@@ -77,7 +77,7 @@ function PayrollPage({ currency = "ر.س", safeBalance = {}, canManage, onBack, 
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob); a.download = `WPS-${d.period}.csv`; a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-      if (d.missing.length) flashToast?.(`⚠ بلا آيبان صالح: ${d.missing.join("، ")}`);
+      if (d.missing.length) flashToast?.(`⚠ بيانات ناقصة يرفضها البنك: ${d.missing.join("، ")}`);
     } catch { flashToast?.("تعذّر إنشاء ملف حماية الأجور"); }
   }
 
