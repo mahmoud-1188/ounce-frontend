@@ -357,6 +357,7 @@ import { ScrapSubPage } from "../screens/ScrapSubPage.jsx";
 import { SellPage } from "../screens/SellPage.jsx";
 import { SellerReportsPage } from "../screens/SellerReportsPage.jsx";
 import { StocktakeSubPage } from "../screens/StocktakeSubPage.jsx";
+import { SoldFoundCard } from "../ui/SoldFoundCard.jsx";
 import { StoreLinkPage } from "../screens/StoreLinkPage.jsx";
 import { SupplierLedgerPage } from "../screens/SupplierLedgerPage.jsx";
 import { SuppliersSubPage } from "../screens/SuppliersSubPage.jsx";
@@ -6881,7 +6882,8 @@ export default function GoldInventoryApp() {
     if (applyReconcile) {
       try {
         const res = await api.applyStocktake(
-          entries.map((e) => ({ itemId: e.itemId, countedQty: Number(e.countedQty) || 0, countedWeight: Number(e.countedWeight) || null })),
+          entries.map((e) => ({ itemId: e.itemId, countedQty: Number(e.countedQty) || 0, countedWeight: Number(e.countedWeight) || null,
+            ...(e.missingCodes ? { missingCodes: e.missingCodes } : {}) })),
           priceData.current
         );
         audit.missingValue = res.missingValue;
@@ -6944,7 +6946,44 @@ export default function GoldInventoryApp() {
   };
   const entryHasVariance = (e) => e.countedQty !== e.systemQty || e.countedWeight !== e.systemWeight;
   // ⚠ الحفظ خارج مُحدِّث الحالة: نداء الخادم أثرٌ جانبي لا يُكرَّر.
+  // ⚠ إنهاء العدّ بالمسح (StocktakeSubPage) يمرّر نتيجة المسح لا true/false — كانت تُعامَل كـ«اعتمد»
+  //   مع أسطرٍ مبنيّة من أرصدة النظام نفسها، فيُحفظ الجرد «مطابقًا» أيًّا كان المقروء.
+  //   الآن الناقص بأعيانه يُحوَّل أسطرًا (العدد الحرّ − الناقص) ويُسوّى بمعالج الجرد نفسه.
+  const scanEntries = (payload) => {
+    const byItem = new Map();
+    (payload.missing || []).forEach((m) => byItem.set(m.itemId, [...(byItem.get(m.itemId) || []), m.code]));
+    const out = [];
+    byItem.forEach((codes, itemId) => {
+      const it = items.find((x) => x.id === itemId);
+      if (!it) return;
+      const free = (it.units || []).filter((u) => !u.sold && !u.issued);
+      const gone = codes.filter((c) => free.some((u) => u.code === c)).length;
+      if (!gone) return;
+      out.push({ itemId, category: it.categoryId, karat: it.karat, systemQty: free.length, systemWeight: it.weight,
+        countedQty: free.length - gone, countedWeight: it.weight, missingCodes: codes });
+    });
+    return out;
+  };
+  const saveScanAudit = (payload) => {
+    const entries = scanEntries(payload);
+    if (entries.length) return handleSaveAudit(entries, true);
+    const audit = { id: Date.now().toString(), date: new Date().toISOString(), entries: [], applied: true, scan: payload,
+      createdBy: currentUser?.name || "", ...dayStamp() };
+    persistAudits([audit, ...audits]);
+    flashToast(payload.soldFound?.length || payload.unknown?.length ? "حُفظ الجرد — لا عجز، والبنود للمراجعة" : "حُفظ الجرد — مطابق");
+    return audit;
+  };
   const handleStocktakeFinishSection = (applyReconcile) => {
+    if (applyReconcile && applyReconcile.kind === "scan") {
+      const catId = applyReconcile.categoryId || stocktake.activeCategory;
+      saveScanAudit(applyReconcile);
+      setStocktake((prev) => ({
+        ...prev,
+        activeCategory: null,
+        sectionalStatus: { ...prev.sectionalStatus, [catId]: applyReconcile.diffCount ? "missing" : "ok" },
+      }));
+      return;
+    }
     const catId = stocktake.activeCategory;
     const entries = stocktake.sectionalEntries[catId] || [];
     const hasMissing = entries.some(entryHasVariance);
@@ -6957,9 +6996,25 @@ export default function GoldInventoryApp() {
     if (!applyReconcile) flashToast("تم حفظ جرد القسم");
   };
   const handleStocktakeFinishGeneral = (applyReconcile) => {
+    if (applyReconcile && applyReconcile.kind === "scan") {
+      saveScanAudit(applyReconcile);
+      setStocktake({ scope: null, activeCategory: null, sectionalStatus: {}, sectionalEntries: {}, generalEntries: null });
+      return;
+    }
     handleSaveAudit(stocktake.generalEntries, applyReconcile);
     if (!applyReconcile) flashToast("تم حفظ الجرد العام");
     setStocktake({ scope: null, activeCategory: null, sectionalStatus: {}, sectionalEntries: {}, generalEntries: null });
+  };
+  // قطعٌ مسجّلة مباعة قرأها الجرد: بنود مراجعة على الخادم (migration 063) — لا قيد ولا قطعة
+  const [soldFoundKey, setSoldFoundKey] = useState(0);
+  const handleSoldFound = async (codes) => {
+    try {
+      const res = await api.soldFoundApi.record(codes, "scan");
+      if (res.recorded?.length) flashToast(`${res.recorded.length} قطعة مسجّلة مباعة وُجدت على الرفّ — للمراجعة`);
+      setSoldFoundKey((k) => k + 1);
+    } catch (err) {
+      flashToast(apiErrorMessage(err, "تعذّر حفظ القطع المبيعة الموجودة"));
+    }
   };
   const handleStocktakeEndSectional = () => {
     setStocktake({ scope: null, activeCategory: null, sectionalStatus: {}, sectionalEntries: {}, generalEntries: null });
@@ -7873,7 +7928,14 @@ export default function GoldInventoryApp() {
             onApplied={() => loadBootstrap(currentUser).catch(() => {})} flashToast={flashToast} />
         )}
         {morePage === null && tab === "stocktake" && (
+          <SoldFoundCard reloadKey={soldFoundKey} returns={returns} canDecide={role === "manager"} price24={priceData.current}
+            onOpenReturn={(saleId) => { setReturnPreset({ saleId, mode: "return" }); openPage("salesReturn"); }}
+            onDecided={(d) => { if (d !== "sale_ok") loadBootstrap(currentUser).catch(() => {}); }} flashToast={flashToast} />
+        )}
+        {morePage === null && tab === "stocktake" && (
           <StocktakeSubPage
+            allItems={items}
+            onSoldFound={handleSoldFound}
             lock={stocktakeLock}
             onToggleLock={handleToggleStocktakeLock}
             settings={appSettings}
