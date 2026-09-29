@@ -218,6 +218,11 @@ const einvoiceApi = {
   },
 };
 
+/** GET /ledger/health — صحّة الدفتر من الدفاتر كاملةً. */
+function ledgerHealth() {
+  return apiFetch("/ledger/health");
+}
+
 function logout() {
   clearAuthToken();
   clearCachedBootstrap();
@@ -713,6 +718,7 @@ export {
   sellSetPart,
   fiscalApi,
   einvoiceApi,
+  ledgerHealth,
   codeRemnant,
   createLotItems,
   reconcileCategories,
