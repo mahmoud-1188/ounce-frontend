@@ -76,6 +76,11 @@ const API_ERROR_MESSAGES = {
   store_suspended: "اشتراك المحل موقوف — تواصل مع مزوّد البرنامج",
   store_expired: "انتهى اشتراك المحل — تواصل مع مزوّد البرنامج لتجديده",
   insufficient_stock: "الكمية غير متوفرة",
+  // أجزاء الأطقم وبقاياها (migration 066)
+  item_is_set_remnant: "بقايا طقم — تُكوَّد قطعًا قبل بيعها",
+  part_weight_not_less_than_set: "الجزء أقلّ من الطقم — بيع الطقم كلّه من فاتورة جديدة",
+  weights_must_equal_remnant: "مجموع أوزان القطع لا يساوي وزن البقايا",
+  not_a_remnant: "هذه القطعة ليست بقايا طقم",
   // المرتجع والاستبدال
   sale_not_found: "الفاتورة غير موجودة",
   line_already_returned: "هذا السطر مُرتجع سلفًا",
@@ -274,6 +279,8 @@ import { NewSaleModal } from "../modals/NewSaleModal.jsx";
 import { RemoteStocktakeInbox } from "../ui/RemoteStocktakeInbox.jsx";
 import { DevicesCard } from "../ui/DevicesCard.jsx";
 import { PartialSaleModal } from "../modals/PartialSaleModal.jsx";
+import { SetPartSaleModal, isSellableSet } from "../modals/SetPartSaleModal.jsx";
+import { SetRemnantsCard } from "../ui/SetRemnantsCard.jsx";
 import { SaleDetailModal } from "../modals/SaleDetailModal.jsx";
 import { SetPriceModal } from "../modals/SetPriceModal.jsx";
 import { VoiceSheet } from "../modals/VoiceSheet.jsx";
@@ -358,6 +365,7 @@ import { SellPage } from "../screens/SellPage.jsx";
 import { SellerReportsPage } from "../screens/SellerReportsPage.jsx";
 import { StocktakeSubPage } from "../screens/StocktakeSubPage.jsx";
 import { SoldFoundCard } from "../ui/SoldFoundCard.jsx";
+import { ForcePinChangeSheet } from "../modals/ForcePinChangeSheet.jsx";
 import { StoreLinkPage } from "../screens/StoreLinkPage.jsx";
 import { SupplierLedgerPage } from "../screens/SupplierLedgerPage.jsx";
 import { SuppliersSubPage } from "../screens/SuppliersSubPage.jsx";
@@ -505,6 +513,7 @@ export default function GoldInventoryApp() {
   const [cashModalType, setCashModalType] = useState(null);
   const [showAiChat, setShowAiChat] = useState(false);
   const [showPartialSale, setShowPartialSale] = useState(false);
+  const [showSetPartSale, setShowSetPartSale] = useState(false);
   const [openBundle, setOpenBundle] = useState(null);
   // فاتورةٌ فُتح منها «مرتجع/استبدال» — تُحدَّد سلفًا في شاشتهما
   const [returnPreset, setReturnPreset] = useState(null);
@@ -1095,7 +1104,9 @@ export default function GoldInventoryApp() {
       merged.taxEnabled !== appSettings.taxEnabled ||
       merged.taxRate !== appSettings.taxRate ||
       (merged.workdayMode || "required") !== (appSettings.workdayMode || "required") ||
-      JSON.stringify(merged.cardFees) !== JSON.stringify(appSettings.cardFees);
+      JSON.stringify(merged.cardFees) !== JSON.stringify(appSettings.cardFees) ||
+      (merged.zakatEnabled !== false) !== (appSettings.zakatEnabled !== false) ||
+      (merged.zakatYear || "gregorian") !== (appSettings.zakatYear || "gregorian");
     if (!taxOrFeesChanged) {
       flashToast("تم حفظ الإعدادات");
       return true;
@@ -1107,6 +1118,8 @@ export default function GoldInventoryApp() {
         taxRate: merged.taxRate,
         cardFees: merged.cardFees,
         workdayMode: merged.workdayMode || "required",
+        zakatEnabled: merged.zakatEnabled !== false,
+        zakatYear: merged.zakatYear === "hijri" ? "hijri" : "gregorian",
       });
       persistSettings({
         ...merged,
@@ -1114,6 +1127,7 @@ export default function GoldInventoryApp() {
         taxRate: Number(res.settings.tax_rate) || 0,
         cardFees: res.settings.card_fees || {},
         workdayMode: res.settings.workday_mode || "required",
+        ...(res.settings.zakat_enabled != null ? { zakatEnabled: res.settings.zakat_enabled !== false, zakatYear: res.settings.zakat_year || "gregorian" } : {}),
       });
       flashToast("تم حفظ الإعدادات");
       return true;
@@ -5783,6 +5797,19 @@ export default function GoldInventoryApp() {
    * المحلي يحدث دفعة واحدة بعد التأكد من نجاح العملية على السيرفر، لا
    * قبله.
    */
+  // بيع جزءٍ من طقم (migration 066) — الخادم يُخرج الجزء بتكلفته بالوزن ويُبقي الباقي بقايا للتكويد
+  const handleSetPartSale = async (draft) => {
+    if (stocktakeLock) { flashToast("المخزون مقفل للجرد"); return false; }
+    try {
+      const res = await api.sellSetPart(draft);
+      await loadBootstrap(currentUser).catch(() => {});
+      flashToast(`${res.sale.ref} · ${res.sale.lineLabel} — ${fmtMoney(res.sale.total)} · بقي ${fmtW(res.remainingWeight)} جم للتكويد`);
+      return true;
+    } catch (e) {
+      flashToast(apiErrorMessage(e, "تعذّر بيع الجزء"));
+      return false;
+    }
+  };
   const handlePartialSale = async (draft) => {
     if (stocktakeLock) {
       flashToast(`المخزون مقفل للجرد`);
@@ -7441,6 +7468,14 @@ export default function GoldInventoryApp() {
   return (
     <div dir="rtl" className="ons-root" style={{ background: "var(--bg)", minHeight: "100vh", fontFamily: "'Cairo','Tajawal',system-ui,sans-serif" }}>
       {lockOverlay}
+      {currentUser?.mustChangePin && (
+        <ForcePinChangeSheet userName={currentUser.name} onLogout={handleLogout}
+          onSave={async (currentPin, newPin) => {
+            await api.changeOwnPin(currentPin, newPin);
+            setCurrentUser((u) => (u ? { ...u, mustChangePin: false } : u));
+            flashToast("حُفظ رقمك الجديد");
+          }} />
+      )}
       {enrollFor && (
         <EnrollQrSheet user={enrollFor} onIssue={handleIssueEnroll} onClose={() => setEnrollFor(null)} />
       )}
@@ -7877,6 +7912,7 @@ export default function GoldInventoryApp() {
                 ? () => setShowPartialSale(true)
                 : null
             }
+            onSetPart={activeItems.some((it) => isSellableSet(it, categories)) ? () => setShowSetPartSale(true) : null}
             onNew={() => {
               setQuickSaleItemId(null);
               setShowNewSale(true);
@@ -7974,6 +8010,10 @@ export default function GoldInventoryApp() {
           />
         )}
 
+        {morePage === "addGoods" && (
+          <SetRemnantsCard items={items} categories={categories} flashToast={flashToast}
+            onCoded={() => loadBootstrap(currentUser).catch(() => {})} />
+        )}
         {morePage === "addGoods" && (
           <AddGoodsPage
             modules={appSettings.serverModules || {}}
@@ -8907,6 +8947,7 @@ export default function GoldInventoryApp() {
         {morePage === "reportsHub" && (
           <ReportsHubPage
             currency={priceData.currency}
+            price24={priceData.current || 0}
             data={{
               journal, accounts: CHART_OF_ACCOUNTS, goldLedger, sales, returns, lots, expenses,
               items, customers, suppliers, scrapEntries, users,
@@ -9480,6 +9521,18 @@ export default function GoldInventoryApp() {
           />
         );
       })()}
+      {showSetPartSale && (
+        <SetPartSaleModal
+          items={activeItems}
+          categories={categories}
+          customers={customers}
+          currency={priceData.currency}
+          price24={priceData.current}
+          settings={appSettings}
+          onClose={() => setShowSetPartSale(false)}
+          onConfirm={handleSetPartSale}
+        />
+      )}
       {showPartialSale && (
         <PartialSaleModal
           items={activeItems}

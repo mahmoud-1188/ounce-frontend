@@ -10,8 +10,10 @@ import { DocHeader } from "../ui/DocHeader.jsx";
 import { SegBar } from "../ui/SegBar.jsx";
 import { Sparkline } from "../ui/Sparkline.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
+import { useZakat } from "../domain/zakat.js";
 
-function ReportsHubPage({ data, currency = "ر.س", onOpen, onBack }) {
+function ReportsHubPage({ data, currency = "ر.س", price24 = 0, onOpen, onBack }) {
+  const zakat = useZakat(price24);
   const [periodKey, setPeriodKey] = useState("month");
   const [custom, setCustom] = useState({ from: "", to: "" });
   const [openCard, setOpenCard] = useState(null);
@@ -42,8 +44,8 @@ function ReportsHubPage({ data, currency = "ر.س", onOpen, onBack }) {
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
   };
   const period = useMemo(() => reportPeriod(periodKey, custom), [periodKey, custom.from, custom.to]);
-  const hub = useMemo(() => buildReportHub({ ...data, from: period.from, to: period.to, currency }),
-    [data, period.from, period.to, currency]);
+  const hub = useMemo(() => buildReportHub({ ...data, from: period.from, to: period.to, currency, zakat }),
+    [data, period.from, period.to, currency, zakat]);
   // ⚠ الفترة تُورَث للتقرير الكامل: من اختار «الربع» هنا لا يُعيد اختياره هناك
   const open = (o) => onOpen({ ...o, from: period.from.slice(0, 10), to: period.to.slice(0, 10) });
   const toneColor = (t) => t === "good" ? "var(--good)" : t === "bad" ? "var(--bad)" : t === "warn" ? "var(--accent)" : "var(--text)";

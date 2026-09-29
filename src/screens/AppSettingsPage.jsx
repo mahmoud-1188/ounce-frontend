@@ -567,6 +567,41 @@ function AppSettingsPage({ settings, onSave, branchIdentity, onSaveBranch, hqPer
         </button>
         </Card>
 
+        {/* ── الزكاة (migration 065): مفتاحٌ واحد وسنة الحساب — تُحفظ فورًا ── */}
+        <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2 mt-4">
+          الزكاة
+        </p>
+        <Card style={{ padding: 14, marginBottom: 12 }}>
+          <div className="flex items-center justify-between mb-2">
+            <span style={{ color: "var(--text)" }} className="text-sm font-bold">حساب الزكاة</span>
+            <button
+              onClick={() => onSave({ zakatEnabled: settings.zakatEnabled === false })}
+              style={{ width: 44, height: 24, borderRadius: 12, position: "relative", transition: "background 0.2s",
+                background: settings.zakatEnabled !== false ? "var(--goodSolid)" : "var(--edge)" }}
+            >
+              <div style={{ width: 18, height: 18, borderRadius: "50%", background: "var(--text)", position: "absolute", top: 3,
+                right: settings.zakatEnabled !== false ? 23 : 3, transition: "right 0.2s" }} />
+            </button>
+          </div>
+          <p style={{ color: "var(--text3)" }} className="text-[11px] mb-3">
+            مطفأةً: لا بطاقة ولا حساب في القوائم ولا في باب التقارير.
+          </p>
+          {settings.zakatEnabled !== false && (
+            <div className="grid grid-cols-2 gap-2">
+              {[["gregorian", "ميلادية — 2.5777٪"], ["hijri", "هجرية — 2.5٪"]].map(([id, label]) => {
+                const on = (settings.zakatYear || "gregorian") === id;
+                return (
+                  <button key={id} onClick={() => !on && onSave({ zakatYear: id })} className="py-2 rounded-xl text-[11px] font-bold"
+                    style={{ background: on ? "var(--accentBg)" : "var(--field)", color: on ? "var(--accent)" : "var(--text2)",
+                      border: `1px solid ${on ? "var(--accentLine)" : "var(--edge)"}` }}>
+                    سنة {label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+
         {/* ── بثّ سعر الذهب ── */}
         <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2 mt-4">
           بثّ سعر الذهب

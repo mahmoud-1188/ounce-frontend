@@ -1,7 +1,7 @@
 import React from "react";
-import { Plus, Receipt, RotateCcw, Scale } from "lucide-react";
+import { Gem, Plus, Receipt, RotateCcw, Scale } from "lucide-react";
 
-function SellPage({ onNew, onPartialSale, onReturns = null }) {
+function SellPage({ onNew, onPartialSale, onSetPart = null, onReturns = null }) {
   return (
     <div className="px-4 pt-6 flex flex-col items-center justify-center" style={{ minHeight: "70vh" }}>
       <div
@@ -40,6 +40,18 @@ function SellPage({ onNew, onPartialSale, onReturns = null }) {
           <Scale size={18} /> بيع بالوزن
           <span style={{ color: "var(--text3)" }} className="text-[11px] font-normal">
             سبائك وأصناف تُقتطع
+          </span>
+        </button>
+      )}
+      {onSetPart && (
+        <button
+          onClick={onSetPart}
+          className="w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 text-sm mt-3"
+          style={{ background: "var(--panel)", color: "var(--accent)", border: "1px solid var(--accentLine)" }}
+        >
+          <Gem size={18} /> بيع جزء من طقم
+          <span style={{ color: "var(--text3)" }} className="text-[11px] font-normal">
+            خاتم أو سلسلة من طقمٍ على الرفّ
           </span>
         </button>
       )}

@@ -129,7 +129,7 @@ function SalesReturnPage({
     (returns || []).some((r) => r.saleId === sale?.id && (r.lineIndexes || []).includes(i));
   const lineName = (l, i) => {
     const it = items.find((x) => x.id === l.itemId);
-    return l.itemName || l.name || (it ? itemLabel(it) : `سطر ${i + 1}`);
+    return l.partLabel || l.itemName || l.name || (it ? itemLabel(it) : `سطر ${i + 1}`);
   };
 
   // ما يُمكن إرجاعه من الفاتورة (غير المرتجع سلفًا)

@@ -152,6 +152,27 @@ async function login({ branchId, userId, pin }) {
   return result;
 }
 
+/** POST /auth/change-pin — الموظف يغيّر رقمه بنفسه (ويُرفع عنه طلب تغيير الرقم الضعيف). */
+function changeOwnPin(currentPin, newPin) {
+  return apiFetch("/auth/change-pin", { method: "POST", body: { currentPin, newPin } });
+}
+
+/** GET /zakat — الزكاة من دفاتر الفرع كاملةً (migration 065). */
+function fetchZakat({ price24 = 0, asOf = null } = {}) {
+  const qs = new URLSearchParams({ price24: String(Number(price24) || 0), ...(asOf ? { asOf } : {}) });
+  return apiFetch(`/zakat?${qs}`);
+}
+
+/** POST /sales/set-part — بيع جزءٍ من طقم (migration 066). */
+function sellSetPart(body) {
+  return apiFetch("/sales/set-part", { method: "POST", body });
+}
+
+/** POST /items/:id/code-remnant — تكويد بقايا طقم قطعًا مجموع أوزانها وزنها. */
+function codeRemnant(itemId, pieces) {
+  return apiFetch(`/items/${itemId}/code-remnant`, { method: "POST", body: { pieces } });
+}
+
 function logout() {
   clearAuthToken();
   clearCachedBootstrap();
@@ -642,6 +663,10 @@ export {
   applyStocktake,
   remoteStocktakeApi,
   soldFoundApi,
+  changeOwnPin,
+  fetchZakat,
+  sellSetPart,
+  codeRemnant,
   createLotItems,
   reconcileCategories,
   rfid,
