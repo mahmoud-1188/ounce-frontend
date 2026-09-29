@@ -1096,7 +1096,9 @@ export default function GoldInventoryApp() {
       merged.taxEnabled !== appSettings.taxEnabled ||
       merged.taxRate !== appSettings.taxRate ||
       (merged.workdayMode || "required") !== (appSettings.workdayMode || "required") ||
-      JSON.stringify(merged.cardFees) !== JSON.stringify(appSettings.cardFees);
+      JSON.stringify(merged.cardFees) !== JSON.stringify(appSettings.cardFees) ||
+      (merged.zakatEnabled !== false) !== (appSettings.zakatEnabled !== false) ||
+      (merged.zakatYear || "gregorian") !== (appSettings.zakatYear || "gregorian");
     if (!taxOrFeesChanged) {
       flashToast("تم حفظ الإعدادات");
       return true;
@@ -1108,6 +1110,8 @@ export default function GoldInventoryApp() {
         taxRate: merged.taxRate,
         cardFees: merged.cardFees,
         workdayMode: merged.workdayMode || "required",
+        zakatEnabled: merged.zakatEnabled !== false,
+        zakatYear: merged.zakatYear === "hijri" ? "hijri" : "gregorian",
       });
       persistSettings({
         ...merged,
@@ -1115,6 +1119,7 @@ export default function GoldInventoryApp() {
         taxRate: Number(res.settings.tax_rate) || 0,
         cardFees: res.settings.card_fees || {},
         workdayMode: res.settings.workday_mode || "required",
+        ...(res.settings.zakat_enabled != null ? { zakatEnabled: res.settings.zakat_enabled !== false, zakatYear: res.settings.zakat_year || "gregorian" } : {}),
       });
       flashToast("تم حفظ الإعدادات");
       return true;
@@ -8916,6 +8921,7 @@ export default function GoldInventoryApp() {
         {morePage === "reportsHub" && (
           <ReportsHubPage
             currency={priceData.currency}
+            price24={priceData.current || 0}
             data={{
               journal, accounts: CHART_OF_ACCOUNTS, goldLedger, sales, returns, lots, expenses,
               items, customers, suppliers, scrapEntries, users,

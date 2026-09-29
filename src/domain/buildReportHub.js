@@ -4,6 +4,7 @@ import { buildCashFlow } from "./buildCashFlow.js";
 import { buildIncomeStatement } from "./buildIncomeStatement.js";
 import { remainingQty } from "./helpers.js";
 import { buildBalanceSheet } from "./buildBalanceSheet.js";
+import { zakatRows } from "./zakat.js";
 
 function buildReportHub({
   journal = [], accounts = [], goldLedger = [], sales = [], returns = [], lots = [], expenses = [],
@@ -11,7 +12,7 @@ function buildReportHub({
   cashBalance = {}, safeBalance = {}, safeGoldBalance = {}, totals = {}, taxRate = 0.15,
   reservations = [], audits = [], cashTx = [], safeTx = [], partners = [], partnersTotals = {},
   taskirOffices = [], taskirEntries = [], bankRecons = [], lastBankRecon = null,
-  from, to, currency = "ر.س",
+  from, to, currency = "ر.س", zakat = null,
 }) {
   const inR = (d) => { const t = d ? String(d) : ""; return t >= from && t <= to; };
   const c = (v) => Math.round((Number(v) || 0) * 100) / 100;
@@ -124,20 +125,8 @@ function buildReportHub({
   ] : [];
   const scrapRows = Object.entries(scrapEntries.filter((x) => x.status === "in_stock").reduce((m, x) => { const k = String(x.karat || "—"); m[k] = (m[k] || 0) + (Number(x.weight) || 0); return m; }, {}))
     .sort((a, b) => Number(b[0]) - Number(a[0])).map(([k, w]) => ({ label: `عيار ${k}`, amount: `${w.toFixed(3)} جم` }));
-  // ⚠ وعاء الزكاة للتاجر: **الأصول المتداولة** (النقد + الذمم المدينة + المخزون
-  //   بالتكلفة) − **الالتزامات المتداولة**. الأصول الثابتة (14xx) خارجه.
-  //   والمخزون في الأستاذ الدوريّ قد يكون أقلّ من الواقع حتى قيد التسوية —
-  //   فتُضاف قيمة القطع الجاهزة بالتكلفة إن كانت أكبر من رصيد الحساب.
-  const zCash = c(["1110", "1120", "1130", "1140", "1150"].reduce((a, k) => a + acc(k), 0));
-  const zAR = c(Math.max(0, acc("1310")) + Math.max(0, acc("1320")) + Math.max(0, acc("1340")));
-  // ⚠ التكلفة على الدفعة لا القطعة: `lots[lotId].costPerGram` × الوزن + حصّة الأجور
-  const stockCost = c(items.filter((it) => !it.voided).reduce((a, it) => { const left = remainingQty(it);
-    const lot = lots.find((l) => l.id === it.lotId); const cpg = Number(it.costPerGram) || Number(lot?.costPerGram) || 0;
-    const unitCost = cpg * (Number(it.weight) || 0) + (Number(it.workmanshipPerUnit) || Number(it.lotWorkmanshipShare) || 0); return a + unitCost * left; }, 0));
-  const zStock = c(Math.max(["1210", "1220", "1225", "1230"].reduce((a, k) => a + acc(k), 0), stockCost));
-  const zLiab = c(Object.keys(bal).filter((k) => k.startsWith("2")).reduce((a, k) => a + Math.max(0, -acc(k)), 0));
-  const zakatBase = c(Math.max(0, zCash + zAR + zStock - zLiab));
-  const zakatDue = c(zakatBase * 0.025);
+  // ⚠ الزكاة بدالّةٍ واحدة على الخادم (GET /zakat): الذهب بوزنه × سعر اليوم والمصنعيّة داخلة —
+  //   كانت هنا صيغةٌ ثانية (المخزون بالتكلفة) تختلف عن صيغة القوائم. مطفأةً لا بطاقة.
   const money = (v) => `${fmtMoney(c(v))} ${currency}`;
   const W = (v) => `${(Math.round((v || 0) * 1000) / 1000).toFixed(3)} جم`;
 
@@ -206,15 +195,11 @@ function buildReportHub({
           { label: "من التشغيل", amount: money(cf.operating) }, { label: "من الاستثمار", amount: money(cf.investingTotal) },
           { label: "من التمويل", amount: money(cf.financingTotal) }, { label: "نقد أول الفترة", amount: money(cf.openCash) }, { label: "نقد آخر الفترة", amount: money(cf.closeCash), strong: true },
         ], open: { page: "fullStatements" } },
-      // ⚠ الوعاء من الأستاذ لا من الشاشات: النقد (111x-115x) + المخزون بالتكلفة
-      //   (121x-123x) − الالتزامات المتداولة (2xxx). والنسبة 2.5٪ للسنة الهجرية —
-      //   والصفحة الكاملة تفصّل الافتراضات.
-      { id: "zakat", label: "الزكاة", headline: money(zakatDue), hint: `2.5٪ من وعاءٍ تقديريّ ${money(zakatBase)}`,
-        rows: [
-          { label: "النقد والبنك", amount: money(zCash) }, { label: "الذمم المدينة", amount: money(zAR) }, { label: "المخزون والكسر بالتكلفة", amount: money(zStock) },
-          { label: "− الالتزامات المتداولة", amount: money(-zLiab) }, { label: "وعاء الزكاة", amount: money(zakatBase), strong: true },
-          { label: "الزكاة المستحقّة 2.5٪", amount: money(zakatDue), strong: true },
-        ], open: { page: "financials" } },
+      ...(zakat && zakat.on === false ? [] : [{ id: "zakat", label: "الزكاة",
+        headline: zakat ? money(zakat.due) : "…",
+        hint: zakat ? `${Math.round(zakat.rate * 1000000) / 10000}٪ من وعاء ${money(zakat.base)} — سنة ${zakat.year === "hijri" ? "هجرية" : "ميلادية"}` : "يُحسب من الدفاتر",
+        rows: zakat ? zakatRows(zakat, money).map((r) => ({ label: r.label, amount: r.text, strong: r.strong })) : [],
+        open: { page: "financials" } }]),
     ]},
     { id: "books", title: "الدفاتر", cards: [
       { id: "trial", label: "ميزان المراجعة", headline: Math.abs(tbDr - tbCr) < 0.01 ? "متوازن ✓" : `⚠ فرق ${money(tbDr - tbCr)}`,

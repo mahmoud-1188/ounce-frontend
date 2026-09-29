@@ -4,6 +4,7 @@ import { mgrFeeBreakdown, mgrFeeEnabled, mgrFeeRate } from "../domain/helpers.js
 import { Card } from "../ui/Card.jsx";
 import { GoldPositionCard } from "../ui/GoldPositionCard.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
+import { ZakatCard } from "../ui/ZakatCard.jsx";
 
 function FinancialStatementsPage({
   totals,
@@ -51,9 +52,6 @@ function FinancialStatementsPage({
   const grossProfit = totals.realizedProfit || 0;
   const netProfit = grossProfit - expensesTotals.total;
 
-  // ---- الزكاة: وعاء الزكاة التقديري = النقدية + المخزون بالتكلفة + الكسر بالتكلفة - لا يوجد التزامات متداولة مسجّلة ----
-  const zakatBase = cashAndEquivalents + safeGoldValue + inventoryAtCost + scrapAtCost;
-  const zakatDue = zakatBase * 0.025;
 
   const netProfitGrams = price24 > 0 ? netProfit / price24 : 0;
   const grossProfitGrams = price24 > 0 ? grossProfit / price24 : 0;
@@ -133,25 +131,7 @@ function FinancialStatementsPage({
           </Card>
         )}
 
-        <Card style={{ padding: 16, marginBottom: 12, border: "1px solid var(--accentLine)" }}>
-          <p style={{ color: "var(--accent)", fontFamily: "'Cairo', sans-serif" }} className="text-sm font-bold mb-2">
-            وعاء الزكاة المقدَّر
-          </p>
-          <p style={{ fontFamily: "'Cairo', sans-serif", color: "var(--accent)" }} className="text-2xl font-extrabold">
-            {currency}
-            {fmt(zakatBase, 0)}
-          </p>
-          <p style={{ color: "var(--text3)" }} className="text-[11px] mt-1 mb-2">
-            الزكاة المستحقة (٪2.5)
-          </p>
-          <p style={{ fontFamily: "'Cairo', sans-serif", color: "var(--good)" }} className="text-xl font-extrabold">
-            {currency}
-            {fmt(zakatDue, 0)}
-          </p>
-          <p style={{ color: "var(--text3)" }} className="text-[11px] mt-2">
-            تقدير مبسّط (نقدية + ذهب الخزنة + مخزون بالتكلفة + كسر بالتكلفة) × 2.5٪ — راجع محاسبك لضبط التعديلات الشرعية والنظامية قبل السداد الفعلي.
-          </p>
-        </Card>
+        <ZakatCard price24={price24} currency={currency} />
 
         <p style={{ color: "var(--text2)" }} className="text-xs mb-2">
           قائمة المركز المالي — الأصول

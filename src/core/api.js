@@ -157,6 +157,12 @@ function changeOwnPin(currentPin, newPin) {
   return apiFetch("/auth/change-pin", { method: "POST", body: { currentPin, newPin } });
 }
 
+/** GET /zakat — الزكاة من دفاتر الفرع كاملةً (migration 065). */
+function fetchZakat({ price24 = 0, asOf = null } = {}) {
+  const qs = new URLSearchParams({ price24: String(Number(price24) || 0), ...(asOf ? { asOf } : {}) });
+  return apiFetch(`/zakat?${qs}`);
+}
+
 function logout() {
   clearAuthToken();
   clearCachedBootstrap();
@@ -648,6 +654,7 @@ export {
   remoteStocktakeApi,
   soldFoundApi,
   changeOwnPin,
+  fetchZakat,
   createLotItems,
   reconcileCategories,
   rfid,

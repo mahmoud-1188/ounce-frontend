@@ -720,6 +720,9 @@ function normalizeBootstrap(boot) {
           periodLocks: { lockAll: boot.settings.lock_all || null, lockPosted: boot.settings.lock_posted || null },
           // الوحدات الاختيارية من الخادم (migration 050) — { id: { on, cfg } }
           serverModules: boot.settings.modules || {},
+          // الزكاة (migration 065): مفعّلةٌ افتراضًا، والسنة ميلادية افتراضًا
+          zakatEnabled: boot.settings.zakat_enabled !== false,
+          zakatYear: boot.settings.zakat_year === "hijri" ? "hijri" : "gregorian",
         }
       : null,
     expenses: normalizeExpenses(boot.expenses || [], usersFullById),
