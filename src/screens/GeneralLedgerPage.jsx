@@ -13,6 +13,7 @@ import { Card } from "../ui/Card.jsx";
 import { EmptyState } from "../ui/EmptyState.jsx";
 import { Field } from "../ui/Field.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
+import { EntryDetail } from "../ui/EntryDetail.jsx";
 
 function GeneralLedgerPage({ journal = [], goldLedger = [], accounts = [], agingEntries = [], agingWeightEntries = [], currency = "ر.س", branchName = "", preparedBy = "", onBackfill, onBack }) {
   const [tab, setTab] = useState("tree");        // tree | account | gold | cash | wages
@@ -241,7 +242,11 @@ function GeneralLedgerPage({ journal = [], goldLedger = [], accounts = [], aging
         })()}
 
         {/* ── تفاصيل السطر المضغوط ── */}
-        {detail && (
+        {detail && journal.some((e) => e.id === detail.id) && (
+          <EntryDetail entry={journal.find((e) => e.id === detail.id)} journal={journal} goldLedger={goldLedger} accounts={accounts}
+            onClose={() => setDetail(null)} />
+        )}
+        {detail && !journal.some((e) => e.id === detail.id) && (
           <Card style={{ padding: 12, marginBottom: 10, border: "1px solid var(--accentLine)" }}>
             <div className="flex items-baseline justify-between mb-1">
               <span style={{ color: "var(--accent)" }} className="text-[11px] font-bold">تفاصيل الحركة</span>

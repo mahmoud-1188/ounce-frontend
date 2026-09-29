@@ -66,7 +66,9 @@ const CHART_OF_ACCOUNTS = [
 
   { code: "2200", name: "التزامات أخرى", parent: "2000", unit: "currency", nature: "credit", statement: "balance", group: true },
   { code: "2210", name: "عرابين وحجوزات عملاء", parent: "2200", unit: "currency", nature: "credit", statement: "balance" },
-  { code: "2220", name: "عمولة مدير مستحقة — تحصيل", parent: "2200", unit: "currency", nature: "credit", statement: "balance" },
+  // ⚠ 2220 ضريبة القيمة المضافة المستحقة — كل قيدٍ يرحّله (البيع · المرتجع · الإقرار) ضريبةٌ لا عمولة؛
+  //   كان اسمه هنا «عمولة مدير مستحقة» فتظهر الضريبة في الأستاذ والميزان باسمٍ خاطئ. الاسم كما في الخادم.
+  { code: "2220", name: "ضريبة القيمة المضافة المستحقة", parent: "2200", unit: "currency", nature: "credit", statement: "balance" },
   // ⚠ حساب مستقل للعمولة: خلطها بالعمولات العامة (2340) يجعل كشف
   // المدير وكشف البائعين رقمًا واحدًا لا يُفصل.
   { code: "2240", name: "عمولة مدير مستحقة — إقفال", parent: "2200", unit: "currency",

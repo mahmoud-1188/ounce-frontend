@@ -7,7 +7,7 @@ import { navTone } from "./navTone.js";
 import { AiLogoBadge } from "./AiLogoBadge.jsx";
 import { Card } from "./Card.jsx";
 
-function MoreMenu({ onSelect, permitted, mainIds, onLogout, userName, roleLabel, order, custom = [], disabled = [], recent = [] }) {
+function MoreMenu({ onSelect, permitted, mainIds, onLogout, userName, roleLabel, order, custom = [], disabled = [], recent = [], explain = null }) {
   const [group, setGroup] = useState(null);
   const [q, setQ] = useState("");
 
@@ -151,10 +151,23 @@ function MoreMenu({ onSelect, permitted, mainIds, onLogout, userName, roleLabel,
           className="w-full rounded-xl text-sm" style={{ padding: "10px 36px 10px 12px", background: "var(--panel)", color: "var(--text)", border: "1px solid var(--line)" }} />
       </div>
       {q.trim() ? (() => {
-        const hits = findScreens(q, (id) => permitted.has(id) && !(disabled || []).includes(id));
+        const open = (id) => permitted.has(id) && !(disabled || []).includes(id);
+        const hits = findScreens(q, open);
+        // «لماذا؟» — شاشاتٌ تطابق البحث ولا تُفتح لك: السبب ومن يغيّره (المرجع 5.2.0: WhyPanel)
+        const blocked = explain ? findScreens(q, (id) => !open(id)).slice(0, 3).map((h) => ({ ...h, why: explain(h.id) })).filter((h) => h.why.length) : [];
         return (
           <div className="flex flex-col gap-2 mb-3">
-            {hits.length === 0 && <p style={{ color: "var(--text3)" }} className="text-xs text-center py-4">لا شاشة بهذا الاسم ضمن صلاحياتك</p>}
+            {hits.length === 0 && !blocked.length && <p style={{ color: "var(--text3)" }} className="text-xs text-center py-4">لا شاشة بهذا الاسم ضمن صلاحياتك</p>}
+            {blocked.map((h) => (
+              <Card key={`why_${h.id}`} style={{ padding: 12, opacity: 0.85, border: "1px dashed var(--edge)" }}>
+                <p style={{ color: "var(--text2)", margin: 0 }} className="text-sm font-bold">{h.label} <span style={{ color: "var(--text3)" }} className="text-[11px] font-normal">— لا تُفتح لك. لماذا؟</span></p>
+                {h.why.map((w, i) => (
+                  <p key={i} style={{ color: "var(--text3)", margin: "3px 0 0" }} className="text-[11px]">
+                    <b style={{ color: "var(--accentText)" }}>{w.layer}:</b> {w.text}{w.fix ? ` — ${w.fix}` : ""}
+                  </p>
+                ))}
+              </Card>
+            ))}
             {hits.map((h) => {
               const Icon = h.icon || FileText;
               return (

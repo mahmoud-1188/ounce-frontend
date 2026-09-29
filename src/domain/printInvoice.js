@@ -19,7 +19,7 @@ function zatcaTlv(fields) {
 const zatcaQr = ({ sellerName, vatNumber, issuedAt, total, vat }) =>
   zatcaTlv([[1, sellerName], [2, vatNumber], [3, issuedAt], [4, Number(total || 0).toFixed(2)], [5, Number(vat || 0).toFixed(2)]]);
 
-function invoiceHtml(sale, { info = {}, currency = "ر.س", modules = {} } = {}) {
+function invoiceHtml(sale, { info = {}, currency = "ر.س", modules = {}, einv = null } = {}) {
   const cur = esc(currency);
   const on = (id) => !!modules?.[id]?.on;
   const thermal = on("thermalReceipt"), bi = on("bilingualInvoice");
@@ -28,7 +28,8 @@ function invoiceHtml(sale, { info = {}, currency = "ر.س", modules = {} } = {})
   const taxed = !!sale.taxApplicable && Number(sale.taxAmount) > 0;
   const title = taxed ? L("فاتورة ضريبية مبسّطة", "Simplified Tax Invoice") : L("فاتورة", "Invoice");
   const seller = info.legalName || info.storeName || info.name || "";
-  const qr = taxed && on("zatca") && info.vatNumber
+  // مستندٌ صدر في سلسلة الفوترة (migration 067): رمزه بتجزئته كما صدر — وإلا رمز المرحلة الأولى
+  const qr = einv?.qr ? einv.qr : taxed && on("zatca") && info.vatNumber
     ? zatcaQr({ sellerName: seller, vatNumber: info.vatNumber, issuedAt: new Date(sale.date).toISOString().slice(0, 19) + "Z", total: sale.total, vat: sale.taxAmount }) : "";
   const pay = { cash: L("نقدًا", "Cash"), card: L("شبكة", "Card"), credit: L("آجل", "Credit"), split: L("نقد + شبكة", "Cash + Card"), trade_in: L("بدل بكسر", "Trade-in") }[sale.paymentMethod] || esc(sale.paymentMethod || "");
   const rows = (sale.lines || []).map((l) => {
@@ -36,7 +37,7 @@ function invoiceHtml(sale, { info = {}, currency = "ر.س", modules = {} } = {})
       l.gem ? `${esc(l.gem.carat || "")} ${L("قيراط", "ct")} · ${esc(l.gem.color || "")} · ${esc(l.gem.clarity || "")} · ${esc(l.gem.cut || "")}${l.gem.certNo ? ` · ${esc(l.gem.lab || "")} ${esc(l.gem.certNo)}` : ""}` : "",
       l.watch ? `${esc(l.watch.brand || "")} ${esc(l.watch.model || "")} · ${L("رقم", "S/N")} ${esc(l.watch.serial || "")}${l.watch.warrantyMonths ? ` · ${L("ضمان", "Warranty")} ${esc(l.watch.warrantyMonths)} ${L("شهرًا", "mo")}` : ""}` : "",
     ].filter(Boolean).join("<br>");
-    return `<tr><td class="r">${esc(l.itemName || `${categoryLabel(l.category)} ع${l.karatSnapshot || ""}`)}${extra ? `<div class="x">${extra}</div>` : ""}</td>
+    return `<tr><td class="r">${esc(l.partLabel || l.itemName || `${categoryLabel(l.category)} ع${l.karatSnapshot || ""}`)}${extra ? `<div class="x">${extra}</div>` : ""}</td>
       <td>${esc(l.karatSnapshot || "")}</td><td>${fmtW(l.weightSnapshot || 0)}</td><td>${esc(l.quantity || 1)}</td><td>${money((Number(l.unitPrice) || 0) * (Number(l.quantity) || 1))}</td></tr>`;
   }).join("");
   const w = thermal ? "72mm" : "190mm";
@@ -73,10 +74,22 @@ ${qr ? `<div class="qr">${qrSvg(qr, thermal ? 120 : 140)}</div>` : ""}
 
 function printSaleInvoice(sale, opts = {}) {
   if (!sale) return false;
+  // ⚠ النافذة تُفتح فورًا (مانع النوافذ يرفض ما يُفتح بعد انتظار)، ثم يُكتب فيها بعد وصول مستند السلسلة
   const win = window.open("", "_blank");
   if (!win) return false;
-  win.document.write(invoiceHtml(sale, opts)); win.document.close();
-  setTimeout(() => { try { win.focus(); win.print(); } catch { /* المستخدم أغلقها */ } }, 350);
+  const write = (einv) => {
+    try {
+      win.document.open(); win.document.write(invoiceHtml(sale, { ...opts, einv })); win.document.close();
+      setTimeout(() => { try { win.focus(); win.print(); } catch { /* المستخدم أغلقها */ } }, 350);
+    } catch { /* أُغلقت */ }
+  };
+  if (opts.einvoice && typeof opts.einvoice.then === "function") {
+    win.document.write("<p style='font-family:sans-serif;text-align:center;margin-top:40px'>…</p>");
+    const timeout = new Promise((r) => setTimeout(() => r(null), 2500));
+    Promise.race([opts.einvoice.catch(() => null), timeout]).then(write);
+  } else {
+    write(opts.einv || null);
+  }
   return true;
 }
 

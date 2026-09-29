@@ -366,6 +366,7 @@ import { SellPage } from "../screens/SellPage.jsx";
 import { SellerReportsPage } from "../screens/SellerReportsPage.jsx";
 import { StocktakeSubPage } from "../screens/StocktakeSubPage.jsx";
 import { SoldFoundCard } from "../ui/SoldFoundCard.jsx";
+import { ConnectivityBar } from "../ui/ConnectivityBar.jsx";
 import { ForcePinChangeSheet } from "../modals/ForcePinChangeSheet.jsx";
 import { StoreLinkPage } from "../screens/StoreLinkPage.jsx";
 import { SupplierLedgerPage } from "../screens/SupplierLedgerPage.jsx";
@@ -872,11 +873,20 @@ export default function GoldInventoryApp() {
           await window.storage.set(BRANCH_LINK_KEY, JSON.stringify(resolved), false);
           setBranchLink(resolved);
           setBranchLinkStatus("ok");
-          // ⚠ تنظيف الرابط من شريط العنوان بعد الحفظ — لا حاجة لإبقاء
-          // رمز الفرع ظاهرًا في كل مرة، والتخزين المحلي كافٍ من الآن.
-          window.history.replaceState(null, "", "/");
+          // ⚠ الرابط يبقى /b/<ref> (بصيغته المعتمدة): التطبيق المثبّت على الشاشة الرئيسية يبدأ من
+          //   العنوان الذي ثُبّت منه — وفي آيفون تخزينه منفصلٌ عن المتصفح، فبلا الرابط لا يعرف فرعه.
+          window.history.replaceState(null, "", `${BRANCH_LINK_PATH_PREFIX}${encodeURIComponent(resolved.branchRef || refInUrl)}`);
           return;
         } catch (e) {
+          // الخادم لا يردّ لحظة الإقلاع: الفرع المحفوظ لهذا الرابط نفسه يكفي (الرابط يبقى في العنوان الآن)
+          try {
+            const saved = JSON.parse((await window.storage.get(BRANCH_LINK_KEY, false)).value);
+            if (!(e instanceof api.ApiError && e.status === 404) && saved?.branchRef === refInUrl) {
+              setBranchLink(saved);
+              setBranchLinkStatus("ok");
+              return;
+            }
+          } catch { /* لا فرع محفوظ */ }
           console.error("[أونصة] تعذّر التحقق من رابط الفرع", e);
           setBranchLinkStatus("error");
           return;
@@ -884,8 +894,13 @@ export default function GoldInventoryApp() {
       }
       try {
         const stored = await window.storage.get(BRANCH_LINK_KEY, false);
-        setBranchLink(JSON.parse(stored.value));
+        const link = JSON.parse(stored.value);
+        setBranchLink(link);
         setBranchLinkStatus("ok");
+        // يُعاد رابط الفرع إلى العنوان فيُثبَّت التطبيق منه (راجع أعلاه)
+        if (link?.branchRef && window.location.pathname === "/") {
+          window.history.replaceState(null, "", `${BRANCH_LINK_PATH_PREFIX}${encodeURIComponent(link.branchRef)}`);
+        }
       } catch (e) {
         // لا رابط في العنوان ولا تخزين سابق — جهازٌ لم يُفتح عليه رابط
         // فرعٍ بعد (راجع BranchLinkCard.jsx في ounce-central).
@@ -4602,7 +4617,7 @@ export default function GoldInventoryApp() {
       // ⚠ دمج لا استبدال: appSettings يحمل أيضًا تفضيلات محلية بحتة
       // (الثيم، طباعة، requirePin...) لا وجود لها في الباك إند بعد —
       // استبدال الكائن كاملًا كان سيمحوها.
-      setAppSettings((prev) => ({ ...prev, taxEnabled: n.appSettings.taxEnabled, taxRate: n.appSettings.taxRate, cardFees: n.appSettings.cardFees, workdayMode: n.appSettings.workdayMode, openingMode: n.appSettings.openingMode, openingFinishedAt: n.appSettings.openingFinishedAt, approvalsEnabled: n.appSettings.approvalsEnabled, approvalThresholds: n.appSettings.approvalThresholds, periodLocks: n.appSettings.periodLocks, serverModules: n.appSettings.serverModules || {} }));
+      setAppSettings((prev) => ({ ...prev, taxEnabled: n.appSettings.taxEnabled, taxRate: n.appSettings.taxRate, cardFees: n.appSettings.cardFees, workdayMode: n.appSettings.workdayMode, openingMode: n.appSettings.openingMode, openingFinishedAt: n.appSettings.openingFinishedAt, approvalsEnabled: n.appSettings.approvalsEnabled, approvalThresholds: n.appSettings.approvalThresholds, periodLocks: n.appSettings.periodLocks, serverModules: n.appSettings.serverModules || {}, zakatEnabled: n.appSettings.zakatEnabled, zakatYear: n.appSettings.zakatYear }));
     }
   };
 
@@ -5368,6 +5383,31 @@ export default function GoldInventoryApp() {
     const supOwed = suppliers.reduce((a, sp) => a + Math.max(0, buildSupplierStatement(sp, { lots, taskirEntries, safeGoldTx, cashTx, openings: supplierOpenings }).now.gold), 0);
     return { physical: { inventory: worked, inTransit: 0, scrap: unworked, atOffices: 0 }, goldOwed: { total: supOwed } };
   }, [items, scrapEntries, safeGoldTx, suppliers, lots, taskirEntries, cashTx, supplierOpenings]);
+
+  /// «لماذا؟» (المرجع 5.2.0: explainAccess) — لماذا لا تظهر شاشةٌ لهذا الشخص: الطبقات نفسها التي
+  /// تبني صلاحياته (الدور · تخصيصه · الإدارة · وضع المحل · الوحدة) — ومن يغيّرها وأين.
+  const explainAccess = (id) => {
+    const out = [];
+    const base = ROLES[role] || { allowedTabs: [], allowedMore: [] };
+    const custom = Array.isArray(currentUser?.allowedPages) ? currentUser.allowedPages : null;
+    if (custom) {
+      if (!custom.includes(id)) out.push({ layer: "الشخص", text: "صلاحياتك المخصّصة لا تشملها", fix: "المدير يضيفها من «صلاحيات الوصول»" });
+    } else if (![...(base.allowedTabs || []), ...(base.allowedMore || [])].includes(id)) {
+      out.push({ layer: "الدور", text: `دور «${ROLES[role]?.label || role}» لا يشملها`, fix: "المدير يمنحها لك من «صلاحيات الوصول»" });
+    }
+    const override = hqPermissions?.byBranch?.[branchIdentity.code]?.[role];
+    const hqEntry = hqPolicy?.branch?.[role] || hqPolicy?.byRole?.[role];
+    if ((override && ![...(override.allowedTabs || []), ...(override.allowedMore || [])].includes(id)) || (hqEntry?.deny || []).includes(id)) {
+      out.push({ layer: "الإدارة", text: "الإدارة المركزية منعتها لهذا الدور في الفرع", fix: "تُغيَّر من سياسة الشاشات في الإدارة المركزية" });
+    }
+    if (id === "hqReports" && !isHq) out.push({ layer: "الفرع", text: "تقارير الإدارة لفرع الإدارة وحده", fix: "" });
+    if (appMode !== "full" && !(MAIN_TAB_IDS.includes(id) ? modeAllowsTab(appMode, id) : modeAllowsPage(appMode, id))) {
+      out.push({ layer: "الوضع", text: `المحل في وضع «${APP_MODES[appMode]?.label || appMode}»`, fix: "المدير يغيّر الوضع من الإعدادات" });
+    }
+    if (id === "bankRecon" && !appSettings.bankReconEnabled) out.push({ layer: "الوحدة", text: "مطابقة البنك مطفأة", fix: "تُفعَّل من الإعدادات" });
+    if (moduleHiddenPages.includes(id)) out.push({ layer: "الوحدة", text: "وحدتها مطفأة", fix: "المدير يفعّلها من «الوحدات الاختيارية»" });
+    return out;
+  };
 
   // صفحات الوحدات المطفأة لا تُعرض في القائمة (الوحدات نفسها تبقى للمدير)
   const moduleHiddenPages = useMemo(() => {
@@ -7480,6 +7520,7 @@ export default function GoldInventoryApp() {
   return (
     <div dir="rtl" className="ons-root" style={{ background: "var(--bg)", minHeight: "100vh", fontFamily: "'Cairo','Tajawal',system-ui,sans-serif" }}>
       {lockOverlay}
+      {currentUser && <ConnectivityBar />}
       {currentUser?.mustChangePin && (
         <ForcePinChangeSheet userName={currentUser.name} onLogout={handleLogout}
           onSave={async (currentPin, newPin) => {
@@ -8018,6 +8059,7 @@ export default function GoldInventoryApp() {
             custom={customGroups}
             recent={recentPages}
             disabled={[...(appSettings.bankReconEnabled ? [] : ["bankRecon"]), ...moduleHiddenPages]}
+            explain={explainAccess}
             onLogout={() => setShowLogoutConfirm(true)}
           />
         )}
@@ -9454,7 +9496,8 @@ export default function GoldInventoryApp() {
           onPrint={(s) => {
             const info = { ...(branchProvision?.profile || {}), name: branchIdentity?.name || "" };
             const withAttrs = { ...s, lines: (s.lines || []).map((l) => { const it = items.find((x) => x.id === l.itemId); return { ...l, itemName: it ? `${categoryLabel(l.category)} ع${l.karatSnapshot}` : undefined, gem: it?.gem || null, watch: it?.watch || null }; }) };
-            if (!printSaleInvoice(withAttrs, { info, currency: priceData.currency || "ر.س", modules: appSettings.serverModules || {} })) flashToast("اسمح بالنوافذ المنبثقة للطباعة");
+            const einvoice = appSettings.serverModules?.zatca?.on ? api.einvoiceApi.of("sales", withAttrs.id).then((r) => r.einvoice) : null;
+            if (!printSaleInvoice(withAttrs, { info, currency: priceData.currency || "ر.س", modules: appSettings.serverModules || {}, einvoice })) flashToast("اسمح بالنوافذ المنبثقة للطباعة");
           }}
           onClose={() => setViewingSale(null)}
         />

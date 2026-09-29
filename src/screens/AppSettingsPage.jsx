@@ -16,6 +16,7 @@ import { NumericInput } from "../ui/NumericInput.jsx";
 import { RfidSettingsCard } from "../ui/RfidSettingsCard.jsx";
 import { HiddenModeSettingsCard } from "../ui/HiddenModeSettingsCard.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
+import { InstallAppCard } from "../ui/InstallAppCard.jsx";
 
 function AppSettingsPage({ settings, onSave, branchIdentity, onSaveBranch, hqPermissions, priceData = {}, onBackfill, canEditControls = false, onSaveControls = null, hqManaged = null, onBack }) {
   const [newRecovery, setNewRecovery] = useState("");
@@ -566,6 +567,8 @@ function AppSettingsPage({ settings, onSave, branchIdentity, onSaveBranch, hqPer
           حفظ إعدادات الضريبة
         </button>
         </Card>
+
+        <InstallAppCard />
 
         {/* ── الزكاة (migration 065): مفتاحٌ واحد وسنة الحساب — تُحفظ فورًا ── */}
         <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2 mt-4">
