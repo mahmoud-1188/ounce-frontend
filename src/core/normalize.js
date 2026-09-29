@@ -60,6 +60,10 @@ function normalizeItems(itemRows, itemUnitRows) {
     // خصائص الحجر والساعة (migration 054)
     gem: it.attrs?.gem || null,
     watch: it.attrs?.watch || null,
+    // مكوّنات الطقم وبقاياه (migration 066)
+    setParts: Array.isArray(it.set_parts) ? it.set_parts : [],
+    remnant: !!it.remnant,
+    remnantOf: it.remnant_of || null,
     units: unitsByItem.get(it.id) || [],
   }));
 }
@@ -78,6 +82,8 @@ function normalizeSales(saleRows, saleLineRows) {
       weightSnapshot: toWeight(l.weight_snapshot),
       costPerGramSnapshot: l.cost_per_gram_snapshot == null ? null : Number(l.cost_per_gram_snapshot),
       workmanshipSnapshot: toMoney(l.workmanship_snapshot),
+      // «خاتم من طقم ‹رمز›» — سطر جزء الطقم (migration 066)
+      partLabel: l.part_label || null,
     });
     linesBySale.set(l.sale_id, list);
   }

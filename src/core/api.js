@@ -163,6 +163,16 @@ function fetchZakat({ price24 = 0, asOf = null } = {}) {
   return apiFetch(`/zakat?${qs}`);
 }
 
+/** POST /sales/set-part — بيع جزءٍ من طقم (migration 066). */
+function sellSetPart(body) {
+  return apiFetch("/sales/set-part", { method: "POST", body });
+}
+
+/** POST /items/:id/code-remnant — تكويد بقايا طقم قطعًا مجموع أوزانها وزنها. */
+function codeRemnant(itemId, pieces) {
+  return apiFetch(`/items/${itemId}/code-remnant`, { method: "POST", body: { pieces } });
+}
+
 function logout() {
   clearAuthToken();
   clearCachedBootstrap();
@@ -655,6 +665,8 @@ export {
   soldFoundApi,
   changeOwnPin,
   fetchZakat,
+  sellSetPart,
+  codeRemnant,
   createLotItems,
   reconcileCategories,
   rfid,
