@@ -32,6 +32,7 @@ function OpeningBalancePage({
   sales,
   expenses,
   onCloseYear,
+  flashToast,
   onBack,
 }) {
   const [tab, setTab] = useState("opening"); // 'opening' | 'closing'
@@ -147,6 +148,7 @@ function OpeningBalancePage({
           sales={sales}
           expenses={expenses}
           onClose={onCloseYear}
+          flashToast={flashToast}
         />
       ) : (
       <div className="px-4">

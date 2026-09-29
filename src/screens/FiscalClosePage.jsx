@@ -6,6 +6,7 @@ import { Card } from "../ui/Card.jsx";
 import { Field } from "../ui/Field.jsx";
 import { Stat } from "../ui/Stat.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
+import { FiscalMonthsCard } from "../ui/FiscalMonthsCard.jsx";
 
 function FiscalClosePage({
   openingBalance,
@@ -22,8 +23,10 @@ function FiscalClosePage({
   sales,
   expenses,
   onClose,
+  flashToast,
 }) {
   const [confirming, setConfirming] = useState(false);
+  const [closing, setClosing] = useState(false);
   const [notes, setNotes] = useState("");
   const [viewingClosure, setViewingClosure] = useState(null);
 
@@ -181,6 +184,8 @@ function FiscalClosePage({
           </div>
         </Card>
 
+        <FiscalMonthsCard currency={currency} reloadKey={fiscalClosures.length} flashToast={flashToast} />
+
         {!confirming ? (
           <button
             onClick={() => setConfirming(true)}
@@ -205,10 +210,12 @@ function FiscalClosePage({
                 إلغاء
               </button>
               <button
-                onClick={() => {
-                  onClose(notes);
-                  setConfirming(false);
-                  setNotes("");
+                disabled={closing}
+                onClick={async () => {
+                  setClosing(true);
+                  const ok = await onClose(notes);
+                  setClosing(false);
+                  if (ok !== false) { setConfirming(false); setNotes(""); }
                 }}
                 className="py-2.5 rounded-xl text-xs font-bold"
                 style={{ background: "linear-gradient(135deg,var(--gradFrom),var(--gradTo))", color: "var(--panel)" }}

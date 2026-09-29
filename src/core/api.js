@@ -173,6 +173,27 @@ function codeRemnant(itemId, pieces) {
   return apiFetch(`/items/${itemId}/code-remnant`, { method: "POST", body: { pieces } });
 }
 
+/** السنة المالية على الخادم (migrations 061 · 068): الأشهر وإقفالها، ودخل الفترة، وإقفال السنة. */
+const fiscalApi = {
+  status: () => apiFetch("/fiscal/status"),
+  closeMonth: (period) => apiFetch("/fiscal/close-month", { method: "POST", body: { period } }),
+  year: () => apiFetch("/fiscal/year"),
+  closeYear: (snapshot, notes) => apiFetch("/fiscal/close-year", { method: "POST", body: { snapshot, notes } }),
+};
+
+/** الفوترة الإلكترونية (migration 067): السلسلة وفحصها وملف XML لكل مستند. */
+const einvoiceApi = {
+  list: () => apiFetch("/einvoices"),
+  verify: () => apiFetch("/einvoices/verify"),
+  xml: async (id) => {
+    const res = await fetch(`${API_BASE}/einvoices/${id}/xml`, {
+      cache: "no-store", headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+    });
+    if (!res.ok) throw new ApiError(res.status, { error: "xml_failed" });
+    return res.text();
+  },
+};
+
 function logout() {
   clearAuthToken();
   clearCachedBootstrap();
@@ -666,6 +687,8 @@ export {
   changeOwnPin,
   fetchZakat,
   sellSetPart,
+  fiscalApi,
+  einvoiceApi,
   codeRemnant,
   createLotItems,
   reconcileCategories,

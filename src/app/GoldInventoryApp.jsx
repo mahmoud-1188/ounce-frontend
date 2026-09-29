@@ -275,6 +275,7 @@ import { CashModal } from "../modals/CashModal.jsx";
 import { EntitySheet } from "../modals/EntitySheet.jsx";
 import { BudgetsPage } from "../screens/BudgetsPage.jsx";
 import { VatReturnPage } from "../screens/VatReturnPage.jsx";
+import { EInvoicePage } from "../screens/EInvoicePage.jsx";
 import { NewSaleModal } from "../modals/NewSaleModal.jsx";
 import { RemoteStocktakeInbox } from "../ui/RemoteStocktakeInbox.jsx";
 import { DevicesCard } from "../ui/DevicesCard.jsx";
@@ -2504,7 +2505,7 @@ export default function GoldInventoryApp() {
   // immutable record. Nothing in the transaction history is deleted — only
   // the reference point future balances are measured from moves forward,
   // which is exactly what keeps this from ever double-counting old entries.
-  const handleCloseFiscalYear = (notes) => {
+  const handleCloseFiscalYear = async (notes) => {
     const periodStart = latestClosure ? latestClosure.closedAt : openingBalance.date || null;
     const now = new Date().toISOString();
     const periodSales = sales.filter((s) => periodStart === null || new Date(s.date) > new Date(periodStart));
@@ -2558,8 +2559,17 @@ export default function GoldInventoryApp() {
       },
       notes: notes || "",
     };
-    persistFiscalClosures([closure, ...fiscalClosures]);
-    flashToast("تم إقفال السنة المالية");
+    // ⚠ الإقفال على الخادم: قيدٌ ينقل أرصدة الدخل إلى 3300، وسجلٌّ دائم تراه كل الأجهزة —
+    //   كان يُحفظ في هذا المتصفح وحده فيضيع بمسحه ولا يصل الأستاذ.
+    try {
+      const res = await api.fiscalApi.closeYear(closure, notes || "");
+      persistFiscalClosures([res.closure, ...fiscalClosures]);
+      flashToast(`أُقفلت السنة المالية ${res.closure.ref} — صافي الدفتر ${fmtMoney(res.closure.ledgerNetIncome)}`);
+      return true;
+    } catch (e) {
+      flashToast(e?.body?.error === "nothing_to_close" ? "لا إيرادات ولا مصروفات منذ آخر إقفال" : apiErrorMessage(e, "تعذّر إقفال السنة"));
+      return false;
+    }
   };
   // Single entry point for opening ANY page, regardless of whether it's a
   // "tab" page or a "morePage" page under the hood, and regardless of whether
@@ -4541,6 +4551,8 @@ export default function GoldInventoryApp() {
   // (بلا انتظار شبكة)، ثم تحديثها بهدوء بعد رجوع الطلب الحقيقي.
   const applyBootstrap = (boot) => {
     const n = normalizeBootstrap(boot);
+    // إقفالات السنة على الخادم (migration 068) هي المرجع — والمحلية القديمة تبقى لمن لم يُقفل على الخادم بعد
+    if (Array.isArray(boot.fiscalClosures) && boot.fiscalClosures.length) setFiscalClosures(boot.fiscalClosures);
     setItems(n.items);
     setSales(n.sales);
     setCashTx(n.cashTx);
@@ -8459,6 +8471,8 @@ export default function GoldInventoryApp() {
         )}
         {morePage === "budgets" && <BudgetsPage currency={priceData.currency || "ر.س"} canEdit={role === "manager"} onBack={() => setMorePage(null)} />}
         {morePage === "vatReturn" && <VatReturnPage currency={priceData.currency || "ر.س"} onBack={() => setMorePage(null)} />}
+        {morePage === "einvoice" && <EInvoicePage currency={priceData.currency || "ر.س"} flashToast={flashToast}
+          onOpenModules={role === "manager" ? () => openPage("modules") : null} onBack={() => setMorePage(null)} />}
         {morePage === "amlRegister" && <AmlRegisterPage currency={priceData.currency || "ر.س"} onBack={() => setMorePage(null)} />}
         {morePage === "reorder" && <ReorderPage onBack={() => setMorePage(null)} onOpenModules={role === "manager" ? () => setMorePage("modules") : null} />}
         {morePage === "branchTransfers" && (
@@ -9111,6 +9125,7 @@ export default function GoldInventoryApp() {
             sales={sales}
             expenses={expenses}
             onCloseYear={handleCloseFiscalYear}
+            flashToast={flashToast}
             onBack={() => setMorePage(null)}
           />
         )}
