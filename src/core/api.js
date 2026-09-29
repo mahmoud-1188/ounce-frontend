@@ -66,8 +66,29 @@ class ApiError extends Error {
   }
 }
 
+// حال الوصول للخادم لشريط الاتصال: يُعلَن عند التغيّر وحده (تعذّر الوصول ↔ عاد)
+let serverReachable = true;
+function noteReachable(ok) {
+  if (ok === serverReachable) return;
+  serverReachable = ok;
+  try { window.dispatchEvent(new CustomEvent("ounce:server", { detail: { ok } })); } catch { /* تجاهل */ }
+}
+
 async function apiFetch(path, { method = "GET", body, headers } = {}) {
-  const res = await fetch(`${API_BASE}${path}`, {
+  let res;
+  try {
+    res = await fetchApi(path, { method, body, headers });
+  } catch (err) {
+    noteReachable(false);
+    throw err;
+  }
+  // 502/503/504 من الوسيط (Railway) = الخادم نفسه لا يردّ
+  noteReachable(![502, 503, 504].includes(res.status));
+  return readApi(res);
+}
+
+async function fetchApi(path, { method = "GET", body, headers } = {}) {
+  return fetch(`${API_BASE}${path}`, {
     method,
     // ⚠ no-store صراحة: طلبات مصادقة محمية (auth/me, bootstrap) لا يجوز
     // تخزينها إطلاقًا — لا من المتصفح ولا من أي بروكسي/CDN وسيط بينهما.
@@ -81,7 +102,9 @@ async function apiFetch(path, { method = "GET", body, headers } = {}) {
     },
     body: body != null ? JSON.stringify(body) : undefined,
   });
+}
 
+async function readApi(res) {
   let payload = null;
   const text = await res.text();
   if (text) {
@@ -185,6 +208,7 @@ const fiscalApi = {
 const einvoiceApi = {
   list: () => apiFetch("/einvoices"),
   verify: () => apiFetch("/einvoices/verify"),
+  of: (refTable, refId) => apiFetch(`/einvoices/of/${refTable}/${refId}`),
   xml: async (id) => {
     const res = await fetch(`${API_BASE}/einvoices/${id}/xml`, {
       cache: "no-store", headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
