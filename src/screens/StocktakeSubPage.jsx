@@ -8,6 +8,8 @@ import { Hallmark } from "../ui/Hallmark.jsx";
 
 function StocktakeSubPage({ lock, onToggleLock,
   activeItems,
+  allItems = [],
+  onSoldFound,
   priceData,
   audits,
   stocktake,
@@ -31,6 +33,10 @@ function StocktakeSubPage({ lock, onToggleLock,
   const showWeight = settings.stocktakeShowWeight !== false;
 
   const [scanned, setScanned] = useState({});   // { unitCode: true }
+  // قطعٌ مسجّلة مباعة قرأها العدّ على الرفّ (للمراجعة لا زيادة) · ورموزٌ لا يعرفها النظام
+  const [soldFound, setSoldFound] = useState([]);  // [code]
+  const [unknown, setUnknown] = useState([]);      // [code]
+  const [confirmFinish, setConfirmFinish] = useState(false);
   const [showMissing, setShowMissing] = useState(false);
   const [manual, setManual] = useState("");
   const [reader, setReader] = useState(null);   // جهاز القراءة المتصل
@@ -120,7 +126,16 @@ function StocktakeSubPage({ lock, onToggleLock,
     if (!code) return;
     const hit = scopeUnits.find((u) => String(u.code).toUpperCase() === code);
     if (!hit) {
-      flashToast(`«${code}» ليست في هذا النطاق`);
+      // ⚠ قطعةٌ مسجّلة مباعة وُجدت على الرفّ: بند مراجعة لا زيادة (قرار المالك 2026-09-29)
+      const sold = allItems.some((it) => (it.units || []).some((u) => u.sold && String(u.code).toUpperCase() === code));
+      if (sold) {
+        if (!soldFound.includes(code)) setSoldFound((p) => [...p, code]);
+        flashToast(`«${code}» مسجّلة مباعة — للمراجعة، لا تُضاف`);
+        return;
+      }
+      const known = allItems.some((it) => (it.units || []).some((u) => String(u.code).toUpperCase() === code));
+      if (!known && !unknown.includes(code)) setUnknown((p) => [...p, code]);
+      flashToast(known ? `«${code}» ليست في هذا النطاق` : `«${code}» رمزٌ لا يعرفه النظام`);
       return;
     }
     if (scanned[code]) {
@@ -135,7 +150,27 @@ function StocktakeSubPage({ lock, onToggleLock,
     if (scope && (scope === "general" || cat)) inputRef.current?.focus();
   }, [scope, cat]);
 
-  const reset = () => { setScanned({}); setShowMissing(false); setManual(""); };
+  const reset = () => { setScanned({}); setSoldFound([]); setUnknown([]); setConfirmFinish(false); setShowMissing(false); setManual(""); };
+
+  // ⚠ إنهاء العدّ بالمسح يحفظ فروقه الحقيقية (كان يُحفظ «مطابقًا» أيًّا كان المقروء):
+  //   الناقص بأعيانه يُسوّى بمعالج الجرد نفسه (عجزٌ بتكلفة القطعة في الدفترين)،
+  //   والمبيعة الموجودة بنود مراجعة، والمجهول يُذكر في السجل.
+  const finish = () => {
+    const payload = {
+      kind: "scan",
+      scope, categoryId: cat || null,
+      expectedCount: summary.total, countedCount: summary.read,
+      expectedWeight: summary.weight, countedWeight: summary.readWeight,
+      missing: summary.missing.map((u) => ({ code: u.code, itemId: u.item.id })),
+      soldFound, unknown,
+      diffCount: summary.missingCount,
+    };
+    if (scope === "general") onFinishGeneral(payload);
+    else onFinishSection(payload);
+    if (soldFound.length) onSoldFound?.(soldFound);
+    reset();
+  };
+  const hasDiffs = summary.missingCount > 0 || soldFound.length > 0 || unknown.length > 0;
 
   // ── صف الملخّص: كل شيء في سطر واحد ──
   const SummaryRow = () => (
@@ -464,6 +499,39 @@ function StocktakeSubPage({ lock, onToggleLock,
             </Card>
           )}
 
+          {(soldFound.length > 0 || unknown.length > 0) && (
+            <Card style={{ padding: 12, marginBottom: 12, border: "1px solid var(--warnLine)" }}>
+              {soldFound.length > 0 && (
+                <p style={{ color: "var(--text)" }} className="text-xs font-bold">
+                  {soldFound.length} قطعة مسجّلة مباعة وُجدت على الرفّ — للمراجعة
+                  <span style={{ color: "var(--text3)" }} className="block text-[10px] font-normal mt-0.5">{soldFound.join(" · ")}</span>
+                </p>
+              )}
+              {unknown.length > 0 && (
+                <p style={{ color: "var(--text2)" }} className="text-[11px] mt-1">
+                  رموزٌ لا يعرفها النظام ({unknown.length}): {unknown.slice(0, 20).join(" · ")}
+                </p>
+              )}
+            </Card>
+          )}
+
+          {confirmFinish && (
+            <Card style={{ padding: 12, marginBottom: 12, border: "1px solid var(--accentLine)" }}>
+              <p style={{ color: "var(--text)" }} className="text-xs font-bold mb-1">احفظ الجرد بفروقه؟</p>
+              <p style={{ color: "var(--text2)" }} className="text-[11px] mb-2">
+                {summary.missingCount > 0 && <>ناقص {summary.missingCount} قطعة{showWeight ? ` (${fmtW(summary.missingWeight)} جم)` : ""} — عجز جرد بتكلفتها في الدفترين. </>}
+                {soldFound.length > 0 && <>{soldFound.length} مبيعة وُجدت — بند مراجعة للمدير. </>}
+                {unknown.length > 0 && <>{unknown.length} رمز مجهول — يُذكر في السجل.</>}
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <button onClick={() => setConfirmFinish(false)} className="py-2 rounded-xl text-xs font-bold"
+                  style={{ background: "var(--panel)", color: "var(--text2)", border: "1px solid var(--line)" }}>تابع العدّ</button>
+                <button onClick={finish} className="py-2 rounded-xl text-xs font-bold"
+                  style={{ background: "linear-gradient(135deg,var(--gradFrom),var(--gradTo))", color: "var(--panel)" }}>احفظ الجرد بفروقه</button>
+              </div>
+            </Card>
+          )}
+
           <div className="grid grid-cols-2 gap-2 mb-4">
             <button onClick={reset}
               className="py-2.5 rounded-xl text-xs font-bold"
@@ -471,18 +539,7 @@ function StocktakeSubPage({ lock, onToggleLock,
               تصفير القراءة
             </button>
             <button
-              onClick={() => {
-                const payload = {
-                  scope, categoryId: cat || null,
-                  expectedCount: summary.total, countedCount: summary.read,
-                  expectedWeight: summary.weight, countedWeight: summary.readWeight,
-                  missing: summary.missing.map((u) => u.code),
-                  diffCount: summary.missingCount,
-                };
-                if (scope === "general") onFinishGeneral(payload);
-                else onFinishSection(payload);
-                reset();
-              }}
+              onClick={() => (hasDiffs ? setConfirmFinish(true) : finish())}
               className="py-2.5 rounded-xl text-xs font-bold"
               style={{ background: "linear-gradient(135deg,var(--gradFrom),var(--gradTo))", color: "var(--panel)" }}>
               {scope === "general" ? "إنهاء الجرد" : "إنهاء القسم"}

@@ -102,11 +102,17 @@ const RETURN_REASONS = [
 const REFUND_TARGETS = [
   { id: "daily_cash", label: "الصندوق اليومي نقدًا", account: "1130" },
   { id: "safe_cash", label: "الخزنة نقدًا", account: "1110" },
-  { id: "network", label: "الشبكة", account: "1120" },
+  // ⚠ ردّ الشبكة على حساب بيعها نفسه (1140 شبكة الصندوق اليومي) — كان 1120.
+  //   ما زاد على رصيد شبكة اليوم يغطّيه الخادم من شبكة الخزنة في الحركة نفسها.
+  { id: "network", label: "الشبكة", account: "1140" },
   // ⚠ الآجل لا يُردّ نقدًا: العميل لم يدفع بعد، فالردّ نقدٌ يخرج مقابل
   // لا شيء. يُخصم من دَينه.
   { id: "credit", label: "خصم من دَين العميل", account: "1310" },
 ];
+
+/** جهة الردّ المقترحة من طريقة دفع الفاتورة: الشبكة للشبكة، والآجل من الدين، وغيرهما للصندوق. */
+const refundTargetFor = (sale) =>
+  sale?.paymentMethod === "credit" ? "credit" : sale?.paymentMethod === "card" ? "network" : "daily_cash";
 
 /// تسوية فرق الاستبدال — طرف النقد في قيدَي المرتجع والفاتورة الجديدة
 /// حسابٌ واحد فيتقاصّان إلى الفرق.
@@ -167,4 +173,4 @@ const EXT_STATUS = {
 /// يتحقق من فاتورة خارجية ويحوّلها لشكل فاتورة داخلية.
 /// لا يكتب شيئًا — الفصل بين التحقق والكتابة يجعل الرفض بلا أثر جانبي.
 
-export { EXCHANGE_SETTLE, EXT_STATUS, FUNDING_SOURCES, GOLD_OUT_DESTINATIONS, ONLINE_STATUS, REFUND_TARGETS, REQ_STATUS, RETURN_REASONS, SALE_MODES, SCRAP_STAGES, SET_PIECE_PRESETS, TRUST_PURPOSES };
+export { EXCHANGE_SETTLE, EXT_STATUS, FUNDING_SOURCES, GOLD_OUT_DESTINATIONS, ONLINE_STATUS, REFUND_TARGETS, REQ_STATUS, refundTargetFor, RETURN_REASONS, SALE_MODES, SCRAP_STAGES, SET_PIECE_PRESETS, TRUST_PURPOSES };

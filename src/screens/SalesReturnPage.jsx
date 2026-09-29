@@ -1,7 +1,7 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Check, Receipt, RotateCcw, Trash2 } from "lucide-react";
 import { fmt, fmtMoney, fmtW } from "../core/money.js";
-import { EXCHANGE_SETTLE, REFUND_TARGETS, RETURN_REASONS } from "../core/workflow.js";
+import { EXCHANGE_SETTLE, REFUND_TARGETS, RETURN_REASONS, refundTargetFor } from "../core/workflow.js";
 import { accountByCode } from "../domain/accountByCode.js";
 import { buildReturnJournal } from "../domain/buildReturnJournal.js";
 import { computeExchangeAmounts } from "../domain/computeExchangeAmounts.js";
@@ -36,8 +36,11 @@ function SalesReturnPage({
   const [showList, setShowList] = useState(false);
   const [picked, setPicked] = useState([]);      // أسطر مختارة
   const [reasonId, setReasonId] = useState("changed_mind");
-  const [target, setTarget] = useState("daily_cash");
+  const [target, setTarget] = useState(() => refundTargetFor(hit?.sale));
   const [note, setNote] = useState("");
+  // الجهة تُقترح من طريقة دفع الفاتورة كلما تغيّرت الفاتورة، ويغيّرها البائع (إلا الآجل)
+  const saleId = hit?.sale?.id;
+  useEffect(() => { if (hit?.sale) setTarget(refundTargetFor(hit.sale)); }, [saleId]); // eslint-disable-line react-hooks/exhaustive-deps
   const [err, setErr] = useState([]);
   const [busy, setBusy] = useState(false);
 

@@ -250,6 +250,13 @@ const remoteStocktakeApi = {
   reject: (id, note) => apiFetch(`/stocktake/remote/${id}/reject`, { method: "POST", body: { note } }),
 };
 
+// قطعٌ مسجّلة مباعة وُجدت في الجرد (migration 063): بند مراجعة لا زيادة آلية، والمدير يقرّر بسببٍ مكتوب
+const soldFoundApi = {
+  list: () => apiFetch("/stocktake/sold-found"),
+  record: (codes, source = "scan") => apiFetch("/stocktake/sold-found", { method: "POST", body: { codes, source } }),
+  decide: (id, body) => apiFetch(`/stocktake/sold-found/${id}/decide`, { method: "POST", body }),
+};
+
 // POST /stocktake/apply — اعتماد الجرد وقيد فروقاته
 function applyStocktake(entries, price24) {
   return apiFetch("/stocktake/apply", { method: "POST", body: { entries, price24 } });
@@ -634,6 +641,7 @@ export {
   fetchSupplierStatements,
   applyStocktake,
   remoteStocktakeApi,
+  soldFoundApi,
   createLotItems,
   reconcileCategories,
   rfid,
