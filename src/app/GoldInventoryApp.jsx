@@ -367,6 +367,7 @@ import { SellerReportsPage } from "../screens/SellerReportsPage.jsx";
 import { StocktakeSubPage } from "../screens/StocktakeSubPage.jsx";
 import { SoldFoundCard } from "../ui/SoldFoundCard.jsx";
 import { ConnectivityBar } from "../ui/ConnectivityBar.jsx";
+import { DesktopSideNav, SIDE_NAV_W } from "../ui/DesktopSideNav.jsx";
 import { ForcePinChangeSheet } from "../modals/ForcePinChangeSheet.jsx";
 import { StoreLinkPage } from "../screens/StoreLinkPage.jsx";
 import { SupplierLedgerPage } from "../screens/SupplierLedgerPage.jsx";
@@ -541,6 +542,8 @@ export default function GoldInventoryApp() {
   const [trustLedger, setTrustLedger] = useState([]);
   const [storesLoaded, setStoresLoaded] = useState(false);
   const vp = useViewport();
+  // الشريط الجانبي على الحاسب وحده (شاشةٌ عريضة بفأرة) — اللوح والجوال يبقيان على ☰ والشريط السفلي
+  const showSideNav = !!currentUser && (vp.size === "xl" || vp.size === "lg") && !vp.touch;
   // ⚠ كيانٌ واحد مفتوح في وقتٍ واحد: فتح ورقةٍ فوق ورقة يفقد المستخدم
   // أيّهما يُغلق، ويجعل «رجوع» غامضة.
   const [sheetEntity, setSheetEntity] = useState(null);   // { kind, record }
@@ -7520,7 +7523,7 @@ export default function GoldInventoryApp() {
   return (
     <div dir="rtl" className="ons-root" style={{ background: "var(--bg)", minHeight: "100vh", fontFamily: "'Cairo','Tajawal',system-ui,sans-serif" }}>
       {lockOverlay}
-      {currentUser && <ConnectivityBar />}
+      {currentUser && <div style={showSideNav ? { marginInlineStart: SIDE_NAV_W } : undefined}><ConnectivityBar /></div>}
       {currentUser?.mustChangePin && (
         <ForcePinChangeSheet userName={currentUser.name} onLogout={handleLogout}
           onSave={async (currentPin, newPin) => {
@@ -7612,9 +7615,19 @@ export default function GoldInventoryApp() {
           كنتُ ثبّتُّه عند 448 حين طُلب الشكل الأصلي — وذلك خطأ:
           الشكل الأصلي هو ما يراه صاحب الجوال، لا سقفٌ يُفرض على من
           يفتح على حاسبه فيرى عمودًا وسط شاشة فارغة. */}
+      {showSideNav && (
+        <DesktopSideNav
+          permitted={new Set([...permsNow.allowedTabs.filter((id) => id !== "more"), ...permsNow.allowedMore])}
+          disabled={[...(appSettings.bankReconEnabled ? [] : ["bankRecon"]), ...moduleHiddenPages]}
+          current={morePage || tab}
+          onSelect={openPage}
+          onHome={() => openPage("home")}
+        />
+      )}
       <div
         className="mx-auto"
         style={{
+          ...(showSideNav ? { marginInlineStart: SIDE_NAV_W, marginInlineEnd: "auto" } : {}),
           maxWidth: contentWidth(vp.size),
           minHeight: "100dvh",
           paddingBottom: "calc(6rem + env(safe-area-inset-bottom, 0px))",
