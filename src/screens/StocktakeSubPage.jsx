@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronLeft, Grid, Lock, Package, Scan, Warehouse } from "lucide-react";
 import { fine24, fmtW } from "../core/money.js";
-import { btSupported, categoryLabel, inputStyle } from "../domain/helpers.js";
+import { btSupported, categoryLabel, epcHexToCode, inputStyle } from "../domain/helpers.js";
 import { Card } from "../ui/Card.jsx";
 import { EmptyState } from "../ui/EmptyState.jsx";
 import { Hallmark } from "../ui/Hallmark.jsx";
@@ -36,6 +36,7 @@ function StocktakeSubPage({ lock, onToggleLock,
   // قطعٌ مسجّلة مباعة قرأها العدّ على الرفّ (للمراجعة لا زيادة) · ورموزٌ لا يعرفها النظام
   const [soldFound, setSoldFound] = useState([]);  // [code]
   const [unknown, setUnknown] = useState([]);      // [code]
+  const [batch, setBatch] = useState("");
   const [confirmFinish, setConfirmFinish] = useState(false);
   const [showMissing, setShowMissing] = useState(false);
   const [manual, setManual] = useState("");
@@ -121,20 +122,43 @@ function StocktakeSubPage({ lock, onToggleLock,
     }
   };
 
+  // قارئ RFID مصدرًا للعدّ (المرجع 5.2.0: StocktakeRfidSource): القارئ بوضع لوحة المفاتيح يكتب EPC لا الرمز.
+  //   الوسم المربوط يُعرف بـEPC المحفوظ على القطعة، وغير المربوط بترميز الرمز في EPC نفسه.
+  //   ودفعةٌ من القارئ (عدّة أسطر أو فواصل) تُعدّ كلّها بضغطةٍ واحدة.
+  const resolveCode = (raw) => {
+    const up = String(raw || "").trim().toUpperCase();
+    if (!up) return "";
+    const all = allItems.length ? allItems : activeItems;
+    if (all.some((it) => (it.units || []).some((u) => String(u.code).toUpperCase() === up))) return up;
+    for (const it of all) {
+      const u = (it.units || []).find((x) => x.epc && String(x.epc).toUpperCase() === up);
+      if (u) return String(u.code).toUpperCase();
+    }
+    if (/^[0-9A-F]{8,}$/.test(up)) {
+      const decoded = epcHexToCode(up).toUpperCase();
+      if (decoded && all.some((it) => (it.units || []).some((u) => String(u.code).toUpperCase() === decoded))) return decoded;
+    }
+    return up;
+  };
   const feed = (raw) => {
-    const code = String(raw || "").trim().toUpperCase();
+    const parts = String(raw || "").split(/[\s,;]+/).filter(Boolean);
+    if (parts.length > 1) { parts.forEach((x) => feedOne(x)); return; }
+    feedOne(raw);
+  };
+  const feedOne = (raw) => {
+    const code = resolveCode(raw);
     if (!code) return;
     const hit = scopeUnits.find((u) => String(u.code).toUpperCase() === code);
     if (!hit) {
       // ⚠ قطعةٌ مسجّلة مباعة وُجدت على الرفّ: بند مراجعة لا زيادة (قرار المالك 2026-09-29)
       const sold = allItems.some((it) => (it.units || []).some((u) => u.sold && String(u.code).toUpperCase() === code));
       if (sold) {
-        if (!soldFound.includes(code)) setSoldFound((p) => [...p, code]);
+        setSoldFound((p) => (p.includes(code) ? p : [...p, code]));
         flashToast(`«${code}» مسجّلة مباعة — للمراجعة، لا تُضاف`);
         return;
       }
       const known = allItems.some((it) => (it.units || []).some((u) => String(u.code).toUpperCase() === code));
-      if (!known && !unknown.includes(code)) setUnknown((p) => [...p, code]);
+      if (!known) setUnknown((p) => (p.includes(code) ? p : [...p, code]));
       flashToast(known ? `«${code}» ليست في هذا النطاق` : `«${code}» رمزٌ لا يعرفه النظام`);
       return;
     }
@@ -306,8 +330,18 @@ function StocktakeSubPage({ lock, onToggleLock,
         autoComplete="off"
       />
       <p style={{ color: "var(--text3)" }} className="text-[10px] mt-1">
-        معظم الماسحات تعمل كلوحة مفاتيح — تُدخل الكود هنا مباشرة بلا اتصال.
+        معظم الماسحات تعمل كلوحة مفاتيح — تُدخل الكود هنا مباشرة بلا اتصال. وقارئ RFID يُقرأ منه EPC الوسم مباشرةً.
       </p>
+      <details className="mt-2">
+        <summary style={{ color: "var(--accentText)" }} className="text-[11px] cursor-pointer">دفعة من قارئ RFID (لصق عدّة وسوم)</summary>
+        <textarea value={batch} onChange={(e) => setBatch(e.target.value)} rows={4} dir="ltr"
+          placeholder="وسمٌ في كل سطر (EPC أو رمز)" style={{ ...inputStyle, marginTop: 6, fontFamily: "monospace", fontSize: 11 }} />
+        <button onClick={() => { const n = batch.split(/[\s,;]+/).filter(Boolean).length; feed(batch); setBatch(""); flashToast(`عُدّ ${n} وسمًا من الدفعة`); }}
+          disabled={!batch.trim()} className="w-full py-2 rounded-xl text-[11px] font-bold mt-1"
+          style={{ background: "var(--accentBg)", color: "var(--accent)", border: "1px solid var(--accentLine)", opacity: batch.trim() ? 1 : 0.5 }}>
+          عُدّ الدفعة
+        </button>
+      </details>
     </Card>
   );
 
@@ -486,10 +520,10 @@ function StocktakeSubPage({ lock, onToggleLock,
             </button>
           </div>
 
-          <ReaderBar />
-          <SummaryRow />
+          {ReaderBar()}
+          {SummaryRow()}
 
-          {showMissing && summary.missingCount > 0 && <MissingList />}
+          {showMissing && summary.missingCount > 0 && MissingList()}
 
           {summary.missingCount === 0 && summary.total > 0 && (
             <Card style={{ padding: 12, marginBottom: 12, border: "1px solid var(--goodLine)" }}>
