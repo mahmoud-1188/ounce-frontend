@@ -358,6 +358,7 @@ import { SellPage } from "../screens/SellPage.jsx";
 import { SellerReportsPage } from "../screens/SellerReportsPage.jsx";
 import { StocktakeSubPage } from "../screens/StocktakeSubPage.jsx";
 import { SoldFoundCard } from "../ui/SoldFoundCard.jsx";
+import { ForcePinChangeSheet } from "../modals/ForcePinChangeSheet.jsx";
 import { StoreLinkPage } from "../screens/StoreLinkPage.jsx";
 import { SupplierLedgerPage } from "../screens/SupplierLedgerPage.jsx";
 import { SuppliersSubPage } from "../screens/SuppliersSubPage.jsx";
@@ -7441,6 +7442,14 @@ export default function GoldInventoryApp() {
   return (
     <div dir="rtl" className="ons-root" style={{ background: "var(--bg)", minHeight: "100vh", fontFamily: "'Cairo','Tajawal',system-ui,sans-serif" }}>
       {lockOverlay}
+      {currentUser?.mustChangePin && (
+        <ForcePinChangeSheet userName={currentUser.name} onLogout={handleLogout}
+          onSave={async (currentPin, newPin) => {
+            await api.changeOwnPin(currentPin, newPin);
+            setCurrentUser((u) => (u ? { ...u, mustChangePin: false } : u));
+            flashToast("حُفظ رقمك الجديد");
+          }} />
+      )}
       {enrollFor && (
         <EnrollQrSheet user={enrollFor} onIssue={handleIssueEnroll} onClose={() => setEnrollFor(null)} />
       )}

@@ -152,6 +152,11 @@ async function login({ branchId, userId, pin }) {
   return result;
 }
 
+/** POST /auth/change-pin — الموظف يغيّر رقمه بنفسه (ويُرفع عنه طلب تغيير الرقم الضعيف). */
+function changeOwnPin(currentPin, newPin) {
+  return apiFetch("/auth/change-pin", { method: "POST", body: { currentPin, newPin } });
+}
+
 function logout() {
   clearAuthToken();
   clearCachedBootstrap();
@@ -642,6 +647,7 @@ export {
   applyStocktake,
   remoteStocktakeApi,
   soldFoundApi,
+  changeOwnPin,
   createLotItems,
   reconcileCategories,
   rfid,
