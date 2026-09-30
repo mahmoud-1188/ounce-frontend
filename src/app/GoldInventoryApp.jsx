@@ -8525,7 +8525,7 @@ export default function GoldInventoryApp() {
             baseKarat={appSettings?.baseKarat || 21} onBack={() => setMorePage(null)} />
         )}
         {morePage === "ifrs" && (
-          <IfrsPage journal={journal} fixedAssets={fixedAssets || []} currency={priceData.currency || "ر.س"}
+          <IfrsPage journal={journal} fixedAssets={fixedAssets || []} currency={priceData.currency || "ر.س"} price24={priceData.current || 0}
             periodStart={latestClosure ? latestClosure.closedAt : null} onBack={() => setMorePage(null)} />
         )}
         {morePage === "fullStatements" && (
