@@ -13,11 +13,12 @@ function AnyStatementPage({
   sales = [], returns = [], expenses = [], receipts = [], cashTx = [], safeTx = [],
   scrapEntries = [], taskirat = [], officeTx = [], partnerTx = [], journal = [],
   goldLedger = [], reservations = [], repairs = [],
-  currency = "ر.س", branchName = "", preparedBy = "", onBack,
+  currency = "ر.س", branchName = "", preparedBy = "", onBack, initial = null,
 }) {
   const today = new Date().toISOString().slice(0, 10);
-  const [kind, setKind] = useState("customer");
-  const [target, setTarget] = useState("");
+  // ⚠ من «كشف حساب» على صفّ العميل أو المورد: يُفتح على صاحبه مباشرة
+  const [kind, setKind] = useState(initial?.entity || "customer");
+  const [target, setTarget] = useState(initial?.id || "");
   const [from, setFrom] = useState(`${new Date().getFullYear()}-01-01`);
   const [to, setTo] = useState(today);
   const [q, setQ] = useState("");

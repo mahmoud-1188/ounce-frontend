@@ -17,8 +17,8 @@ import * as api from "../core/api.js";
 function NewSaleModal({ activeItems, priceData,
   // ⚠ العملة كانت غائبة عن التوقيع: البدل يستخدمها فيسقط بـ
   // «currency is not defined» — والنافذة تُفرَغ بلا رسالة.
-  currency = "ر.س", initialItemId, taxEnabled, taxRate, settings = {}, role, customers = [], customOrder = null, reservations = [], dailyCash = null, onClose, onConfirm, onBindEpc }) {
-  const [customerId, setCustomerId] = useState(customOrder?.customerId || "");
+  currency = "ر.س", initialItemId, initialCustomerId = null, taxEnabled, taxRate, settings = {}, role, customers = [], customOrder = null, reservations = [], dailyCash = null, onClose, onConfirm, onBindEpc }) {
+  const [customerId, setCustomerId] = useState(customOrder?.customerId || initialCustomerId || "");
   // عربون الحجز يُخصم من الفاتورة (المرجع 5.2.0) — حجز القطعة نفسها تلقائيًّا أو حجزٌ يُختار
   const [depositFrom, setDepositFrom] = useState("");
   // بطاقة هدية (وحدة giftCards): رمزها ورصيدها يُخصم من الفاتورة

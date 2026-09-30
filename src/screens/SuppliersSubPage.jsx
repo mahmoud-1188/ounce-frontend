@@ -10,8 +10,10 @@ import { InvoiceAttachField } from "../ui/InvoiceAttachField.jsx";
 import { SettleSupplierForm } from "../ui/SettleSupplierForm.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 import { SupplierOpeningCard } from "../ui/SupplierOpeningCard.jsx";
+import { RowHint } from "../ui/RowHint.jsx";
+import { RowMore } from "../ui/RowMore.jsx";
 
-function SuppliersSubPage({ suppliers, lots, items, safeTx, cashTx, taskirEntries, scrapEntries = [], offices = [], safeGoldTx = [], price24 = 0, currency, canManage, supplierOpenings = [], onAddOpening = null, onVoidOpening = null, onAddSupplier, onAttachInvoice, onAddPurchase, onCloseLot, onSettle, onBack, onOpenEntity }) {
+function SuppliersSubPage({ suppliers, lots, items, safeTx, cashTx, taskirEntries, scrapEntries = [], offices = [], safeGoldTx = [], price24 = 0, currency, canManage, supplierOpenings = [], onAddOpening = null, onVoidOpening = null, onAddSupplier, onAttachInvoice, onAddPurchase, onCloseLot, onSettle, onBack, onOpenEntity, rowActs = null, onRowAct = null }) {
   const [detailId, setDetailId] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
   const [showSettle, setShowSettle] = useState(false);
@@ -513,12 +515,13 @@ function SuppliersSubPage({ suppliers, lots, items, safeTx, cashTx, taskirEntrie
                     {grp.label} ({list.length})
                   </p>
                   <div className="flex flex-col gap-2">
+                    {grp.official && onOpenEntity && <RowHint />}
                     {list.map((sp) => {
                       const acc = accountFor(sp.id);
                       const clear = acc.goldOwed <= 0.0001 && acc.feesOwed <= 0.0001;
                       return (
                         <div key={sp.id}>
-                          <Card style={{ padding: 12 }}>
+                          <Card style={{ padding: 12 }} className="ons-row">
                             {/* ⚠ زرّان متجاوران لا متداخلان */}
                             <div className="flex items-center gap-2 mb-1.5">
                               <button
@@ -539,6 +542,10 @@ function SuppliersSubPage({ suppliers, lots, items, safeTx, cashTx, taskirEntrie
                                   <ChevronLeft size={12} color="var(--accent)"
                                     style={{ transform: "rotate(180deg)" }} />
                                 </button>
+                              )}
+                              {onOpenEntity && (
+                                <RowMore label={sp.name} acts={rowActs ? rowActs("supplier", sp) : []}
+                                  onMore={() => onOpenEntity("supplier", sp, "actions")} onAct={(id) => onRowAct?.(id, sp, "supplier")} />
                               )}
                             </div>
                             <div className="flex items-center justify-between">

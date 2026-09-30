@@ -4,9 +4,9 @@ import { ActionButton } from "../ui/ActionButton.jsx";
 import { ModalShell } from "../ui/ModalShell.jsx";
 import { SheetRow } from "../ui/SheetRow.jsx";
 
-function EntitySheet({ kind, record, ctx = {}, onClose, onAction }) {
+function EntitySheet({ kind, record, ctx = {}, onClose, onAction, initialTab = null }) {
   const def = ENTITY_KINDS[kind];
-  const [tab, setTab] = useState(def?.tabs?.[0] || "info");
+  const [tab, setTab] = useState(def?.tabs?.includes(initialTab) ? initialTab : def?.tabs?.[0] || "info");
   if (!def || !record) return null;
 
   const Icon = def.icon;

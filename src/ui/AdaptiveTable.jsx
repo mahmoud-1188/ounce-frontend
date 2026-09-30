@@ -11,6 +11,7 @@ function AdaptiveTable({
   onEdit,                // (row, key, value) => void
   actions = [],          // [{ id, label, icon, tone, disabled }]
   onAction,
+  rowEnd = null,         // (row) => عقدة في آخر الصفّ — «⋯» وأفعاله السريعة
   onSelect,              // للعرض المزدوج
   selectedId,
   empty = "لا سجلات",
@@ -37,9 +38,10 @@ function AdaptiveTable({
           const [first, ...rest] = columns;
           return (
             <Card key={id} style={{ padding: 0, overflow: "hidden" }}>
+              <div className="ons-row flex items-center">
               <button
                 onClick={() => setOpenId(open ? null : id)}
-                className="w-full text-right px-3 py-2.5 flex items-center gap-2"
+                className="flex-1 min-w-0 text-right px-3 py-2.5 flex items-center gap-2"
               >
                 <span className="flex-1 min-w-0">
                   <span style={{ color: "var(--text)" }} className="text-[12px] font-bold block truncate">
@@ -57,6 +59,8 @@ function AdaptiveTable({
                   style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform .2s" }}
                 />
               </button>
+              {rowEnd && <span className="pl-1">{rowEnd(r)}</span>}
+              </div>
 
               {/* ⚠ التوسّع في مكانه لا في صفحة: المستخدم يرى ما حوله
                   فيعرف أين هو، والرجوع ضغطةٌ على الرأس نفسه. */}
@@ -128,7 +132,7 @@ function AdaptiveTable({
                 {c.label}
               </th>
             ))}
-            {actions.length > 0 && (
+            {(actions.length > 0 || rowEnd) && (
               <th style={{ ...cell, background: "var(--field)", width: 1 }} />
             )}
           </tr>
@@ -140,6 +144,7 @@ function AdaptiveTable({
             return (
               <tr
                 key={id}
+                className="ons-row"
                 onClick={() => onSelect?.(r)}
                 style={{
                   background: on ? "var(--accentBg)" : "transparent",
@@ -159,9 +164,10 @@ function AdaptiveTable({
                     )}
                   </td>
                 ))}
-                {actions.length > 0 && (
+                {(actions.length > 0 || rowEnd) && (
                   <td style={{ ...cell, whiteSpace: "nowrap" }}>
-                    <span className="flex gap-1">
+                    <span className="flex gap-1 items-center">
+                      {rowEnd && rowEnd(r)}
                       {actions.map((a) => (
                         <button
                           key={a.id}
