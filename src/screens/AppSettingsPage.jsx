@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Check, ShieldCheck } from "lucide-react";
+import { Check, Coins, Link2, Printer, Puzzle, Settings2, ShieldCheck } from "lucide-react";
 import { APP_MODES, DEFAULT_APP_MODE, DEFAULT_SETTINGS } from "../core/constants.js";
 import { KARATS, fmt, pricePerGram } from "../core/money.js";
 import { CARD_NETWORKS, DEFAULT_CARD_FEES, DEFAULT_MARGINS } from "../core/money-rules.js";
@@ -18,7 +18,23 @@ import { HiddenModeSettingsCard } from "../ui/HiddenModeSettingsCard.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 import { InstallAppCard } from "../ui/InstallAppCard.jsx";
 
-function AppSettingsPage({ settings, onSave, branchIdentity, onSaveBranch, hqPermissions, priceData = {}, onBackfill, canEditControls = false, onSaveControls = null, hqManaged = null, onBack }) {
+/// صفوف الإعدادات الستّة (المرجع م5): الكلمات تعرّف أقسام الصفحة التي تخصّ الصفّ، والشاشات ما يُدار خارجها.
+const SETTINGS_ROWS = [
+  { id: "basics", label: "الأساسيات", icon: Settings2, keys: ["وضع التطبيق", "شكل التطبيق", "يوم العمل", "واتساب", "عمولة المدير"],
+    screens: [], status: (s) => `${APP_MODES[s.appMode || DEFAULT_APP_MODE]?.label || ""} · يوم العمل ${s.workdayMode === "off" ? "مطفأ" : "مفعّل"}` },
+  { id: "security", label: "الأمان والصلاحيات", icon: ShieldCheck, keys: ["الرقم السري", "الرقابة", "استرجاع"],
+    screens: [["access", "الصلاحيات"]], status: (s) => `الرقم السري ${s.requirePin ? "مفعّل" : "مطفأ"} · الاعتماد ${s.approvalsEnabled ? "مفعّل" : "مطفأ"}` },
+  { id: "money", label: "المال والضريبة", icon: Coins, keys: ["الضريبه", "هوامش", "هامش", "عمولات", "مطابقة البنك", "الزكاه", "فحص الكسر"],
+    screens: [], status: (s) => (s.taxEnabled ? `ضريبة ${Math.round((Number(s.taxRate) || 0) * 1000) / 10}٪` : "بلا ضريبة") + ` · الزكاة ${s.zakatEnabled === false ? "مطفأة" : "مفعّلة"}` },
+  { id: "devices", label: "الأجهزة", icon: Printer, keys: ["قارئ rfid", "الطابعه"],
+    screens: [["printerSetup", "الطابعة"], ["rfidSettings", "القارئ"]], status: () => "الطابعة وقارئ RFID" },
+  { id: "links", label: "الربط", icon: Link2, keys: ["ربط الفرع", "البرنامج المركزي"],
+    screens: [["integration", "الأنظمة"]], status: (s, b) => (b?.code ? `مربوطٌ بالإدارة · ${b.code}` : "غير مربوطٍ بالإدارة") },
+  { id: "modules", label: "الوحدات والنسخ", icon: Puzzle, keys: ["دفتر القيود", "ترحيل"],
+    screens: [["modules", "الوحدات"], ["backup", "النسخ"]], status: () => "الوحدات الاختيارية والنسخ الاحتياطي" },
+];
+
+function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSaveBranch, hqPermissions, priceData = {}, onBackfill, canEditControls = false, onSaveControls = null, hqManaged = null, onBack }) {
   const [newRecovery, setNewRecovery] = useState("");
   const [fees, setFees] = useState(() => ({ ...DEFAULT_CARD_FEES, ...(settings.cardFees || {}) }));
   const [margins, setMargins] = useState(() => ({ ...DEFAULT_MARGINS, ...(settings.marginByKarat || {}) }));
@@ -38,6 +54,7 @@ function AppSettingsPage({ settings, onSave, branchIdentity, onSaveBranch, hqPer
   // ⚠ نُخفي كتل الصفحة التي لا تحوي الكلمة بدل إعادة بنائها من جدول: الصفحة
   //   تتغيّر كثيرًا، وجدولٌ منفصل يتقادم فيُضلّ البحث. عنوان القسم يظهر مع كتلته.
   const [query, setQuery] = useState("");
+  const [section, setSection] = useState(null);   // أحد الصفوف الستّة — يعرض أقسامه وحدها
   const [misses, setMisses] = useState(false);
   const bodyRef = useRef(null);
   useEffect(() => {
@@ -49,14 +66,23 @@ function AppSettingsPage({ settings, onSave, branchIdentity, onSaveBranch, hqPer
     const hit = (el) => { const t = norm(el.textContent); return words.every((w) => t.includes(w)); };
     const isTitle = (el) => el.tagName === "P" && el.classList.contains("font-bold");
     let any = false;
+    // صفٌّ مختار: عنوان القسم يجرّ ما تحته حتى العنوان التالي، والبطاقة بلا عنوانٍ تُعرف بكلماتها
+    const keys = !words.length && section ? SETTINGS_ROWS.find((r) => r.id === section)?.keys.map(norm) || [] : [];
+    const inKeys = (el) => { const t = norm(el.textContent); return keys.some((k) => t.includes(k)); };
+    let under = false;
     kids.forEach((el, i) => {
+      if (keys.length) {
+        if (isTitle(el)) { under = inKeys(el); el.hidden = !under; if (under) any = true; return; }
+        const show = under || (!kids.slice(0, i).some(isTitle) ? true : inKeys(el));
+        el.hidden = !show; if (show) any = true; return;
+      }
       if (!words.length) { el.hidden = false; return; }
       let show = hit(el);
       if (isTitle(el) && !show) { const nx = kids[i + 1]; show = !!nx && !isTitle(nx) && hit(nx); }
       el.hidden = !show;
       if (show && !isTitle(el)) any = true;
     });
-    setMisses(words.length > 0 && !any);
+    setMisses((words.length > 0 || keys.length > 0) && !any);
   });
 
   return (
@@ -67,7 +93,38 @@ function AppSettingsPage({ settings, onSave, branchIdentity, onSaveBranch, hqPer
           aria-label="ابحث في الإعدادات" className="w-full mb-3 px-3 py-2.5 rounded-xl text-[12px]"
           style={{ background: "var(--field)", color: "var(--text)", border: "1px solid var(--line)" }} />
         {misses && (
-          <p style={{ color: "var(--text3)" }} className="text-[11px] mb-3">لا إعداد بهذه الكلمة هنا — جرّب «البحث الشامل» للشاشات.</p>
+          <p style={{ color: "var(--text3)" }} className="text-[11px] mb-3">
+            {query.trim() ? "لا إعداد بهذه الكلمة هنا — جرّب «البحث الشامل» للشاشات." : "إعدادات هذا الصفّ في شاشاتها — افتحها من الزرّ بجانبه."}
+          </p>
+        )}
+        {/* ── ستّة صفوف (المرجع م5): لكلٍّ حالته قبل فتحه، والضغط يعرض أقسامه وحدها ── */}
+        {!query.trim() && (
+          <div className="grid grid-cols-1 gap-1.5 mb-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
+            {SETTINGS_ROWS.map((r) => {
+              const on = section === r.id;
+              const Icon = r.icon;
+              return (
+                <div key={r.id} className="rounded-xl px-3 py-2 flex items-center gap-2"
+                  style={{ background: on ? "var(--accentBg)" : "var(--panel)", border: `1px solid ${on ? "var(--accentLine)" : "var(--edge)"}` }}>
+                  <button type="button" onClick={() => setSection(on ? null : r.id)} aria-pressed={on}
+                    className="flex-1 min-w-0 flex items-center gap-2 text-right">
+                    <Icon size={16} color="var(--accent)" />
+                    <span className="min-w-0">
+                      <span className="block text-[12px] font-bold" style={{ color: "var(--text)" }}>{r.label}</span>
+                      <span className="block text-[10px] truncate" style={{ color: "var(--text3)" }}>{r.status(settings, branchIdentity)}</span>
+                    </span>
+                  </button>
+                  {onOpen && r.screens.map(([id, lbl]) => (
+                    <button key={id} type="button" onClick={() => onOpen(id)} className="text-[10px] px-2 py-1 rounded-lg flex-shrink-0"
+                      style={{ color: "var(--accent)", border: "1px solid var(--accentLine)" }}>{lbl} ←</button>
+                  ))}
+                </div>
+              );
+            })}
+            {section && (
+              <button type="button" onClick={() => setSection(null)} className="text-[11px] py-1" style={{ color: "var(--text3)" }}>عرض كل الإعدادات</button>
+            )}
+          </div>
         )}
       </div>
       <div className="px-4" ref={bodyRef}>

@@ -8255,6 +8255,7 @@ export default function GoldInventoryApp() {
         )}
         {morePage === "settings" && (
           <AppSettingsPage
+            onOpen={openPage}
             priceData={priceData}
             settings={appSettings} onSave={handleUpdateSettings} branchIdentity={branchIdentity} onSaveBranch={handleSaveBranchIdentity} hqPermissions={hqPermissions}
             canEditControls={role === "manager"} onSaveControls={handleSaveControls}
