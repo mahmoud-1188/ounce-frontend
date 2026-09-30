@@ -368,6 +368,7 @@ import { SellerReportsPage } from "../screens/SellerReportsPage.jsx";
 import { StocktakeSubPage } from "../screens/StocktakeSubPage.jsx";
 import { SoldFoundCard } from "../ui/SoldFoundCard.jsx";
 import { ConnectivityBar } from "../ui/ConnectivityBar.jsx";
+import { HubBar } from "../ui/HubBar.jsx";
 import { DesktopSideNav, SIDE_NAV_W } from "../ui/DesktopSideNav.jsx";
 import { ForcePinChangeSheet } from "../modals/ForcePinChangeSheet.jsx";
 import { StoreLinkPage } from "../screens/StoreLinkPage.jsx";
@@ -7864,6 +7865,12 @@ export default function GoldInventoryApp() {
               </div>
             </Card>
           </div>
+        )}
+        {currentUser && (
+          <HubBar current={morePage || tab}
+            allowed={(id) => (permsNow.allowedTabs.includes(id) || permsNow.allowedMore.includes(id))
+              && !moduleHiddenPages.includes(id) && (id !== "bankRecon" || !!appSettings.bankReconEnabled)}
+            onOpen={openPage} />
         )}
         {morePage === null && tab === "home" && (
           <HomeScreen
