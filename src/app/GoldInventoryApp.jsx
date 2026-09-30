@@ -368,6 +368,7 @@ import { SellerReportsPage } from "../screens/SellerReportsPage.jsx";
 import { StocktakeSubPage } from "../screens/StocktakeSubPage.jsx";
 import { SoldFoundCard } from "../ui/SoldFoundCard.jsx";
 import { ConnectivityBar } from "../ui/ConnectivityBar.jsx";
+import { HubBar } from "../ui/HubBar.jsx";
 import { DesktopSideNav, SIDE_NAV_W } from "../ui/DesktopSideNav.jsx";
 import { ForcePinChangeSheet } from "../modals/ForcePinChangeSheet.jsx";
 import { StoreLinkPage } from "../screens/StoreLinkPage.jsx";
@@ -7865,6 +7866,12 @@ export default function GoldInventoryApp() {
             </Card>
           </div>
         )}
+        {currentUser && (
+          <HubBar current={morePage || tab}
+            allowed={(id) => (permsNow.allowedTabs.includes(id) || permsNow.allowedMore.includes(id))
+              && !moduleHiddenPages.includes(id) && (id !== "bankRecon" || !!appSettings.bankReconEnabled)}
+            onOpen={openPage} />
+        )}
         {morePage === null && tab === "home" && (
           <HomeScreen
             userName={currentUser?.name || ""}
@@ -8518,7 +8525,7 @@ export default function GoldInventoryApp() {
             baseKarat={appSettings?.baseKarat || 21} onBack={() => setMorePage(null)} />
         )}
         {morePage === "ifrs" && (
-          <IfrsPage journal={journal} fixedAssets={fixedAssets || []} currency={priceData.currency || "ر.س"}
+          <IfrsPage journal={journal} fixedAssets={fixedAssets || []} currency={priceData.currency || "ر.س"} price24={priceData.current || 0}
             periodStart={latestClosure ? latestClosure.closedAt : null} onBack={() => setMorePage(null)} />
         )}
         {morePage === "fullStatements" && (

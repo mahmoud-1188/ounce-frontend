@@ -186,6 +186,19 @@ function fetchZakat({ price24 = 0, asOf = null } = {}) {
   return apiFetch(`/zakat?${qs}`);
 }
 
+/** GET /ifrs/bridge — الجسر بين المكسب بالوزن والنتيجة الدولية، من الدفاتر كاملةً. */
+function fetchIfrsBridge({ from = null, to = null, priceOpen = 0, priceClose = 0 } = {}) {
+  const qs = new URLSearchParams({ priceOpen: String(Number(priceOpen) || 0), priceClose: String(Number(priceClose) || 0),
+    ...(from ? { from } : {}), ...(to ? { to } : {}) });
+  return apiFetch(`/ifrs/bridge?${qs}`);
+}
+
+/** GET /ifrs/measurement — قياس نهاية الفترة (IAS 2)، عرضٌ بلا قيد. */
+function fetchIfrsMeasurement({ asOf = null, price24 = 0 } = {}) {
+  const qs = new URLSearchParams({ price24: String(Number(price24) || 0), ...(asOf ? { asOf } : {}) });
+  return apiFetch(`/ifrs/measurement?${qs}`);
+}
+
 /** POST /sales/set-part — بيع جزءٍ من طقم (migration 066). */
 function sellSetPart(body) {
   return apiFetch("/sales/set-part", { method: "POST", body });
@@ -715,6 +728,8 @@ export {
   soldFoundApi,
   changeOwnPin,
   fetchZakat,
+  fetchIfrsBridge,
+  fetchIfrsMeasurement,
   sellSetPart,
   fiscalApi,
   einvoiceApi,

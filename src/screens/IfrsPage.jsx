@@ -2,10 +2,11 @@ import React, { useMemo, useState } from "react";
 import { fmtMoney } from "../core/money.js";
 import { buildIfrsStatements, ifrsChecks } from "../domain/buildIfrsStatements.js";
 import { Card } from "../ui/Card.jsx";
+import { IfrsBridgeCard } from "../ui/IfrsBridgeCard.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 
 /// المعايير الدولية (IFRS) — الامتثال · القوائم بتصنيف IAS 1 · السياسات (المرجع 5.2.0 · قراءةٌ من الدفتر)
-function IfrsPage({ journal = [], fixedAssets = [], currency = "ر.س", periodStart = null, onBack }) {
+function IfrsPage({ journal = [], fixedAssets = [], currency = "ر.س", periodStart = null, price24 = 0, onBack }) {
   const [tab, setTab] = useState("status");
   const m = (v) => `${currency}${fmtMoney(v)}`;
   const nowIso = useMemo(() => new Date().toISOString(), [journal]);
@@ -35,7 +36,7 @@ function IfrsPage({ journal = [], fixedAssets = [], currency = "ر.س", periodSt
       <SubPageHeader title="المعايير الدولية — IFRS" onBack={onBack} />
       <div className="px-4 pt-3">
         <div className="flex gap-1.5 flex-wrap mb-3">
-          {[["status", "الامتثال"], ["statements", "القوائم"], ["policies", "السياسات"]].map(([id, lbl]) => (
+          {[["status", "الامتثال"], ["statements", "القوائم"], ["bridge", "الجسر والقياس"], ["policies", "السياسات"]].map(([id, lbl]) => (
             <button key={id} onClick={() => setTab(id)} className="px-3 py-1.5 rounded-xl text-[11px] font-bold"
               style={{ background: tab === id ? "var(--accentBg)" : "var(--panel)", color: tab === id ? "var(--accent)" : "var(--text2)", border: "1px solid var(--line)" }}>{lbl}</button>
           ))}
@@ -53,6 +54,7 @@ function IfrsPage({ journal = [], fixedAssets = [], currency = "ر.س", periodSt
             ))}
           </Sec>
         )}
+        {tab === "bridge" && <IfrsBridgeCard price24={price24} currency={currency} />}
         {tab === "statements" && (
           <>
             <Sec title={`قائمة المركز المالي (IAS 1) ${st.sofp.balanced ? "✓ متوازنة" : "✗ غير متوازنة"}`}>
