@@ -369,6 +369,7 @@ import { StocktakeSubPage } from "../screens/StocktakeSubPage.jsx";
 import { SoldFoundCard } from "../ui/SoldFoundCard.jsx";
 import { ConnectivityBar } from "../ui/ConnectivityBar.jsx";
 import { HubBar } from "../ui/HubBar.jsx";
+import { NavDrawerFab } from "../ui/NavDrawerFab.jsx";
 import { DesktopSideNav, SIDE_NAV_W } from "../ui/DesktopSideNav.jsx";
 import { ForcePinChangeSheet } from "../modals/ForcePinChangeSheet.jsx";
 import { StoreLinkPage } from "../screens/StoreLinkPage.jsx";
@@ -7597,6 +7598,16 @@ export default function GoldInventoryApp() {
           onHome={() => openPage("home")}
         />
       )}
+      {!showSideNav && !!currentUser && (
+        <NavDrawerFab
+          layoutKey={designOfTheme(effectiveTheme(appSettings))}
+          permitted={new Set([...permsNow.allowedTabs.filter((id) => id !== "more"), ...permsNow.allowedMore])}
+          disabled={[...(appSettings.bankReconEnabled ? [] : ["bankRecon"]), ...moduleHiddenPages]}
+          current={morePage || tab}
+          onSelect={openPage}
+          onHome={() => openPage("home")}
+        />
+      )}
       <div
         className="mx-auto"
         style={{
@@ -9180,7 +9191,7 @@ export default function GoldInventoryApp() {
         if (designOfTheme(effectiveTheme(appSettings)) === "simple") {
           if (morePage !== null || tab === "home") return null;
           return (
-            <button onClick={() => { setMorePage(null); setTab("home"); }} aria-label="الرئيسية"
+            <button id="ons-home-pill" onClick={() => { setMorePage(null); setTab("home"); }} aria-label="الرئيسية"
               className="fixed flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-bold"
               style={{ zIndex: 40, insetInlineStart: 16, bottom: "calc(16px + env(safe-area-inset-bottom, 0px))", background: "var(--accentBg)", color: "var(--accentText)",
                 border: "1px solid var(--accentLine)", boxShadow: "var(--cardShadow)" }}>
@@ -9219,6 +9230,7 @@ export default function GoldInventoryApp() {
 
         return (
           <div
+            id="ons-bottom-nav"
             className="fixed bottom-0 left-0 right-0 z-40"
             // ⚠ على الشاشة الكبيرة رصيفٌ جانبي لا شريط سفلي.
             //
