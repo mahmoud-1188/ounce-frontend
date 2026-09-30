@@ -35,3 +35,7 @@ body {
 @keyframes rdIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 [data-design="radiant"] .ons-dot{animation:rdPulse 2s ease-in-out infinite}
 @media (prefers-reduced-motion:reduce){[data-design="radiant"] body::before,[data-design="radiant"] .ons-hero::after,[data-design="radiant"] .ons-live,[data-design="radiant"] .ons-in,[data-design="radiant"] .ons-dot{animation:none!important}}
+
+/* أفعال الصفّ السريعة: تظهر عند مرور الفأرة أو التركيز، وتختفي على اللمس */
+.ons-row-quick{display:none}
+@media (hover:hover) and (pointer:fine){.ons-row:hover .ons-row-quick,.ons-row:focus-within .ons-row-quick{display:grid}}

@@ -4,9 +4,11 @@ import { fine24, fmt, fmtMoney, fmtW, weightTimesPrice } from "../core/money.js"
 import { categoryLabel, itemLabel } from "../domain/helpers.js";
 import { Card } from "../ui/Card.jsx";
 import { EmptyState } from "../ui/EmptyState.jsx";
+import { EntityRow } from "../ui/EntityRow.jsx";
+import { RowHint } from "../ui/RowHint.jsx";
 
 function InventorySummaryTab({ totals, currency, items = [], scrapEntries = [],
-  safeGoldTx = [], trustGold = [], price24 = 0, onOpenEntity }) {
+  safeGoldTx = [], trustGold = [], price24 = 0, onOpenEntity, rowActs = null, onRowAct = null }) {
   // ── الذهب بالعيار وبمعادله عيار 24 ──
   //
   // العيارات لا تُجمع خامًا: 10 جم عيار 18 ليست كـ10 جم عيار 24. عرض
@@ -237,15 +239,21 @@ function InventorySummaryTab({ totals, currency, items = [], scrapEntries = [],
           <p style={{ color: "var(--text3)" }} className="text-[10px] mb-2">
             ⚖ بياناتها وحركاتها وإجراءاتها في ورقة واحدة — بلا مغادرة الشاشة.
           </p>
+          <RowHint />
           <div className="flex flex-col gap-1.5">
             {items.slice(0, 40).map((it) => {
               const avail = (it.units || []).filter((u) => !u.sold && !u.issued).length;
               return (
-                <button
+                <EntityRow
                   key={it.id}
-                  onClick={() => onOpenEntity("item", it)}
-                  className="w-full text-right rounded-xl px-3 py-2.5 flex items-center gap-2"
+                  label={itemLabel(it)}
+                  acts={rowActs ? rowActs("item", it) : []}
+                  onOpen={() => onOpenEntity("item", it)}
+                  onMore={() => onOpenEntity("item", it, "actions")}
+                  onAct={(id) => onRowAct?.(id, it, "item")}
+                  className="rounded-xl pl-1"
                   style={{ background: "var(--panel)", border: "1px solid var(--edge)" }}
+                  innerClass="flex-1 min-w-0 text-right px-3 py-2.5 flex items-center gap-2"
                 >
                   <span className="flex-1 min-w-0">
                     <span style={{ color: "var(--text)" }} className="text-[12px] font-bold block truncate">
@@ -258,7 +266,7 @@ function InventorySummaryTab({ totals, currency, items = [], scrapEntries = [],
                   <span style={{ color: "var(--accent)" }} className="text-[11px]">
                     {currency}{fmtMoney(fine24(it.weight, it.karat) * (price24 || 0))}
                   </span>
-                </button>
+                </EntityRow>
               );
             })}
           </div>

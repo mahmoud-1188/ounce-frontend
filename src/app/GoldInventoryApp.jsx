@@ -273,6 +273,7 @@ import { AiActionSheet } from "../modals/AiActionSheet.jsx";
 import { BundleSheet } from "../modals/BundleSheet.jsx";
 import { CashModal } from "../modals/CashModal.jsx";
 import { EntitySheet } from "../modals/EntitySheet.jsx";
+import { entityActionsSpec } from "../domain/entities.js";
 import { BudgetsPage } from "../screens/BudgetsPage.jsx";
 import { VatReturnPage } from "../screens/VatReturnPage.jsx";
 import { EInvoicePage } from "../screens/EInvoicePage.jsx";
@@ -511,6 +512,8 @@ export default function GoldInventoryApp() {
   const [showPrice, setShowPrice] = useState(false);
   const [showNewSale, setShowNewSale] = useState(false);
   const [quickSaleItemId, setQuickSaleItemId] = useState(null);
+  const [quickSaleCustomerId, setQuickSaleCustomerId] = useState(null);
+  const [statementPreset, setStatementPreset] = useState(null); // { entity, id } — كشفٌ يُفتح على صاحبه
   const [viewingSale, setViewingSale] = useState(null);
   const [pendingCustomOrder, setPendingCustomOrder] = useState(null); // طلبٌ خاص يُسلَّم بالفاتورة القادمة
   const [cashModalType, setCashModalType] = useState(null);
@@ -3674,59 +3677,13 @@ export default function GoldInventoryApp() {
       return row;
     });
 
-  const entityActionsFor = (kind, r) => {
-    const mgr = role === "manager" || role === "assistant";
-    if (kind === "item") {
-      const avail = (r.units || []).filter((u) => !u.sold && !u.issued).length;
-      return [
-        { id: "sell", label: "بيع هذه القطعة", icon: ShoppingCart,
-          hint: avail ? `${avail} متاح` : "لا وحدات متاحة",
-          disabled: !avail || !openDay },
-        { id: "edit", label: "تعديل البيانات", icon: Wrench, disabled: !mgr },
-        { id: "print", label: "طباعة الملصق", icon: Printer },
-        { id: "issue", label: "إخراج من النظام", icon: PackageMinus,
-          tone: "bad", hint: "بسبب مُعلَن — لا حذف", disabled: !mgr || !avail },
-        { id: "trace", label: "تتبّع للمصدر", icon: Search,
-          hint: "الدفعة والمورد وتاريخ الدخول" },
-      ];
-    }
-    if (kind === "customer") {
-      return [
-        { id: "sell", label: "فاتورة له", icon: Receipt, disabled: !openDay },
-        { id: "receipt", label: "سند قبض", icon: Banknote, disabled: !openDay },
-        { id: "statement", label: "كشف حساب PDF", icon: FileText },
-        { id: "edit", label: "تعديل البيانات", icon: Wrench, disabled: !mgr },
-      ];
-    }
-    if (kind === "supplier") {
-      return [
-        { id: "purchase", label: "شراء منه", icon: Truck, disabled: !mgr || !openDay },
-        { id: "settle", label: "سداد", icon: Handshake, disabled: !mgr },
-        { id: "statement", label: "كشف حساب PDF", icon: FileText },
-        { id: "edit", label: "تعديل البيانات", icon: Wrench, disabled: !mgr },
-      ];
-    }
-    if (kind === "sale") {
-      return [
-        { id: "print", label: "إعادة الطباعة", icon: Printer },
-        { id: "return", label: "استرجاع", icon: RotateCcw, tone: "bad",
-          hint: "بسطر أو بالفاتورة كاملة" },
-        { id: "trace", label: "تتبّع الأسطر", icon: Search },
-      ];
-    }
-    if (kind === "scrap") {
-      const st = stageOf(r);
-      return [
-        { id: "break", label: "تكسير وتثبيت الوزن", icon: Scale,
-          disabled: !mgr || st !== "pending_break" },
-        { id: "convert", label: "إدخال للمخزون", icon: Package,
-          disabled: !mgr || st !== "in_safe",
-          hint: st !== "in_safe" ? "يحتاج التصفية أولًا" : null },
-        { id: "trace", label: "تتبّع", icon: Search },
-      ];
-    }
-    return [];
-  };
+  // ⚠ أفعال الصفّ من جدولٍ واحد (domain/entities.js): ما يظهر يُفتح لمن يجلس ويُسمح له
+  const entityActionsFor = (kind, r) => entityActionsSpec(kind, r, {
+    pageOk: (id) => permsNow.allowedTabs.includes(id) || permsNow.allowedMore.includes(id),
+    mgr: role === "manager" || role === "assistant",
+    openDay,
+    locked: !!stocktakeLock,
+  });
 
   /// صفوف العرض لكل تبويب.
   const entityRowsFor = (kind, r, tab) => {
@@ -3789,25 +3746,40 @@ export default function GoldInventoryApp() {
   };
 
   /// تنفيذ الفعل — نقطةٌ واحدة لكل الكيانات.
+  // الكشف المُعدّ لزيارةٍ واحدة — من غادر ثم عاد يجد الشاشة كما هي
+  useEffect(() => {
+    if (statementPreset && morePage !== "anyStatement") setStatementPreset(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [morePage]);
+  // طباعة الفاتورة من موضعٍ واحد: نافذة الفاتورة وفعل «طباعة الفاتورة» على صفّها
+  const printSale = (sl) => {
+    const info = { ...(branchProvision?.profile || {}), name: branchIdentity?.name || "" };
+    const withAttrs = { ...sl, lines: (sl.lines || []).map((l) => { const it = items.find((x) => x.id === l.itemId); return { ...l, itemName: it ? `${categoryLabel(l.category)} ع${l.karatSnapshot}` : undefined, gem: it?.gem || null, watch: it?.watch || null }; }) };
+    const einvoice = appSettings.serverModules?.zatca?.on ? api.einvoiceApi.of("sales", withAttrs.id).then((r) => r.einvoice) : null;
+    if (!printSaleInvoice(withAttrs, { info, currency: priceData.currency || "ر.س", modules: appSettings.serverModules || {}, einvoice })) flashToast("اسمح بالنوافذ المنبثقة للطباعة");
+  };
   const runEntityAction = (actionId, r, kind) => {
-    const go = (page) => { setSheetEntity(null); openPage(page); };
-    if (actionId === "edit") return go(kind === "item" ? "itemEdit"
-      : kind === "customer" ? "customers" : "suppliers");
-    if (actionId === "issue") return go("goldOut");
-    if (actionId === "trace") return go("search");
-    if (actionId === "statement") return go(kind === "supplier" ? "supplierLedger" : "customers");
-    if (actionId === "return") return go("salesReturn");
-    if (actionId === "print") return go(kind === "sale" ? "printing" : "printerSetup");
-    if (actionId === "break" || actionId === "convert") return go("scrapCustody");
-    if (actionId === "purchase") return go("purchases");
-    if (actionId === "settle") return go("supplierLedger");
-    if (actionId === "receipt") return go("customers");
-    if (actionId === "sell") {
-      setSheetEntity(null);
-      setTab("sales");
-      return;
-    }
+    const a = entityActionsFor(kind, r).find((x) => x.id === actionId);
     setSheetEntity(null);
+    if (!a || a.disabled) { flashToast(a?.hint || "هذا الفعل غير متاح الآن"); return; }
+    const go = (page) => openPage(page);
+    // كشف الحساب يُفتح على صاحبه لا على شاشةٍ فارغة يُبحث فيها من جديد
+    const stmt = (entity, id) => {
+      if (a.target === "anyStatement") setStatementPreset({ entity, id, at: Date.now() });
+      go(a.target);
+    };
+    switch (`${kind}:${actionId}`) {
+      case "item:sell": setQuickSaleCustomerId(null); setQuickSaleItemId(r.id); setShowNewSale(true); return;
+      case "customer:sell": setQuickSaleItemId(null); setQuickSaleCustomerId(r.id); setShowNewSale(true); return;
+      case "customer:statement": return stmt("customer", r.id);
+      case "supplier:statement": return stmt("supplier", r.id);
+      case "sale:customerStatement": return stmt("customer", r.customerId);
+      case "sale:return": case "sale:exchange":
+        setReturnPreset({ saleId: r.id, mode: actionId === "exchange" ? "exchange" : "return" });
+        return go("salesReturn");
+      case "sale:print": return printSale(r);
+      default: return a.target ? go(a.target) : undefined;
+    }
   };
 
   const postJournal = (opType, amount, opts = {}) => {
@@ -6026,7 +5998,7 @@ export default function GoldInventoryApp() {
     if (draft.customOrderId) setPendingCustomOrder(null);
     if (Number(srvSale.depositApplied) > 0 || Number(srvSale.giftApplied) > 0 || draft.customOrderId) {
       setShowNewSale(false);
-      setQuickSaleItemId(null);
+      setQuickSaleItemId(null); setQuickSaleCustomerId(null);
       flashToast(`تم إنشاء الفاتورة — خُصم ${Number(srvSale.depositApplied) > 0 ? `عربون ${fmtMoney(srvSale.depositApplied)}` : ""}${Number(srvSale.giftApplied) > 0 ? ` بطاقة ${fmtMoney(srvSale.giftApplied)}` : ""} والمقبوض ${fmtMoney(srvSale.payable)}${srvSale.pointsEarned ? ` · +${srvSale.pointsEarned} نقطة` : ""}`);
       loadBootstrap(currentUser).catch(() => {});
       return;
@@ -6124,7 +6096,7 @@ export default function GoldInventoryApp() {
     if (entries.length) setCashTx([...entries, ...cashTx]);
 
     setShowNewSale(false);
-    setQuickSaleItemId(null);
+    setQuickSaleItemId(null); setQuickSaleCustomerId(null);
     flashToast("تم إنشاء الفاتورة");
   };
 
@@ -7786,8 +7758,10 @@ export default function GoldInventoryApp() {
       {/* ── ورقة الكيان ── */}
       {sheetEntity && (
         <EntitySheet
+          key={`${sheetEntity.kind}:${sheetEntity.record?.id}:${sheetEntity.tab || ""}`}
           kind={sheetEntity.kind}
           record={sheetEntity.record}
+          initialTab={sheetEntity.tab}
           ctx={{
             currency: priceData.currency,
             actionsFor: entityActionsFor,
@@ -7911,7 +7885,7 @@ export default function GoldInventoryApp() {
             onSell={() => {
               if (!openDay) { openPage("sales"); return; }
               if (stocktakeLock) { flashToast("المخزون مقفل للجرد"); return; }
-              setQuickSaleItemId(null);
+              setQuickSaleItemId(null); setQuickSaleCustomerId(null);
               setShowNewSale(true);
             }}
             onScrap={() => { setMorePage(null); setOpenBundle("grp_scrap_all"); }}
@@ -7920,7 +7894,7 @@ export default function GoldInventoryApp() {
         )}
         {morePage === null && tab === "inventory" && (
           <InventorySummaryTab
-            onOpenEntity={(kind, record) => setSheetEntity({ kind, record })}
+            onOpenEntity={(kind, record, tab) => setSheetEntity({ kind, record, tab })} rowActs={entityActionsFor} onRowAct={runEntityAction}
             totals={totals}
             items={activeItems}
             scrapEntries={scrapEntries}
@@ -7980,7 +7954,7 @@ export default function GoldInventoryApp() {
             }
             onSetPart={activeItems.some((it) => isSellableSet(it, categories)) ? () => setShowSetPartSale(true) : null}
             onNew={() => {
-              setQuickSaleItemId(null);
+              setQuickSaleItemId(null); setQuickSaleCustomerId(null);
               setShowNewSale(true);
             }}
             onReturns={(permsNow.allowedMore || []).includes("salesReturn") ? () => openPage("salesReturn") : null}
@@ -8175,7 +8149,7 @@ export default function GoldInventoryApp() {
             supplierOpenings={supplierOpenings}
             onAddOpening={handleAddSupplierOpening}
             onVoidOpening={handleVoidSupplierOpening}
-            onOpenEntity={(k, r) => setSheetEntity({ kind: k, record: r })}
+            onOpenEntity={(k, r, tab) => setSheetEntity({ kind: k, record: r, tab })} rowActs={entityActionsFor} onRowAct={runEntityAction}
             scrapEntries={scrapEntries}
             offices={taskirOffices}
             safeGoldTx={safeGoldTx}
@@ -8198,7 +8172,7 @@ export default function GoldInventoryApp() {
         )}
         {morePage === "salesHistory" && (
           <SalesHistoryPage
-            onOpenEntity={(k, r) => setSheetEntity({ kind: k, record: r })}
+            onOpenEntity={(k, r, tab) => setSheetEntity({ kind: k, record: r, tab })} rowActs={entityActionsFor} onRowAct={runEntityAction}
             customers={customers}
             returns={returns}
             canReturn={role !== "employee"}
@@ -8561,6 +8535,8 @@ export default function GoldInventoryApp() {
         )}
         {morePage === "anyStatement" && (
           <AnyStatementPage
+            key={statementPreset ? statementPreset.at : "plain"}
+            initial={statementPreset}
             suppliers={suppliers}
             customers={customers}
             users={users}
@@ -8770,7 +8746,7 @@ export default function GoldInventoryApp() {
         {morePage === "customers" && (
           <CustomersPage
             onEditCustomer={(id, f, v) => editRecord(CUSTOMERS_KEY, setCustomers, customers, id, f, v)}
-            onOpenEntity={(k, r) => setSheetEntity({ kind: k, record: r })}
+            onOpenEntity={(k, r, tab) => setSheetEntity({ kind: k, record: r, tab })} rowActs={entityActionsFor} onRowAct={runEntityAction}
             customers={customers}
             sales={sales}
             returns={returns}
@@ -9488,13 +9464,14 @@ export default function GoldInventoryApp() {
           activeItems={activeItems}
           priceData={priceData}
           initialItemId={quickSaleItemId}
+          initialCustomerId={quickSaleCustomerId}
           taxEnabled={appSettings.taxEnabled}
           taxRate={appSettings.taxRate}
           currency={priceData.currency}
           dailyCash={cashBalance.cash}
           onClose={() => {
             setShowNewSale(false);
-            setQuickSaleItemId(null);
+            setQuickSaleItemId(null); setQuickSaleCustomerId(null);
             setPendingCustomOrder(null);
           }}
           onConfirm={handleCreateSale}
@@ -9511,12 +9488,7 @@ export default function GoldInventoryApp() {
           suppliers={suppliers}
           canReturn={(permsNow.allowedMore || []).includes("salesReturn")}
           onReturn={(saleId, mode) => { setReturnPreset({ saleId, mode }); setViewingSale(null); openPage("salesReturn"); }}
-          onPrint={(s) => {
-            const info = { ...(branchProvision?.profile || {}), name: branchIdentity?.name || "" };
-            const withAttrs = { ...s, lines: (s.lines || []).map((l) => { const it = items.find((x) => x.id === l.itemId); return { ...l, itemName: it ? `${categoryLabel(l.category)} ع${l.karatSnapshot}` : undefined, gem: it?.gem || null, watch: it?.watch || null }; }) };
-            const einvoice = appSettings.serverModules?.zatca?.on ? api.einvoiceApi.of("sales", withAttrs.id).then((r) => r.einvoice) : null;
-            if (!printSaleInvoice(withAttrs, { info, currency: priceData.currency || "ر.س", modules: appSettings.serverModules || {}, einvoice })) flashToast("اسمح بالنوافذ المنبثقة للطباعة");
-          }}
+          onPrint={printSale}
           onClose={() => setViewingSale(null)}
         />
       )}

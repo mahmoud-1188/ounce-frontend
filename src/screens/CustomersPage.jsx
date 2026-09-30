@@ -10,8 +10,10 @@ import { Field } from "../ui/Field.jsx";
 import { NumericInput } from "../ui/NumericInput.jsx";
 import { Stat } from "../ui/Stat.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
+import { RowHint } from "../ui/RowHint.jsx";
+import { RowMore } from "../ui/RowMore.jsx";
 
-function CustomersPage({ customers, sales, returns = [], repairs = [], trustGold = [], receipts = [], currency, canManage, onAdd, onCollect, onBack, onOpenEntity, onEditCustomer }) {
+function CustomersPage({ customers, sales, returns = [], repairs = [], trustGold = [], receipts = [], currency, canManage, onAdd, onCollect, onBack, onOpenEntity, onEditCustomer, rowActs = null, onRowAct = null }) {
   const vp = useViewport();
   // مديونية العميل = مبيعاته الآجلة − ما حصّلته منه − مرتجعاته الآجلة.
   const receivableFor = (id) => {
@@ -356,6 +358,8 @@ function CustomersPage({ customers, sales, returns = [], repairs = [], trustGold
                 { key: "note", label: "ملاحظة", editable: canManage },
               ];
               return (
+                <>
+                {onOpenEntity && <RowHint />}
                 <AdaptiveTable
                   vp={vp}
                   rows={filtered}
@@ -368,6 +372,10 @@ function CustomersPage({ customers, sales, returns = [], repairs = [], trustGold
                      والحقل معها — والضغط يبدو بلا أثر.
                      والتفصيل يُفتح بزرّه الصريح لا بنقر الصفّ. */
                   onEdit={(row, key, value) => onEditCustomer?.(row.id, key, value)}
+                  rowEnd={onOpenEntity ? (c) => (
+                    <RowMore label={c.name} acts={rowActs ? rowActs("customer", c) : []}
+                      onMore={() => onOpenEntity("customer", c, "actions")} onAct={(id) => onRowAct?.(id, c, "customer")} />
+                  ) : null}
                   actions={[
                     { id: "sheet", label: "كل ما يخصّه" },
                     { id: "detail", label: "التفاصيل", tone: "text2" },
@@ -378,6 +386,7 @@ function CustomersPage({ customers, sales, returns = [], repairs = [], trustGold
                   }}
                   empty="لا عملاء بعد"
                 />
+                </>
               );
             })()}
           </div>

@@ -5,8 +5,10 @@ import { PAYMENT_METHODS } from "../core/money-rules.js";
 import { Card } from "../ui/Card.jsx";
 import { EmptyState } from "../ui/EmptyState.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
+import { EntityRow } from "../ui/EntityRow.jsx";
+import { RowHint } from "../ui/RowHint.jsx";
 
-function SalesHistoryPage({ sales, currency, totals, customers = [], returns = [], canReturn, onReturnSale, onView, onBack, onOpenEntity }) {
+function SalesHistoryPage({ sales, currency, totals, customers = [], returns = [], canReturn, onReturnSale, onView, onBack, onOpenEntity, rowActs = null, onRowAct = null }) {
   return (
     <div>
       <SubPageHeader title="سجل المبيعات" onBack={onBack} />
@@ -20,13 +22,22 @@ function SalesHistoryPage({ sales, currency, totals, customers = [], returns = [
           <EmptyState icon={<Receipt size={40} color="var(--accentText)" />} title="لا يوجد مبيعات بعد" sub="الفواتير التي تنشئها من صفحة البيع ستظهر هنا" />
         ) : (
           <div className="flex flex-col gap-3">
+            {onOpenEntity && <RowHint />}
             {sales.map((s) => {
               const method = PAYMENT_METHODS.find((m) => m.id === s.paymentMethod);
               const Icon = method?.icon || Banknote;
               const qtyCount = (s.lines || []).reduce((a, l) => a + l.quantity, 0);
               return (
-                <Card key={s.id} style={{ padding: 12 }} className="cursor-pointer">
-                  <button onClick={() => onView(s)} className="w-full text-right">
+                <Card key={s.id} style={{ padding: 0 }} className="cursor-pointer">
+                  <EntityRow
+                    label={s.ref || "فاتورة"}
+                    acts={rowActs ? rowActs("sale", s) : []}
+                    onOpen={() => onView(s)}
+                    onMore={onOpenEntity ? () => onOpenEntity("sale", s, "actions") : undefined}
+                    onAct={(id) => onRowAct?.(id, s, "sale")}
+                    className="pl-1"
+                    innerClass="flex-1 min-w-0 text-right p-3"
+                  >
                     <div className="flex items-center justify-between">
                       <p style={{ color: "var(--text)", fontFamily: "'Cairo', sans-serif" }} className="font-bold text-sm">
                         {s.sellerName || "—"}
@@ -45,7 +56,7 @@ function SalesHistoryPage({ sales, currency, totals, customers = [], returns = [
                         <Icon size={11} /> {method?.label}
                       </span>
                     </div>
-                  </button>
+                  </EntityRow>
                 </Card>
               );
             })}
