@@ -8347,6 +8347,8 @@ export default function GoldInventoryApp() {
             voiceFirst={aiVoiceFirst}
             onVoiceConsumed={() => setAiVoiceFirst(false)}
             onOpenScreen={openPage}
+            facts={aiFacts}
+            canOpen={(id) => permsNow.allowedTabs.includes(id) || permsNow.allowedMore.includes(id)}
             auditCtx={{
               items,
               sales,
@@ -9439,6 +9441,7 @@ export default function GoldInventoryApp() {
           <FloatingDock
             pos={aiButtonPos}
             onPosChange={setAiButtonPos}
+            reserveRight={showSideNav ? SIDE_NAV_W : 0}
             collapsed={dockClosed}
             onToggle={() => setDockClosed((v) => !v)}
             actions={acts}
@@ -9450,6 +9453,8 @@ export default function GoldInventoryApp() {
           seed={aiSeed}
           index={aiIndex}
           facts={aiFacts}
+          canOpen={(id) => permsNow.allowedTabs.includes(id) || permsNow.allowedMore.includes(id)}
+          onOpen={openPage}
           role={role}
           contextText={buildAiChatContext(role, {
             totals,

@@ -7,7 +7,7 @@ import { Card } from "../ui/Card.jsx";
 import { Field } from "../ui/Field.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 
-function AiAssistantPage({ auditCtx, reportSnapshot, currency, onBack, onOpenScreen, voiceFirst = false, onVoiceConsumed }) {
+function AiAssistantPage({ facts = null, canOpen = null, auditCtx, reportSnapshot, currency, onBack, onOpenScreen, voiceFirst = false, onVoiceConsumed }) {
   const [tab, setTab] = useState("chat"); // 'chat' | 'audit' | 'report'
 
   // ---- Smart audit state ----
@@ -105,6 +105,8 @@ function AiAssistantPage({ auditCtx, reportSnapshot, currency, onBack, onOpenScr
             ctx={auditCtx}
             currency={currency}
             onOpenScreen={onOpenScreen}
+            facts={facts}
+            canOpen={canOpen}
             voiceFirst={voiceFirst}
             onVoiceConsumed={onVoiceConsumed}
           />
