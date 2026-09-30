@@ -1,5 +1,6 @@
 import { ArrowLeftRight, Layers, Globe2, Gift, Boxes, Repeat, Puzzle, ShieldAlert, ClipboardPen, Hammer, Bot, Gem, Check, Home, Barcode, BarChart3, BookmarkCheck, Building2, CalendarCheck, ClipboardCheck, ClipboardList, Coins, Database, FileMinus, FileText, Flame, Grid, Handshake, Landmark, LayoutGrid, Lock, PiggyBank, Plus, Printer, Receipt, RefreshCw, RotateCcw, Scale, Search, Send, Settings, ShieldCheck, ShoppingCart, Sparkles, Sun, SlidersHorizontal, Tag, Truck, UserRound, Users, Wallet, Warehouse, Wrench } from "lucide-react";
 import { ROLES } from "./constants.js";
+import { BRANCH_HUBS } from "./hubs.js";
 
 const TAB_KIND_IDS = ["home", "inventory", "sales", "cash", "expenses", "stocktake"];
 
@@ -288,65 +289,19 @@ const SHORTCUT_HINTS = {
 
 const NAV_MAX_PER_ROW = 5;
 
+// ⚠ أقسام ☰ تُبنى من أبواب الفرع (core/hubs.js — المرجع م1): جدولٌ واحد للتنقّل،
+//   فالشريط الجانبي وشريط الباب و☰ لا يختلفون. معرّفات الأقسام القديمة باقية
+//   (sales · purchasing · inventory …) كي لا يضيع ترتيب من خصّص قائمته ولا ألوانها.
+const HUB_GROUP_ID = { sale: "sales", scrap: "purchasing", stock: "inventory", money: "money", clients: "customers", reports: "reports", settings: "system" };
 const MENU_GROUPS = [
-  // ⚠ المرتجع والاستبدال عملُ بيعٍ لا تقرير: كانا تحت «التقارير» فلا
-  //   يجدهما البائع حين يقف الزبون أمامه بالقطعة.
-  {
-    id: "sales",
-    label: "المبيعات",
-    hint: "الاستعراض · السجل · المرتجعات والاستبدال · البائعون",
-    icon: Receipt,
-    items: ["showcase", "salesHistory", "salesReturn", "sellerReports", "giftCards"],
-  },
-  {
-    id: "reports",
-    label: "التقارير",
-    hint: "كل التقارير والقوائم",
-    icon: BarChart3,
-    items: ["reportsHub", "dashboard", "aiAccountant", "accountantReview", "approvals", "documents", "bankFees", "reports", "journal", "generalLedger", "trialBalance", "fullStatements", "combinedBook", "ifrs", "anyStatement", "masterReport", "queryBuilder", "customerReport", "docCycle", "search", "bankRecon", "supplierLedger", "officeLedger", "taxReport", "vatReturn", "einvoice", "budgets", "financials"],
-  },
-  {
-    id: "inventory",
-    label: "المخزون والتكويد",
-    hint: "التكويد · الطباعة · التحويلات",
-    icon: Warehouse,
-    items: ["pieceInquiry", "addGoods", "codingReport", "categories", "printing", "printerSetup", "rfidReader", "rfidSettings", "itemEdit", "conversions", "reorder", "branchTransfers"],
-  },
-  {
-    id: "purchasing",
-    label: "الشراء والموردين",
-    hint: "المشتريات · الموردين · الكسر",
-    icon: Truck,
-    items: ["purchases", "purchaseOrders", "suppliers", "taskirat", "scrapIntake", "scrapCustody", "scrap"],
-  },
-  {
-    id: "customers",
-    label: "العملاء",
-    hint: "الحجوزات · الأمانة · الإصلاحات",
-    icon: UserRound,
-    items: ["customers", "reservations", "customOrders", "trustGold", "repairs", "amlRegister"],
-  },
-  {
-    id: "money",
-    label: "المال والشركاء",
-    hint: "الخزنة · الشركاء · السعر",
-    icon: Wallet,
-    items: ["safeAudit", "partners", "openingBalance", "price", "fixedAssets", "payroll", "attendanceHr", "hqReports", "priceFix"],
-  },
-  {
-    id: "links",
-    label: "الربط",
-    hint: "الأنظمة المحاسبية والمتجر",
-    icon: ArrowLeftRight,
-    items: ["integration", "storeLink", "exchange"],
-  },
-  {
-    id: "system",
-    label: "النظام",
-    hint: "الإعدادات · الصلاحيات · النسخ",
-    icon: Settings,
-    items: ["workday", "settings", "modules", "access", "navCustomize", "backup"],
-  },
+  ...BRANCH_HUBS.map((h) => ({
+    id: HUB_GROUP_ID[h.key] || h.key,
+    label: h.title,
+    icon: h.icon,
+    items: h.tabs.flatMap((t) => t.views),
+  })),
+  // ما لا باب له: البحث والمساعد
+  { id: "tools", label: "أدوات", icon: Search, items: ["search", "aiAccountant", "trustGold"] },
 ];
 
 export { AI_PAGES, DEFAULT_NAV_LAYOUT, KIND_TO_PAGE, MAIN_TAB_IDS, MENU_GROUPS, NAV_BUNDLES, NAV_MAX_PER_ROW, NAV_REGISTRY, NAV_ROWS, SHORTCUT_HINTS, TAB_KIND_IDS };

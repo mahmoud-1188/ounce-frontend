@@ -59,7 +59,11 @@ function NewSaleModal({ activeItems, priceData,
   const [tTotalMode, setTTotalMode] = useState(false);
   const [tTotal, setTTotal] = useState("");      // جزء نقدي وجزء شبكة
   const [cashPart, setCashPart] = useState("");
-  const [cardNetwork, setCardNetwork] = useState("mada");
+  // آخر شبكةٍ تُتذكّر على الجهاز (المرجع م6) — البائع على جهازٍ واحد يستعمل غالبًا شبكةً واحدة
+  const [cardNetwork, setCardNetworkRaw] = useState(() => {
+    try { const v = localStorage.getItem("ounce_last_card_network"); return CARD_NETWORKS.some((n) => n.id === v) ? v : "mada"; } catch { return "mada"; }
+  });
+  const setCardNetwork = (v) => { setCardNetworkRaw(v); try { localStorage.setItem("ounce_last_card_network", v); } catch { /* تخزينٌ محجوب */ } };
   const [scanMsg, setScanMsg] = useState("");
   const [bindFor, setBindFor] = useState(null); // EPC غير معروف بانتظار الربط
   const [selection, setSelection] = useState(() => {
@@ -670,7 +674,8 @@ function NewSaleModal({ activeItems, priceData,
       })()}
 
       <Field label="طريقة الدفع">
-        <div className="grid grid-cols-3 gap-2">
+        {/* ⚠ طرق الدفع صفٌّ واحد (المرجع م6): السطر الثاني كان يُخفي «بدل بكسر» تحت الطيّ على الجوال */}
+        <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${PAYMENT_METHODS.length}, minmax(0, 1fr))` }}>
           {PAYMENT_METHODS.map((m) => {
             const Icon = m.icon;
             const active = !splitPay && paymentMethod === m.id;
@@ -681,7 +686,7 @@ function NewSaleModal({ activeItems, priceData,
                   setSplitPay(false);
                   setPaymentMethod(m.id);
                 }}
-                className="flex flex-col items-center gap-1 py-2 rounded-xl text-xs"
+                className="flex flex-col items-center gap-1 py-2 rounded-xl text-[11px] min-w-0"
                 style={{ background: active ? "var(--accentBg)" : "var(--panel)", border: active ? "1px solid var(--accentSoft)" : "1px solid var(--edge)", color: active ? "var(--accent)" : "var(--text2)" }}
               >
                 <Icon size={16} />
@@ -695,14 +700,11 @@ function NewSaleModal({ activeItems, priceData,
             setSplitPay((v) => !v);
             if (!splitPay) setCashPart("");
           }}
-          className="w-full mt-2 py-2 rounded-xl text-[11px] font-bold"
-          style={{
-            background: splitPay ? "var(--accentBg)" : "var(--panel)",
-            color: splitPay ? "var(--accent)" : "var(--text2)",
-            border: `1px solid ${splitPay ? "var(--accentLine)" : "var(--edge)"}`,
-          }}
+          aria-pressed={splitPay}
+          className="mt-1.5 text-[11px] font-bold underline"
+          style={{ color: splitPay ? "var(--accent)" : "var(--text3)" }}
         >
-          دفع مقسّم — جزء نقدي وجزء شبكة
+          {splitPay ? "✓ جزءٌ نقدًا والباقي شبكة — إلغاء" : "جزءٌ نقدًا والباقي شبكة"}
         </button>
       </Field>
 
