@@ -1,14 +1,17 @@
 import React, { useEffect, useRef, useState } from "react";
 import { AI_APP_MANUAL, AI_PROMPTS, AI_SYSTEM_RULES } from "../core/constants.js";
+import { NAV_REGISTRY } from "../core/navigation.js";
 import { buildAiAccounts } from "../domain/buildAiAccounts.js";
 import { buildAiDetail } from "../domain/buildAiDetail.js";
 import { buildAiSnapshot } from "../domain/buildAiSnapshot.js";
+import { matchIntent } from "../domain/matchIntent.js";
+import { isScreenQuestion, screensFor } from "../domain/screensFor.js";
 import { askReportAi, guessScreens, inputStyle, normalizeArabicQuery, useVoice } from "../domain/helpers.js";
 import { parseAiJson } from "../domain/parseAiJson.js";
 import { Card } from "../ui/Card.jsx";
 import { VoiceBar } from "../ui/VoiceBar.jsx";
 
-function AiChatTab({ ctx, currency, onOpenScreen, voiceFirst = false, onVoiceConsumed }) {
+function AiChatTab({ ctx, currency, onOpenScreen, voiceFirst = false, onVoiceConsumed, facts = null, canOpen = null }) {
   const voice = useVoice("ar-SA");
   const [autoSpeak, setAutoSpeak] = useState(voiceFirst);
   const [greeted, setGreeted] = useState(false);
@@ -29,6 +32,23 @@ function AiChatTab({ ctx, currency, onOpenScreen, voiceFirst = false, onVoiceCon
     setQ("");
     setErr("");
     setMsgs((m) => [...m, { role: "user", text: question }]);
+    // ── من الدفاتر أولًا ──
+    // الأرقام اليومية (بيع · صندوق · مخزون · كسر) عندنا أدقّ وأسرع من
+    // النموذج، وتعمل بلا اتصال. وسؤال «وين/افتح» جوابه زرّ الشاشة نفسها.
+    const intent = facts && !isScreenQuestion(question) ? matchIntent(question) : null;
+    const localText = intent ? intent.answer(facts) : null;
+    if (localText) {
+      setMsgs((m) => [...m, { role: "ai", text: localText, local: true, screens: [], followups: [], clarify: [] }]);
+      return;
+    }
+    const hits = screensFor(question, canOpen || ((id) => AI_APP_MANUAL.some((r) => r[0] === id)));
+    if (hits.length) {
+      const t = hits.length === 1
+        ? `«${hits[0].label}» ${hits[0].where}.`
+        : "وجدتُ هذه الشاشات:\n" + hits.map((h) => `• ${h.label} — ${h.where}`).join("\n");
+      setMsgs((m) => [...m, { role: "ai", text: t, local: true, screens: hits.map((h) => h.id), followups: [], clarify: [] }]);
+      return;
+    }
     setBusy(true);
     try {
       const norm = normalizeArabicQuery(question);
@@ -129,7 +149,7 @@ function AiChatTab({ ctx, currency, onOpenScreen, voiceFirst = false, onVoiceCon
   const greetTimerRef = useRef(null);
   useEffect(() => () => clearTimeout(greetTimerRef.current), []);
 
-  const screenLabel = (id) => AI_APP_MANUAL.find((r) => r[0] === id)?.[1] || id;
+  const screenLabel = (id) => AI_APP_MANUAL.find((r) => r[0] === id)?.[1] || NAV_REGISTRY.find((o) => o.id === id)?.label || id;
 
   return (
     <>
@@ -175,6 +195,9 @@ function AiChatTab({ ctx, currency, onOpenScreen, voiceFirst = false, onVoiceCon
               }} className="text-[12px]">
                 {m.text}
               </p>
+              {m.local && (
+                <p style={{ color: "var(--text3)", margin: "4px 0 0" }} className="text-[9px]">من الدفاتر — بلا اتصال</p>
+              )}
               {m.screens?.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mt-2">
                   {m.screens.map((id) => (

@@ -1,6 +1,6 @@
 import React, { useRef, useState } from "react";
 
-function FloatingDock({ pos, onPosChange, collapsed, onToggle, actions = [] }) {
+function FloatingDock({ pos, onPosChange, collapsed, onToggle, actions = [], reserveRight = 0 }) {
   const [dragging, setDragging] = useState(false);
   const info = useRef({ sx: 0, sy: 0, ox: 0, oy: 0, moved: false });
   // ⚠ مؤقّت الضغط المطوّل يعيش هنا لا في كائن الفعل: `actions` يُعاد
@@ -20,13 +20,17 @@ function FloatingDock({ pos, onPosChange, collapsed, onToggle, actions = [] }) {
   ///
   /// و96 لا صفر: تحت الترويسة وشريط يوم العمل، فلا يحجبهما.
   const fallback = () => ({
-    x: Math.max(8, window.innerWidth - W - 14),
+    x: Math.max(8, window.innerWidth - reserveRight - W - 14),
     y: 96,
   });
-  const cur = pos || fallback();
+  // ⚠ القائمة الجانبية في المكتبي تحجز حافة الشاشة: الرصيف لا يدخل تحتها
+  //   ولو كان موضعه المحفوظ هناك من قبل.
+  const maxX = Math.max(0, window.innerWidth - reserveRight - W);
+  const raw = pos || fallback();
+  const cur = { ...raw, x: Math.min(raw.x, maxX) };
 
   const clamp = (x, y) => ({
-    x: Math.min(Math.max(0, x), Math.max(0, window.innerWidth - W)),
+    x: Math.min(Math.max(0, x), maxX),
     y: Math.min(Math.max(0, y), Math.max(0, window.innerHeight - H)),
   });
 

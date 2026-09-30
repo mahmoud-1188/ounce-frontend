@@ -14,6 +14,7 @@ import { EmptyState } from "../ui/EmptyState.jsx";
 import { Field } from "../ui/Field.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 import { EntryDetail } from "../ui/EntryDetail.jsx";
+import { LedgerHealthCard } from "../ui/LedgerHealthCard.jsx";
 
 function GeneralLedgerPage({ journal = [], goldLedger = [], accounts = [], agingEntries = [], agingWeightEntries = [], currency = "ر.س", branchName = "", preparedBy = "", onBackfill, onBack }) {
   const [tab, setTab] = useState("tree");        // tree | account | gold | cash | wages
@@ -242,6 +243,7 @@ function GeneralLedgerPage({ journal = [], goldLedger = [], accounts = [], aging
         })()}
 
         {/* ── تفاصيل السطر المضغوط ── */}
+        {tab === "tree" && <LedgerHealthCard />}
         {detail && journal.some((e) => e.id === detail.id) && (
           <EntryDetail entry={journal.find((e) => e.id === detail.id)} journal={journal} goldLedger={goldLedger} accounts={accounts}
             onClose={() => setDetail(null)} />

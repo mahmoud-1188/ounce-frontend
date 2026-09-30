@@ -12,6 +12,7 @@ import { Card } from "../ui/Card.jsx";
 import { EmptyState } from "../ui/EmptyState.jsx";
 import { Field } from "../ui/Field.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
+import { LedgerHealthCard } from "../ui/LedgerHealthCard.jsx";
 
 function AccountantReviewPage({ queue = [], reviews = [], audits = [], items = [], journal = [], goldLedger = [], accounts = [], currency, canReview = false, reviewer = "", reviewerRole = "", branchName = "", periodLocks = null, onReview, onGo, onBack }) {
   const [tab, setTab] = useState("queue");     // queue | stocktake | log
@@ -42,6 +43,7 @@ function AccountantReviewPage({ queue = [], reviews = [], audits = [], items = [
     <div>
       <SubPageHeader title="المراجعة المحاسبية" onBack={onBack} />
       <div className="px-4 pt-3">
+        <LedgerHealthCard />
         {/* الملخّص */}
         <div className="grid grid-cols-3 gap-2 mb-3">
           {[["block", "يمنع الإقفال"], ["warn", "يحتاج مراجعة"], ["info", "للعلم"]].map(([k, l]) => (

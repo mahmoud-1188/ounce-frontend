@@ -4,10 +4,11 @@ import { INDEX_KINDS } from "../core/assistant.js";
 import { fmt, fmtW } from "../core/money.js";
 import { fetchAiChatReply, inputStyle, useVoice } from "../domain/helpers.js";
 import { matchIntent } from "../domain/matchIntent.js";
+import { isScreenQuestion, screensFor } from "../domain/screensFor.js";
 import { searchIndex } from "../domain/searchIndex.js";
 import { AiLogoBadge } from "./AiLogoBadge.jsx";
 
-function AiChatPanel({ role, contextText, onClose, seed = "", index = [], facts = null }) {
+function AiChatPanel({ role, contextText, onClose, seed = "", index = [], facts = null, canOpen = null, onOpen = null }) {
   // ⚠ إسناد الإجابة: نبحث في الفهرس بكلمات السؤال ونمرّر السجلات
   // المطابقة بمراجعها. المساعد بلا سجلات يُخمّن، وبها يستشهد بما
   // تستطيع فتحه بنفسك.
@@ -63,7 +64,7 @@ function AiChatPanel({ role, contextText, onClose, seed = "", index = [], facts 
     // أكثر ما يُسأل عنه أرقامٌ في الجهاز: كم بعت · كم بالصندوق · ما
     // حالة المخزون. إرسالها للشبكة يُبطئ ويفشل عند انقطاعها، والجواب
     // عندنا أصلًا وأدقّ.
-    const intent = facts ? matchIntent(content) : null;
+    const intent = facts && !isScreenQuestion(content) ? matchIntent(content) : null;
     if (intent) {
       const local = intent.answer(facts);
       if (local) {
@@ -71,6 +72,16 @@ function AiChatPanel({ role, contextText, onClose, seed = "", index = [], facts 
         setLoading(false);
         return;
       }
+    }
+    // ── ② سؤالٌ عن شاشة: نفتحها بدل أن نشرح الطريق إليها ──
+    const screens = onOpen ? screensFor(content, canOpen || (() => true)) : [];
+    if (screens.length) {
+      const text = screens.length === 1
+        ? `«${screens[0].label}» ${screens[0].where}.`
+        : "وجدتُ هذه الشاشات:\n" + screens.map((h) => `• ${h.label} — ${h.where}`).join("\n");
+      setMessages([...nextMessages, { role: "assistant", content: text, local: true, screens }]);
+      setLoading(false);
+      return;
     }
 
     setLoading(true);
@@ -182,6 +193,21 @@ function AiChatPanel({ role, contextText, onClose, seed = "", index = [], facts 
                         style={{ background: "var(--panel)", color: "var(--accent)", border: "1px solid var(--accentLine)" }}
                       >
                         {q}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {m.screens?.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {m.screens.map((h) => (
+                      <button
+                        key={h.id}
+                        onClick={() => { onOpen(h.id); onClose?.(); }}
+                        className="text-[12px] px-3 py-1.5 rounded-xl font-bold"
+                        style={{ background: "var(--accent)", color: "#1C1913" }}
+                      >
+                        افتح {h.label}
                       </button>
                     ))}
                   </div>

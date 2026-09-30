@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Check, ShieldCheck } from "lucide-react";
 import { APP_MODES, DEFAULT_APP_MODE, DEFAULT_SETTINGS } from "../core/constants.js";
 import { KARATS, fmt, pricePerGram } from "../core/money.js";
@@ -34,10 +34,43 @@ function AppSettingsPage({ settings, onSave, branchIdentity, onSaveBranch, hqPer
   const hasOverride = !!hqPermissions?.byBranch?.[branchIdentity?.code];
   const valid = Number(taxRate) >= 0 && Number(taxRate) <= 100;
 
+  // ── البحث في الإعدادات (المرجع م5): أيّ إعدادٍ بكلمةٍ منه ──
+  // ⚠ نُخفي كتل الصفحة التي لا تحوي الكلمة بدل إعادة بنائها من جدول: الصفحة
+  //   تتغيّر كثيرًا، وجدولٌ منفصل يتقادم فيُضلّ البحث. عنوان القسم يظهر مع كتلته.
+  const [query, setQuery] = useState("");
+  const [misses, setMisses] = useState(false);
+  const bodyRef = useRef(null);
+  useEffect(() => {
+    const root = bodyRef.current;
+    if (!root) return;
+    const norm = (t) => String(t || "").replace(/[أإآ]/g, "ا").replace(/ة/g, "ه").replace(/ى/g, "ي").replace(/[\u064B-\u0652]/g, "").toLowerCase();
+    const words = norm(query).split(/\s+/).filter(Boolean);
+    const kids = [...root.children];
+    const hit = (el) => { const t = norm(el.textContent); return words.every((w) => t.includes(w)); };
+    const isTitle = (el) => el.tagName === "P" && el.classList.contains("font-bold");
+    let any = false;
+    kids.forEach((el, i) => {
+      if (!words.length) { el.hidden = false; return; }
+      let show = hit(el);
+      if (isTitle(el) && !show) { const nx = kids[i + 1]; show = !!nx && !isTitle(nx) && hit(nx); }
+      el.hidden = !show;
+      if (show && !isTitle(el)) any = true;
+    });
+    setMisses(words.length > 0 && !any);
+  });
+
   return (
     <div>
       <SubPageHeader title="الإعدادات" onBack={onBack} />
       <div className="px-4 pt-3">
+        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="ابحث في الإعدادات — الضريبة، الرقم السري، الطابعة…"
+          aria-label="ابحث في الإعدادات" className="w-full mb-3 px-3 py-2.5 rounded-xl text-[12px]"
+          style={{ background: "var(--field)", color: "var(--text)", border: "1px solid var(--line)" }} />
+        {misses && (
+          <p style={{ color: "var(--text3)" }} className="text-[11px] mb-3">لا إعداد بهذه الكلمة هنا — جرّب «البحث الشامل» للشاشات.</p>
+        )}
+      </div>
+      <div className="px-4" ref={bodyRef}>
         {hqManaged && (
           <div className="rounded-xl px-3 py-2 mb-3 text-[11px] leading-6"
             style={{ background: "var(--accentBg)", color: "var(--accentText)", border: "1px solid var(--accentLine)" }}>

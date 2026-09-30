@@ -12,11 +12,27 @@ import { Sparkline } from "../ui/Sparkline.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 import { useZakat } from "../domain/zakat.js";
 
+/// التقارير تُفتح بسؤال (المرجع م2): كل سؤالٍ يعرض بطاقاته وحدها من الأقسام.
+const REPORT_QUESTIONS = [
+  { id: "all", label: "الكل" },
+  { id: "profit", label: "كم ربحنا؟", cards: ["income", "sales", "returns", "expenses", "balance"] },
+  { id: "flow", label: "بيعٌ وشراءٌ وصرف", cards: ["sales", "returns", "purchases", "expenses", "sellers", "custrep"] },
+  { id: "gold", label: "أين الذهب؟", cards: ["goldpos", "stockk", "scrap", "stocktake", "coding"] },
+  { id: "owed", label: "من يدين لمن؟", cards: ["ar", "ap", "deposits", "partners", "offices"] },
+  { id: "cash", label: "النقد والبنك", cards: ["till", "safe", "bank", "cashflow"] },
+  { id: "tax", label: "الضريبة والزكاة", cards: ["vat", "zakat"] },
+];
+const Q_KEY = "ounce_reports_question";
+
 function ReportsHubPage({ data, currency = "ر.س", price24 = 0, onOpen, onBack }) {
   const zakat = useZakat(price24);
   const [periodKey, setPeriodKey] = useState("month");
   const [custom, setCustom] = useState({ from: "", to: "" });
   const [openCard, setOpenCard] = useState(null);
+  const [question, setQuestionRaw] = useState(() => {
+    try { const v = localStorage.getItem(Q_KEY); return REPORT_QUESTIONS.some((q) => q.id === v) ? v : "all"; } catch { return "all"; }
+  });
+  const setQuestion = (v) => { setQuestionRaw(v); setOpenCard(null); try { localStorage.setItem(Q_KEY, v); } catch { /* تخزينٌ محجوب */ } };
   const [pressed, setPressed] = useState(null);
   // ⚠ **الطباعة تفتح كل البطاقات أولًا:** ما يُطبع ورقةٌ للمراجع، لا شاشةٌ تُطوى بالضغط.
   //   وتُطفأ الحركة كي لا يُلتقط الرقم في منتصف عدّه.
@@ -46,6 +62,14 @@ function ReportsHubPage({ data, currency = "ر.س", price24 = 0, onOpen, onBack 
   const period = useMemo(() => reportPeriod(periodKey, custom), [periodKey, custom.from, custom.to]);
   const hub = useMemo(() => buildReportHub({ ...data, from: period.from, to: period.to, currency, zakat }),
     [data, period.from, period.to, currency, zakat]);
+  // ⚠ الطباعة والتصدير للكل دائمًا — السؤال عرضٌ على الشاشة لا فلترٌ للورقة
+  const shownSections = useMemo(() => {
+    const q = REPORT_QUESTIONS.find((x) => x.id === question);
+    if (!q?.cards || printing) return hub.sections;
+    return hub.sections
+      .map((sec) => ({ ...sec, cards: sec.cards.filter((cd) => q.cards.includes(cd.id)) }))
+      .filter((sec) => sec.cards.length);
+  }, [hub, question, printing]);
   // ⚠ الفترة تُورَث للتقرير الكامل: من اختار «الربع» هنا لا يُعيد اختياره هناك
   const open = (o) => onOpen({ ...o, from: period.from.slice(0, 10), to: period.to.slice(0, 10) });
   const toneColor = (t) => t === "good" ? "var(--good)" : t === "bad" ? "var(--bad)" : t === "warn" ? "var(--accent)" : "var(--text)";
@@ -86,6 +110,16 @@ function ReportsHubPage({ data, currency = "ر.س", price24 = 0, onOpen, onBack 
       {printing && (
         <DocHeader info={data?.branchDoc} title="مركز التقارير" sub={`${period.label} · ${period.from.slice(0, 10)} ← ${period.to.slice(0, 10)} · طُبع ${new Date().toLocaleString("en-GB")}`} />
       )}
+      {/* ══ السؤال — ماذا تريد أن تعرف؟ ══ */}
+      <div className="flex gap-1 mb-2 ons-noprint" style={{ overflowX: "auto", paddingBottom: 2 }} role="tablist" aria-label="اسأل التقارير">
+        {REPORT_QUESTIONS.map((q) => (
+          <button key={q.id} role="tab" aria-selected={question === q.id} onClick={() => setQuestion(q.id)}
+            className="px-3 py-2 rounded-full text-[11px] font-bold flex-shrink-0"
+            style={{ background: question === q.id ? "var(--accent)" : "var(--panel)",
+              color: question === q.id ? "#1C1913" : "var(--text2)",
+              border: `1px solid ${question === q.id ? "var(--accent)" : "var(--line)"}` }}>{q.label}</button>
+        ))}
+      </div>
       {/* ══ الفترة — واحدةٌ للجميع ══ */}
       <div className="flex gap-1 mb-2 ons-noprint" style={{ overflowX: "auto", paddingBottom: 2 }}>
         {PERIODS.map(([k, l]) => (
@@ -142,7 +176,7 @@ function ReportsHubPage({ data, currency = "ر.س", price24 = 0, onOpen, onBack 
       </div>
 
       {/* ══ الأقسام ══ */}
-      {hub.sections.map((sec, si) => (
+      {shownSections.map((sec, si) => (
         <div key={sec.id} className="mb-4 ons-sec">
           <p style={{ color: "var(--accentText)", margin: "0 0 6px" }} className="text-[12px] font-bold">
             {["①", "②", "③", "④", "⑤", "⑥", "⑦"][si]} {sec.title}
