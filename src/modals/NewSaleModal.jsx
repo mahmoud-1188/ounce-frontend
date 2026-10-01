@@ -17,8 +17,8 @@ import * as api from "../core/api.js";
 function NewSaleModal({ activeItems, priceData,
   // ⚠ العملة كانت غائبة عن التوقيع: البدل يستخدمها فيسقط بـ
   // «currency is not defined» — والنافذة تُفرَغ بلا رسالة.
-  currency = "ر.س", initialItemId, initialCustomerId = null, taxEnabled, taxRate, settings = {}, role, customers = [], customOrder = null, reservations = [], dailyCash = null, onClose, onConfirm, onBindEpc }) {
-  const [customerId, setCustomerId] = useState(customOrder?.customerId || initialCustomerId || "");
+  currency = "ر.س", initialItemId, initialCustomerId = null, initialDraft = null, onHold = null, taxEnabled, taxRate, settings = {}, role, customers = [], customOrder = null, reservations = [], dailyCash = null, onClose, onConfirm, onBindEpc }) {
+  const [customerId, setCustomerId] = useState(customOrder?.customerId || initialCustomerId || initialDraft?.payload?.customerId || "");
   // عربون الحجز يُخصم من الفاتورة (المرجع 5.2.0) — حجز القطعة نفسها تلقائيًّا أو حجزٌ يُختار
   const [depositFrom, setDepositFrom] = useState("");
   // بطاقة هدية (وحدة giftCards): رمزها ورصيدها يُخصم من الفاتورة
@@ -67,6 +67,11 @@ function NewSaleModal({ activeItems, priceData,
   const [scanMsg, setScanMsg] = useState("");
   const [bindFor, setBindFor] = useState(null); // EPC غير معروف بانتظار الربط
   const [selection, setSelection] = useState(() => {
+    // فاتورةٌ معلّقة أو عرض سعرٍ يُستأنف: أسطره كما حُفظت، وما بيع منذ ذلك يسقط (لا يُباع مرّتين)
+    if (initialDraft?.payload?.selection) {
+      return Object.fromEntries(Object.entries(initialDraft.payload.selection)
+        .filter(([id]) => activeItems.some((i) => i.id === id)));
+    }
     if (initialItemId) {
       const item = activeItems.find((i) => i.id === initialItemId);
       if (item) {
@@ -76,7 +81,7 @@ function NewSaleModal({ activeItems, priceData,
     }
     return {};
   });
-  const [paymentMethod, setPaymentMethod] = useState("cash");
+  const [paymentMethod, setPaymentMethod] = useState(initialDraft?.payload?.paymentMethod || "cash");
   const [taxApplicable, setTaxApplicable] = useState(!!taxEnabled);
 
   const toggleItem = (item) => {
@@ -166,8 +171,14 @@ function NewSaleModal({ activeItems, priceData,
       giftAmount: giftPart,
       frozenPrice,
       frozenAt,
+      draftId: initialDraft?.id || undefined,
     });
   };
+  // ⏸ تعليق الفاتورة أو حفظها عرض سعر — لا حركة ولا قيد، تُستأنف من «الفواتير المعلّقة»
+  const hold = (kind) => onHold?.(kind, {
+    selection, customerId: customerId || null, paymentMethod,
+    lines: Object.entries(selection).map(([itemId, v]) => ({ itemId, quantity: v.qty, unitPrice: Number(v.unitPrice) || 0 })),
+  }, total);
 
   return (
     <ModalShell title="فاتورة بيع جديدة" onClose={onClose}>
@@ -880,6 +891,15 @@ function NewSaleModal({ activeItems, priceData,
           selectedCount > 0 && allPriced && tradeOk &&
           !(paymentMethod === "credit" && !customerId);
         return (
+          <>
+          {onHold && selectedCount > 0 && (
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              <button onClick={() => hold("held")} className="py-2 rounded-xl text-[12px] font-bold"
+                style={{ background: "var(--panel)", color: "var(--text2)", border: "1px solid var(--line)" }}>⏸ علّق الفاتورة</button>
+              <button onClick={() => hold("quote")} disabled={!allPriced} className="py-2 rounded-xl text-[12px] font-bold"
+                style={{ background: "var(--panel)", color: allPriced ? "var(--accent)" : "var(--text3)", border: "1px solid var(--line)" }}>عرض سعر للعميل</button>
+            </div>
+          )}
           <button
             disabled={!canConfirm}
             onClick={handleConfirm}
@@ -891,6 +911,7 @@ function NewSaleModal({ activeItems, priceData,
           >
             <Check size={18} /> تأكيد البيع
           </button>
+          </>
         );
       })()}
     </ModalShell>

@@ -24,6 +24,7 @@ const NAV_REGISTRY = [
   { id: "rfidReader", label: "قارئ RFID", icon: Barcode },
   { id: "rfidSettings", label: "إعدادات القارئ", icon: Barcode },
   { id: "salesHistory", label: "سجل المبيعات", icon: Receipt },
+  { id: "saleDrafts", label: "الفواتير المعلّقة وعروض الأسعار", icon: ClipboardList },
   { id: "sellerReports", label: "تقارير البائعين", icon: Users },
   { id: "price", label: "السعر اليومي", icon: Coins },
   { id: "reports", label: "التقارير", icon: BarChart3 },

@@ -60,6 +60,8 @@ const API_ERROR_MESSAGES = {
   approval_already_decided: "قُرِّر هذا الطلب سلفًا",
   approval_state_changed: "تغيّر حال الطلب أثناء الإرسال — أعد المحاولة",
   count_required: "عُدّ الصندوق أوّلًا — لا يُقفل يومٌ بلا عدّ",
+  draft_not_open: "أُغلقت هذه المسودّة سلفًا",
+  draft_needs_lines: "لا أسطر في الفاتورة لتعليقها",
   approval_self_decide_blocked: "فرق العدّ لا يعتمده من عدّ — يعتمده شخصٌ آخر",
   approval_self_decided: "اعتمده من عدّ نفسه — يحتاج شخصًا آخر",
   approval_expired: "انتهت مهلة الطلب (72 ساعة) — أرسل طلبًا جديدًا",
@@ -286,6 +288,7 @@ import { AiActionSheet } from "../modals/AiActionSheet.jsx";
 import { BundleSheet } from "../modals/BundleSheet.jsx";
 import { CashModal } from "../modals/CashModal.jsx";
 import { EntitySheet } from "../modals/EntitySheet.jsx";
+import { SaleDraftsPage, printQuote } from "../screens/SaleDraftsPage.jsx";
 import { entityActionsSpec } from "../domain/entities.js";
 import { BudgetsPage } from "../screens/BudgetsPage.jsx";
 import { VatReturnPage } from "../screens/VatReturnPage.jsx";
@@ -527,6 +530,8 @@ export default function GoldInventoryApp() {
   const [showNewSale, setShowNewSale] = useState(false);
   const [quickSaleItemId, setQuickSaleItemId] = useState(null);
   const [quickSaleCustomerId, setQuickSaleCustomerId] = useState(null);
+  const [saleDrafts, setSaleDrafts] = useState([]);       // فواتير معلّقة وعروض أسعار (migration 069 ⑧)
+  const [resumeDraft, setResumeDraft] = useState(null);   // مسودّةٌ تُستأنف في نافذة البيع
   const [statementPreset, setStatementPreset] = useState(null); // { entity, id } — كشفٌ يُفتح على صاحبه
   const [viewingSale, setViewingSale] = useState(null);
   const [pendingCustomOrder, setPendingCustomOrder] = useState(null); // طلبٌ خاص يُسلَّم بالفاتورة القادمة
@@ -2693,6 +2698,8 @@ export default function GoldInventoryApp() {
     if (!isHq) {
       more = more.filter((id) => id !== "hqReports");
     }
+    // الفواتير المعلّقة وعروض الأسعار تتبع البيع: من يبيع يعلّق ويستأنف (الخادم يحرسها بصفحة البيع)
+    if (tabs.includes("sales") && !more.includes("saleDrafts")) more.push("saleDrafts");
 
     return { ...base, allowedTabs: [...tabs, "more"], allowedMore: more };
   };
@@ -3474,6 +3481,24 @@ export default function GoldInventoryApp() {
   /// تجعله أكثر وقوعًا — فيحتاج الأثر أكثر لا أقلّ.
   const canEditRecords = role === "manager" || role === "assistant";
 
+  const loadSaleDrafts = () => api.saleDraftsApi.list().then((r) => setSaleDrafts(r.drafts || [])).catch(() => {});
+  /// تعليق الفاتورة أو حفظها عرض سعر — تُغلق النافذة ولا تتحرّك قطعة
+  const handleHoldSale = async (kind, payload, total) => {
+    try {
+      const validUntil = kind === "quote" ? new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10) : null;
+      const res = await api.saleDraftsApi.create({ kind, payload, total, validUntil });
+      // المسودّة المستأنفة التي عُلّقت ثانيةً تُستبدل بالجديدة
+      if (resumeDraft?.id) await api.saleDraftsApi.cancel(resumeDraft.id).catch(() => {});
+      setSaleDrafts((prev) => [res.draft, ...prev.filter((d) => d.id !== resumeDraft?.id)]);
+      setShowNewSale(false); setResumeDraft(null);
+      setQuickSaleItemId(null); setQuickSaleCustomerId(null);
+      flashToast(kind === "quote" ? `حُفظ عرض السعر ${res.draft.ref} — صالحٌ 7 أيام، اطبعه من «المعلّقة وعروض الأسعار»` : `عُلّقت الفاتورة ${res.draft.ref} — استأنفها من «المعلّقة»`);
+      if (kind === "quote") printQuote(res.draft, { items, currency: priceData.currency, shopName: branchIdentity?.name || "" });
+    } catch (err) {
+      flashToast(apiErrorMessage(err, "تعذّر حفظ المسودّة"));
+    }
+  };
+
   /// حدّ آجل العميل يُحفظ على الخادم — هو من يفرضه عند البيع (migration 069)
   const handleSetCreditLimit = async (id, value) => {
     if (!canEditRecords) { flashToast("خارج صلاحيتك"); return; }
@@ -3806,6 +3831,7 @@ export default function GoldInventoryApp() {
   };
 
   /// تنفيذ الفعل — نقطةٌ واحدة لكل الكيانات.
+  useEffect(() => { if (morePage === "saleDrafts") loadSaleDrafts(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [morePage]);
   // الكشف المُعدّ لزيارةٍ واحدة — من غادر ثم عاد يجد الشاشة كما هي
   useEffect(() => {
     if (statementPreset && morePage !== "anyStatement") setStatementPreset(null);
@@ -5016,6 +5042,8 @@ export default function GoldInventoryApp() {
   }, [loading, currentUser?.id]);
 
   const activeItems = useMemo(() => items.filter((i) => remainingQty(i) > 0), [items]);
+  // بقايا الطقم لا تُباع قبل تكويدها قطعًا — الخادم يرفضها، فلا تُعرض في البيع.
+  const sellableItems = useMemo(() => activeItems.filter((i) => !i.remnant), [activeItems]);
 
   const totals = useMemo(() => {
     // الأسطر الجديدة لها الأولوية؛ الحقول المفردة تبقى للتوافق مع بيانات سابقة.
@@ -6046,6 +6074,7 @@ export default function GoldInventoryApp() {
         karat: l.karat, netWeight: l.weight, grossWeight: l.gross,
         pricePerGram: l.pricePerGram, total: l.total,
       })),
+      ...(draft.draftId ? { draftId: draft.draftId } : {}),
     };
 
     let res;
@@ -6057,7 +6086,7 @@ export default function GoldInventoryApp() {
     }
     if (res?.approvalPending) {
       notePendingApproval(res.approvalPending);
-      setShowNewSale(false);
+      setShowNewSale(false); setResumeDraft(null);
       setQuickSaleItemId(null); setQuickSaleCustomerId(null);
       return;
     }
@@ -6067,7 +6096,7 @@ export default function GoldInventoryApp() {
     //   تحسبه الشاشة — نعيد التحميل كي لا تُعرض أرقامٌ لم تقع.
     if (draft.customOrderId) setPendingCustomOrder(null);
     if (Number(srvSale.depositApplied) > 0 || Number(srvSale.giftApplied) > 0 || draft.customOrderId) {
-      setShowNewSale(false);
+      setShowNewSale(false); setResumeDraft(null);
       setQuickSaleItemId(null); setQuickSaleCustomerId(null);
       flashToast(`تم إنشاء الفاتورة — خُصم ${Number(srvSale.depositApplied) > 0 ? `عربون ${fmtMoney(srvSale.depositApplied)}` : ""}${Number(srvSale.giftApplied) > 0 ? ` بطاقة ${fmtMoney(srvSale.giftApplied)}` : ""} والمقبوض ${fmtMoney(srvSale.payable)}${srvSale.pointsEarned ? ` · +${srvSale.pointsEarned} نقطة` : ""}`);
       loadBootstrap(currentUser).catch(() => {});
@@ -6165,7 +6194,7 @@ export default function GoldInventoryApp() {
     // "credit" لا يُدخل شيئًا — يُحصَّل لاحقًا من كشف العميل.
     if (entries.length) setCashTx([...entries, ...cashTx]);
 
-    setShowNewSale(false);
+    setShowNewSale(false); setResumeDraft(null);
     setQuickSaleItemId(null); setQuickSaleCustomerId(null);
     flashToast("تم إنشاء الفاتورة");
   };
@@ -8604,6 +8633,24 @@ export default function GoldInventoryApp() {
             onBack={() => setMorePage(null)}
           />
         )}
+        {morePage === "saleDrafts" && (
+          <SaleDraftsPage
+            drafts={saleDrafts}
+            items={activeItems}
+            currency={priceData.currency}
+            shopName={branchIdentity?.name || ""}
+            onResume={(d) => {
+              if (!openDay) { flashToast("افتح يوم العمل أولًا"); openPage("workday"); return; }
+              if (stocktakeLock) { flashToast("المخزون مقفل للجرد"); return; }
+              setQuickSaleItemId(null); setQuickSaleCustomerId(null); setResumeDraft(d); setShowNewSale(true);
+            }}
+            onCancel={async (d) => {
+              try { await api.saleDraftsApi.cancel(d.id); loadSaleDrafts(); flashToast(`أُلغيت ${d.ref}`); }
+              catch (err) { flashToast(apiErrorMessage(err, "تعذّر الإلغاء")); }
+            }}
+            onBack={() => setMorePage(null)}
+          />
+        )}
         {morePage === "anyStatement" && (
           <AnyStatementPage
             key={statementPreset ? statementPreset.at : "plain"}
@@ -9542,16 +9589,19 @@ export default function GoldInventoryApp() {
           customers={customers}
           customOrder={pendingCustomOrder}
           reservations={reservations}
-          activeItems={activeItems}
+          activeItems={sellableItems}
           priceData={priceData}
+          key={resumeDraft?.id || "new"}
           initialItemId={quickSaleItemId}
           initialCustomerId={quickSaleCustomerId}
+          initialDraft={resumeDraft}
+          onHold={handleHoldSale}
           taxEnabled={appSettings.taxEnabled}
           taxRate={appSettings.taxRate}
           currency={priceData.currency}
           dailyCash={cashBalance.cash}
           onClose={() => {
-            setShowNewSale(false);
+            setShowNewSale(false); setResumeDraft(null);
             setQuickSaleItemId(null); setQuickSaleCustomerId(null);
             setPendingCustomOrder(null);
           }}

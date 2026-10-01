@@ -242,6 +242,13 @@ function cancelApproval(id) {
   return apiFetch(`/approvals/${id}/cancel`, { method: "POST", body: {} });
 }
 
+/** الفواتير المعلّقة وعروض الأسعار (migration 069 ⑧). */
+const saleDraftsApi = {
+  list: () => apiFetch("/sale-drafts"),
+  create: (body) => apiFetch("/sale-drafts", { method: "POST", body }),
+  cancel: (id) => apiFetch(`/sale-drafts/${id}/cancel`, { method: "POST", body: {} }),
+};
+
 function ledgerHealth() {
   return apiFetch("/ledger/health");
 }
@@ -746,6 +753,7 @@ export {
   fiscalApi,
   einvoiceApi,
   ledgerHealth,
+  saleDraftsApi,
   cancelApproval,
   repostSale,
   codeRemnant,

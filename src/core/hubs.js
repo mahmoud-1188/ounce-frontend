@@ -10,7 +10,7 @@ import { BarChart3, ClipboardCheck, FileText, Flame, Receipt, Settings, UserRoun
 const BRANCH_HUBS = [
   { key: "sale", title: "البيع", icon: Receipt,
     tabs: [
-      { key: "invoice", label: "فاتورة", views: ["sales"] },
+      { key: "invoice", label: "فاتورة", views: ["sales", "saleDrafts"], labels: { sales: "فاتورة", saleDrafts: "معلّقة وعروض أسعار" } },
       { key: "history", label: "الفواتير والمرتجع", views: ["salesHistory", "salesReturn"],
         labels: { salesHistory: "الفواتير", salesReturn: "مرتجع واستبدال" } },
       { key: "orders", label: "الطلبات", views: ["reservations", "customOrders", "giftCards"],
