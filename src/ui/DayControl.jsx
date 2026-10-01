@@ -17,6 +17,9 @@ function DayControl({
   const [openCash, setOpenCash] = useState("");
   const [openCustody, setOpenCustody] = useState("");
   const [note, setNote] = useState("");
+  // ⚖ إنهاء اليوم بعدٍّ أعمى (المرجع ت٢): من يعدّ لا يرى المتوقَّع — يكتب ما في الدرج فعلًا
+  const [countCash, setCountCash] = useState("");
+  const [countNet, setCountNet] = useState("");
   // ⚠ onOpen/onClose صارا نداءي شبكة غير متزامنين — بلا هذه الحالة كانت
   // الورقة تُغلق فورًا بصرف النظر عن نجاح الطلب.
   const [submitting, setSubmitting] = useState(false);
@@ -120,9 +123,8 @@ function DayControl({
       id: "drawer",
       label: "توريد الصندوق اليومي للخزنة",
       ok: drawer + net <= 0.01,
-      detail: drawer + net > 0.01
-        ? `${currency}${fmtMoney(drawer + net)} في الصندوق اليومي`
-        : "فارغ",
+      // ⚠ العدّ أعمى: لا يُعرض رصيد الدرج قبل العدّ — كان يكشف المتوقَّع لمن يعدّ
+      detail: drawer + net > 0.01 ? "يُورَّد المعدود مع الإقفال" : "فارغ",
       block: false,
       goTo: null,
     });
@@ -132,6 +134,7 @@ function DayControl({
   const blockers = checks.filter((c) => c.block && !c.ok);
   const warnings = checks.filter((c) => !c.block && !c.ok);
   const canClose = blockers.length === 0;
+  const counted = String(countCash).trim() !== "";
 
   // ── حصيلة اليوم ──
   const summary = useMemo(() => {
@@ -374,6 +377,19 @@ function DayControl({
           </p>
         )}
 
+        <p style={{ color: "var(--accent)" }} className="text-[11px] font-bold mb-1">عُدّ الصندوق</p>
+        <p style={{ color: "var(--text3)" }} className="text-[10px] mb-2">
+          اكتب ما في الدرج فعلًا — لا يُعرض المتوقَّع قبل العدّ. الفرق فوق 100 يعتمده غير من عدّ، والمعدود يُورَّد للخزنة.
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          <Field label="النقد في الدرج">
+            <NumericInput value={countCash} onChange={setCountCash} placeholder="0" />
+          </Field>
+          <Field label="إيصالات الشبكة">
+            <NumericInput value={countNet} onChange={setCountNet} placeholder="0" />
+          </Field>
+        </div>
+
         <Field label="ملاحظة الإقفال (اختياري)">
           <input style={inputStyle} value={note} onChange={(e) => setNote(e.target.value)} />
         </Field>
@@ -386,14 +402,14 @@ function DayControl({
             لاحقًا
           </button>
           <button
-            disabled={!canClose || submitting}
+            disabled={!canClose || !counted || submitting}
             onClick={async () => {
               setSubmitting(true);
               try {
-                const ok = await onClose(note);
+                const ok = await onClose(note, { countedCash: Number(countCash) || 0, countedNetwork: Number(countNet) || 0 });
                 if (ok) {
                   setSheet(null);
-                  setNote("");
+                  setNote(""); setCountCash(""); setCountNet("");
                 }
               } finally {
                 setSubmitting(false);
@@ -401,12 +417,12 @@ function DayControl({
             }}
             className="py-3 rounded-xl text-sm font-bold"
             style={{
-              background: canClose
+              background: canClose && counted
                 ? "linear-gradient(135deg,var(--gradFrom),var(--gradTo))" : "var(--field)",
-              color: canClose ? "var(--panel)" : "var(--text3)",
+              color: canClose && counted ? "var(--panel)" : "var(--text3)",
             }}
           >
-            {submitting ? "جارٍ الإقفال..." : canClose ? "أقفل اليوم" : `${blockers.length} مانع`}
+            {submitting ? "جارٍ الإقفال..." : !canClose ? `${blockers.length} مانع` : counted ? "عُدّ وورّد وأقفل اليوم" : "اكتب العدّ أوّلًا"}
           </button>
         </div>
       </ModalShell>

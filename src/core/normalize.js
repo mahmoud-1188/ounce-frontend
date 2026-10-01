@@ -203,7 +203,8 @@ function normalizeSafeAudits(rows) {
 }
 
 function normalizeCustomers(rows) {
-  return rows.map((c) => ({ id: c.id, ref: c.ref, name: c.name, phone: c.phone, idNumber: c.id_number || "", note: c.note || "", createdBy: c.created_by, createdAt: c.created_at }));
+  return rows.map((c) => ({ id: c.id, ref: c.ref, name: c.name, phone: c.phone, idNumber: c.id_number || "", note: c.note || "", createdBy: c.created_by, createdAt: c.created_at,
+    creditLimit: c.credit_limit != null ? Number(c.credit_limit) : null }));
 }
 
 function normalizeSuppliers(rows) {
@@ -366,6 +367,9 @@ function normalizeLots(rows) {
     workmanshipAllocated: toMoney(l.workmanship_allocated),
     totalCost: toMoney(l.total_cost),
     status: l.status || "open",
+    // التكويد في الإدارة (migration 069)
+    codingAt: l.coding_at === "hq" ? "hq" : "branch",
+    sentToHqAt: l.sent_to_hq_at || null,
     enteredWeight: l.entered_weight == null ? null : toWeight(l.entered_weight),
     wastageWeight: toWeight(l.wastage_weight),
     surplusWeight: toWeight(l.surplus_weight),
@@ -591,6 +595,9 @@ function normalizeReservations(rows) {
     total: toMoney(r.total),
     deposit: toMoney(r.deposit),
     depositUsed: toMoney(r.deposit_used || 0),
+    // «محجوز حتى» وخطّة التقسيط (migration 069)
+    holdUntil: r.hold_until ? String(r.hold_until).slice(0, 10) : "",
+    plan: r.plan || null,
     saleId: r.sale_id || null,
     remaining: r.remaining == null ? null : toMoney(r.remaining),
     description: r.description || "",
@@ -728,6 +735,13 @@ function normalizeBootstrap(boot) {
           serverModules: boot.settings.modules || {},
           // الزكاة (migration 065): مفعّلةٌ افتراضًا، والسنة ميلادية افتراضًا
           zakatEnabled: boot.settings.zakat_enabled !== false,
+          creditLimitDefault: Number(boot.settings.credit_limit_default) || 0,
+          creditOverdueDays: Number(boot.settings.credit_overdue_days) || 0,
+          // تفضيلات البيع (migration 069): ورقة ما بعد البيع والبيع أثناء الجرد مطفآن افتراضًا
+          postSaleSheet: boot.settings.sale_prefs?.postSaleSheet === true,
+          sellDuringStocktake: boot.settings.sale_prefs?.sellDuringStocktake === true,
+          quoteDays: Number(boot.settings.sale_prefs?.quoteDays) || 7,
+          codingModel: ["branch", "hq", "both"].includes(boot.settings.coding_model) ? boot.settings.coding_model : "both",
           zakatYear: boot.settings.zakat_year === "hijri" ? "hijri" : "gregorian",
         }
       : null,

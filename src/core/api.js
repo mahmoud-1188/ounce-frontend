@@ -232,6 +232,23 @@ const einvoiceApi = {
 };
 
 /** GET /ledger/health — صحّة الدفتر من الدفاتر كاملةً. */
+/** POST /ledger/repost/:saleId — المدير يُرحّل قيد فاتورةٍ قديمة بلا قيد (migration 069). */
+function repostSale(saleId) {
+  return apiFetch(`/ledger/repost/${saleId}`, { method: "POST", body: {} });
+}
+
+/** POST /approvals/:id/cancel — الطالب يُلغي طلبه المعلّق. */
+function cancelApproval(id) {
+  return apiFetch(`/approvals/${id}/cancel`, { method: "POST", body: {} });
+}
+
+/** الفواتير المعلّقة وعروض الأسعار (migration 069 ⑧). */
+const saleDraftsApi = {
+  list: () => apiFetch("/sale-drafts"),
+  create: (body) => apiFetch("/sale-drafts", { method: "POST", body }),
+  cancel: (id) => apiFetch(`/sale-drafts/${id}/cancel`, { method: "POST", body: {} }),
+};
+
 function ledgerHealth() {
   return apiFetch("/ledger/health");
 }
@@ -362,6 +379,10 @@ function createSupplier(payload) {
 // migration 028_lot_item_coding.sql وitems.routes.js في الباك إند
 // للسياق الكامل)، فتُكتب items/item_units حقيقية في Postgres وتظهر في
 // bootstrap لكل جهاز/جلسة من الآن فصاعدًا.
+// التكويد في الإدارة (migration 069): إرسال الدفعة واسترجاعها
+const sendLotToHq = (lotId) => apiFetch(`/lots/${lotId}/send-to-hq`, { method: "POST", body: {} });
+const recallLot = (lotId) => apiFetch(`/lots/${lotId}/recall`, { method: "POST", body: {} });
+
 function createLotItems(lotId, rows, distributionMode) {
   return apiFetch(`/lots/${lotId}/items`, {
     method: "POST",
@@ -423,6 +444,10 @@ const safe = {
 const day = {
   open: (payload) => apiFetch("/day/open", { method: "POST", body: payload }),
   close: (payload) => apiFetch("/day/close", { method: "POST", body: payload }),
+  // إنهاء اليوم فعلٌ واحد: عدٌّ ← فرقه ← توريد ← إقفال (migration 069)
+  end: (payload) => apiFetch("/day/end", { method: "POST", body: payload }),
+  ask: () => apiFetch("/day-ask", { method: "POST" }),
+  asks: () => apiFetch("/day-ask"),
 };
 
 const custody = {
@@ -497,6 +522,8 @@ const reservationsApi = {
   list: () => apiFetch("/reservations"),
   add: (payload) => apiFetch("/reservations", { method: "POST", body: payload }),
   cancel: (id, refund) => apiFetch(`/reservations/${id}/cancel`, { method: "POST", body: { refund: !!refund } }),
+  pay: (id, amount, method) => apiFetch(`/reservations/${id}/pay`, { method: "POST", body: { amount, method } }),
+  hold: (id, holdUntil) => apiFetch(`/reservations/${id}/hold`, { method: "POST", body: { holdUntil: holdUntil || null } }),
 };
 
 const repairsApi = {
@@ -619,7 +646,8 @@ const modulesApi = {
   reorder: () => apiFetch("/reorder/status"),
   transfers: () => apiFetch("/branch-transfers"),
   sendTransfer: (body) => apiFetch("/branch-transfers", { method: "POST", body }),
-  receiveTransfer: (id) => apiFetch(`/branch-transfers/${id}/receive`, { method: "POST", body: {} }),
+  receiveTransfer: (id, count = {}) => apiFetch(`/branch-transfers/${id}/receive`, { method: "POST", body: count }),
+  settleTransferShort: (id, decision) => apiFetch(`/branch-transfers/${id}/settle-short`, { method: "POST", body: { decision } }),
   cancelTransfer: (id) => apiFetch(`/branch-transfers/${id}/cancel`, { method: "POST", body: {} }),
   giftCards: () => apiFetch("/gift-cards"),
   lookupGiftCard: (code) => apiFetch(`/gift-cards/lookup/${encodeURIComponent(code)}`),
@@ -734,8 +762,13 @@ export {
   fiscalApi,
   einvoiceApi,
   ledgerHealth,
+  saleDraftsApi,
+  cancelApproval,
+  repostSale,
   codeRemnant,
   createLotItems,
+  sendLotToHq,
+  recallLot,
   reconcileCategories,
   rfid,
   scrap,

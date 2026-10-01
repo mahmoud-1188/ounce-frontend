@@ -11,13 +11,20 @@ import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 
 function WorkDayPage({
   priceData, cashBalance, safeBalance, openCustodySession, sales, expenses, items, lots = [],
-  openDay, businessDays = [], onOpenDay, onCloseDay2, workdayOff = false,
+  openDay, businessDays = [], dayAsks = [], onOpenDay, onCloseDay2, workdayOff = false,
   currency, onOpenCustody, onCloseCustody, onCloseDay, onGo, onBack,
 }) {
   const [form, setForm] = useState(null); // "open" | "close"
   const [dayNote, setDayNote] = useState("");
-  const [tillFloat, setTillFloat] = useState("");
-  const [scrapFloat, setScrapFloat] = useState("");
+  const [countCash, setCountCash] = useState("");
+  const [countNet, setCountNet] = useState("");
+  // العهدة تُقترح من آخر يوم: من يفتح يومه كل صباح لا يكتب رقمه كل صباح — «نفس عهدة الأمس»
+  const lastDay = [...businessDays].filter((d) => d && d.openedAt && (d.tillFloat != null || d.scrapFloat != null))
+    .sort((a, b) => String(b.openedAt).localeCompare(String(a.openedAt)))[0] || null;
+  const sugTill = Number(lastDay?.tillFloat) || 0;
+  const sugScrap = Number(lastDay?.scrapFloat) || 0;
+  const [tillFloat, setTillFloat] = useState(sugTill > 0 ? String(sugTill) : "");
+  const [scrapFloat, setScrapFloat] = useState(sugScrap > 0 ? String(sugScrap) : "");
   // ⚠ onOpenDay/onCloseDay2/onOpenCustody/onCloseCustody صارت نداءات شبكة
   // غير متزامنة — بلا هذه الحالة كانت النماذج تُغلق وتُصفَّر فورًا بصرف
   // النظر عن نجاح الطلب من عدمه.
@@ -78,6 +85,11 @@ function WorkDayPage({
             <p style={{ color: "var(--text2)" }} className="text-[11px] mt-1 mb-3">
               افتح اليوم قبل أي بيع أو صرف. الحركات المسجّلة بلا يوم مفتوح لن تظهر في إقفال أي يوم.
             </p>
+            {dayAsks.length > 0 && (
+              <p style={{ color: "var(--accent)" }} className="text-[12px] font-bold mb-3" data-day-asks>
+                طلب فتح اليوم: {dayAsks.map((a) => a.name).filter(Boolean).join("، ") || "موظف"}
+              </p>
+            )}
             {form !== "openDay" ? (
               <button
                 onClick={() => setForm("openDay")}
@@ -92,6 +104,15 @@ function WorkDayPage({
                   العهدتان نقد فقط من الخزنة — الصندوق اليومي يستقبل نقدًا وشراء الكسر يُدفع نقدًا.
                   نقدي الخزنة المتاح: {currency}{fmt(safeBalance?.cash || 0, 0)}
                 </p>
+                {lastDay && (sugTill > 0 || sugScrap > 0) && (
+                  <p style={{ color: "var(--text3)" }} className="text-[11px] mb-2" data-day-float-sug>
+                    مقترحة من {lastDay.ref || "آخر يوم"}: صندوق {currency}{fmt(sugTill, 0)} · كسر {currency}{fmt(sugScrap, 0)}
+                    {(Number(tillFloat) || 0) !== sugTill || (Number(scrapFloat) || 0) !== sugScrap ? (
+                      <button type="button" className="mr-2 font-bold" style={{ color: "var(--accent)" }}
+                        onClick={() => { setTillFloat(String(sugTill)); setScrapFloat(String(sugScrap)); }}>نفس عهدة الأمس</button>
+                    ) : null}
+                  </p>
+                )}
                 <div className="grid grid-cols-2 gap-2">
                   <Field label={`عهدة الصندوق (${currency})`}>
                     <NumericInput value={tillFloat} onChange={setTillFloat} placeholder="0" />
@@ -168,6 +189,15 @@ function WorkDayPage({
                 <p style={{ color: "var(--text2)" }} className="text-[11px] mb-2">
                   ستُحفظ لقطة بأرقام اليوم عند الإقفال، ولن يُقبل تسجيل حركات جديدة حتى تفتح يومًا آخر.
                 </p>
+                {/* ⚖ عدٌّ أعمى إلزامي (المرجع ت٢): المعدود يُورَّد للخزنة والفرق فوق 100 يعتمده غير من عدّ */}
+                <div className="grid grid-cols-2 gap-2">
+                  <Field label="النقد في الدرج">
+                    <input style={inputStyle} inputMode="decimal" value={countCash} onChange={(e) => setCountCash(e.target.value)} placeholder="0" />
+                  </Field>
+                  <Field label="إيصالات الشبكة">
+                    <input style={inputStyle} inputMode="decimal" value={countNet} onChange={(e) => setCountNet(e.target.value)} placeholder="0" />
+                  </Field>
+                </div>
                 <Field label="ملاحظة الإقفال (اختياري)">
                   <input style={inputStyle} value={dayNote} onChange={(e) => setDayNote(e.target.value)} />
                 </Field>
@@ -176,13 +206,13 @@ function WorkDayPage({
                     تراجع
                   </button>
                   <button
-                    disabled={submitting}
+                    disabled={submitting || String(countCash).trim() === ""}
                     onClick={async () => {
                       setSubmitting(true);
                       try {
-                        const ok = await onCloseDay2(dayNote);
+                        const ok = await onCloseDay2(dayNote, { countedCash: Number(countCash) || 0, countedNetwork: Number(countNet) || 0 });
                         if (ok) {
-                          setDayNote("");
+                          setDayNote(""); setCountCash(""); setCountNet("");
                           setForm(null);
                         }
                       } finally {
@@ -192,7 +222,7 @@ function WorkDayPage({
                     className="py-2 rounded-xl text-xs font-bold"
                     style={{ background: "var(--badBg)", color: "var(--bad)", border: "1px solid var(--badLine)" }}
                   >
-                    {submitting ? "جارٍ الإقفال..." : "تأكيد الإقفال"}
+                    {submitting ? "جارٍ الإقفال..." : String(countCash).trim() === "" ? "اكتب العدّ أوّلًا" : "عُدّ وورّد وأقفل"}
                   </button>
                 </div>
               </div>

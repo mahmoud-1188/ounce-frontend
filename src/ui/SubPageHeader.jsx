@@ -13,6 +13,11 @@ function SubPageHeader({ title, onBack, right = null }) {
         {title}
       </h1>
       {right}
+      {/* «؟»: مسرد المصطلحات من أي صفحة — التطبيق يستمع للحدث ويفتحه */}
+      <button type="button" aria-label="ما معنى هذا؟ مسرد المصطلحات" title="مسرد المصطلحات"
+        onClick={() => { try { window.dispatchEvent(new CustomEvent("ons-glossary", { detail: "" })); } catch { /* خارج المتصفّح */ } }}
+        className="shrink-0 w-7 h-7 rounded-full text-[13px] font-bold flex items-center justify-center"
+        style={{ color: "var(--text3)", border: "1px solid var(--line)" }}>؟</button>
     </div>
   );
 }

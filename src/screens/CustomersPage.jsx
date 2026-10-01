@@ -356,6 +356,8 @@ function CustomersPage({ customers, sales, returns = [], repairs = [], trustGold
                 { key: "_spent", label: "المشتريات", align: "left",
                   render: (c) => `${currency}${fmt(statsFor(c.id).spent, 0)}` },
                 { key: "note", label: "ملاحظة", editable: canManage },
+                // حدّ الآجل (migration 069): فارغٌ = افتراضي الفرع من الإعدادات
+                { key: "creditLimit", label: "حدّ الآجل", editable: canManage, type: "number", align: "left" },
               ];
               return (
                 <>

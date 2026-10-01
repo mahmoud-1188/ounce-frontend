@@ -17,8 +17,13 @@ import * as api from "../core/api.js";
 function NewSaleModal({ activeItems, priceData,
   // ⚠ العملة كانت غائبة عن التوقيع: البدل يستخدمها فيسقط بـ
   // «currency is not defined» — والنافذة تُفرَغ بلا رسالة.
-  currency = "ر.س", initialItemId, initialCustomerId = null, taxEnabled, taxRate, settings = {}, role, customers = [], customOrder = null, reservations = [], dailyCash = null, onClose, onConfirm, onBindEpc }) {
-  const [customerId, setCustomerId] = useState(customOrder?.customerId || initialCustomerId || "");
+  currency = "ر.س", initialItemId, initialCustomerId = null, initialDraft = null, onHold = null, taxEnabled, taxRate, settings = {}, role, customers = [], onAddCustomer = null, customOrder = null, reservations = [], dailyCash = null, onClose, onConfirm, onBindEpc }) {
+  const [customerId, setCustomerId] = useState(customOrder?.customerId || initialCustomerId || initialDraft?.payload?.customerId || "");
+  // منتقي العميل: بحثٌ بالاسم أو الجوال، و«+ عميل جديد» يُضاف ويُختار دون مغادرة الفاتورة
+  const [custQuery, setCustQuery] = useState("");
+  const [newCust, setNewCust] = useState(null);
+  // آخر قطعةٍ مُسحت: صورتها ووزنها أمام البائع ليطابقها بما في يده قبل البيع
+  const [scanHit, setScanHit] = useState(null);
   // عربون الحجز يُخصم من الفاتورة (المرجع 5.2.0) — حجز القطعة نفسها تلقائيًّا أو حجزٌ يُختار
   const [depositFrom, setDepositFrom] = useState("");
   // بطاقة هدية (وحدة giftCards): رمزها ورصيدها يُخصم من الفاتورة
@@ -67,6 +72,11 @@ function NewSaleModal({ activeItems, priceData,
   const [scanMsg, setScanMsg] = useState("");
   const [bindFor, setBindFor] = useState(null); // EPC غير معروف بانتظار الربط
   const [selection, setSelection] = useState(() => {
+    // فاتورةٌ معلّقة أو عرض سعرٍ يُستأنف: أسطره كما حُفظت، وما بيع منذ ذلك يسقط (لا يُباع مرّتين)
+    if (initialDraft?.payload?.selection) {
+      return Object.fromEntries(Object.entries(initialDraft.payload.selection)
+        .filter(([id]) => activeItems.some((i) => i.id === id)));
+    }
     if (initialItemId) {
       const item = activeItems.find((i) => i.id === initialItemId);
       if (item) {
@@ -76,7 +86,7 @@ function NewSaleModal({ activeItems, priceData,
     }
     return {};
   });
-  const [paymentMethod, setPaymentMethod] = useState("cash");
+  const [paymentMethod, setPaymentMethod] = useState(initialDraft?.payload?.paymentMethod || "cash");
   const [taxApplicable, setTaxApplicable] = useState(!!taxEnabled);
 
   const toggleItem = (item) => {
@@ -166,8 +176,14 @@ function NewSaleModal({ activeItems, priceData,
       giftAmount: giftPart,
       frozenPrice,
       frozenAt,
+      draftId: initialDraft?.id || undefined,
     });
   };
+  // ⏸ تعليق الفاتورة أو حفظها عرض سعر — لا حركة ولا قيد، تُستأنف من «الفواتير المعلّقة»
+  const hold = (kind) => onHold?.(kind, {
+    selection, customerId: customerId || null, paymentMethod,
+    lines: Object.entries(selection).map(([itemId, v]) => ({ itemId, quantity: v.qty, unitPrice: Number(v.unitPrice) || 0 })),
+  }, total);
 
   return (
     <ModalShell title="فاتورة بيع جديدة" onClose={onClose}>
@@ -222,7 +238,7 @@ function NewSaleModal({ activeItems, priceData,
       <Field label="مسح الرقاقة">
         <ScanField
           value={scanCode}
-          onChange={(v) => { setScanCode(v); setScanMsg(""); }}
+          onChange={(v) => { setScanCode(v); setScanMsg(""); setScanHit(null); }}
           onSubmit={(raw, source) => {
             const code = String(raw || "").trim();
             if (!code) return;
@@ -285,6 +301,7 @@ function NewSaleModal({ activeItems, priceData,
             const purity = PURITY[hit.karat] || hit.karat / 24;
             const goldPart = (Number(hit.weight) || 0) * purity * frozenPrice;
             const wmPart = Number(hit.lotWorkmanshipShare) || 0;
+            setScanHit({ itemId: hit.id, code: matchedUnit?.code || code });
             setScanMsg(
               `أُضيفت: ${categoryLabel(hit.categoryId)} · عيار ${hit.karat} · ${fmtW(hit.weight)} جم` +
                 (hit.stonesWeight > 0 ? ` (فصوص ${fmt(hit.stonesWeight)})` : "") +
@@ -301,6 +318,24 @@ function NewSaleModal({ activeItems, priceData,
           {scanMsg}
         </p>
       )}
+      {scanHit && scanMsg.startsWith("أُضيفت") && (() => {
+        const it = activeItems.find((x) => x.id === scanHit.itemId);
+        if (!it) return null;
+        const photo = it.photoUrl || it.photoDataUrl || null;
+        return (
+          <div data-scan-photo className="flex items-center gap-3 p-2 mb-3 rounded-xl" style={{ background: "var(--field)", border: "1px solid var(--line)" }}>
+            {photo
+              ? <img src={photo} alt="" style={{ width: 72, height: 72, borderRadius: 12, objectFit: "cover", flexShrink: 0 }} />
+              : <div style={{ width: 72, height: 72, borderRadius: 12, background: "var(--panel)", color: "var(--text3)", flexShrink: 0 }} className="flex items-center justify-center text-[10px] text-center px-1">بلا صورة</div>}
+            <div className="min-w-0">
+              <p style={{ color: "var(--text)" }} className="text-[13px] font-bold">{categoryLabel(it.categoryId)} · عيار {it.karat}</p>
+              <p style={{ color: "var(--text2)" }} className="text-[12px]">{fmtW(it.weight)} جم{it.stonesWeight > 0 ? ` · فصوص ${fmt(it.stonesWeight)}` : ""}</p>
+              <p style={{ color: "var(--text3)" }} className="text-[11px]" dir="ltr">{scanHit.code}</p>
+              <p style={{ color: "var(--text3)" }} className="text-[10px]">طابقها بالقطعة التي في يدك — الصورة والوزن</p>
+            </div>
+          </div>
+        );
+      })()}
       {bindFor && (
         <BindEpcSheet epc={bindFor} items={activeItems} onCancel={() => setBindFor(null)}
           onBind={async (unitId) => {
@@ -320,16 +355,67 @@ function NewSaleModal({ activeItems, priceData,
         </Card>
       )}
 
-      {customers.length > 0 && (
-        <Field label={paymentMethod === "credit" ? "العميل (إجباري للبيع الآجل)" : "العميل (اختياري — يتيح الإرجاع والضمان لاحقًا)"}>
-          <select style={inputStyle} value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
-            <option value="">بلا عميل مسجَّل</option>
-            {customers.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}{c.phone ? ` — ${c.phone}` : ""}</option>
-            ))}
-          </select>
-        </Field>
-      )}
+      {(customers.length > 0 || onAddCustomer) && (() => {
+        const picked = customers.find((c) => c.id === customerId) || null;
+        const q = custQuery.trim().toLowerCase();
+        const digits = q.replace(/\D/g, "");
+        const hits = q
+          ? customers.filter((c) => String(c.name || "").toLowerCase().includes(q) || (digits && String(c.phone || "").replace(/\D/g, "").includes(digits))).slice(0, 6)
+          : [];
+        return (
+          <Field label={paymentMethod === "credit" ? "العميل (إجباري للبيع الآجل)" : "العميل (اختياري — يتيح الإرجاع والضمان لاحقًا)"}>
+            {picked ? (
+              <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl" style={{ background: "var(--field)", border: "1px solid var(--line)" }}>
+                <span style={{ color: "var(--text)" }} className="text-[12px] font-bold truncate">{picked.name}{picked.phone ? ` — ${picked.phone}` : ""}</span>
+                <button type="button" onClick={() => { setCustomerId(""); setCustQuery(""); }} style={{ color: "var(--text3)" }} className="text-[11px] font-bold shrink-0">تغيير</button>
+              </div>
+            ) : newCust ? (
+              <div className="flex flex-col gap-2 p-2 rounded-xl" style={{ border: "1px solid var(--line)" }}>
+                <input style={inputStyle} placeholder="اسم العميل" value={newCust.name} autoFocus
+                  onChange={(e) => setNewCust({ ...newCust, name: e.target.value })} />
+                <input style={inputStyle} placeholder="الجوال (اختياري)" inputMode="tel" value={newCust.phone}
+                  onChange={(e) => setNewCust({ ...newCust, phone: e.target.value })} />
+                <div className="flex gap-2">
+                  <button type="button" disabled={!newCust.name.trim() || newCust.busy}
+                    onClick={async () => {
+                      setNewCust({ ...newCust, busy: true });
+                      const c = await onAddCustomer(newCust.name.trim(), newCust.phone.trim(), "");
+                      if (c) { setCustomerId(c.id); setNewCust(null); setCustQuery(""); } else setNewCust({ ...newCust, busy: false });
+                    }}
+                    className="flex-1 py-2 rounded-xl text-[12px] font-bold"
+                    style={{ background: "var(--accent)", color: "var(--panel)", opacity: !newCust.name.trim() || newCust.busy ? 0.5 : 1 }}>
+                    أضف واختر
+                  </button>
+                  <button type="button" onClick={() => setNewCust(null)} className="px-3 py-2 rounded-xl text-[12px]" style={{ color: "var(--text2)", border: "1px solid var(--line)" }}>إلغاء</button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <input style={inputStyle} placeholder="ابحث بالاسم أو الجوال" value={custQuery} onChange={(e) => setCustQuery(e.target.value)} aria-label="بحث العميل" />
+                {hits.length > 0 && (
+                  <div className="flex flex-col mt-1 rounded-xl overflow-hidden" style={{ border: "1px solid var(--line)" }}>
+                    {hits.map((c) => (
+                      <button type="button" key={c.id} onClick={() => { setCustomerId(c.id); setCustQuery(""); }}
+                        className="text-right px-3 py-2 text-[12px]" style={{ color: "var(--text)", borderBottom: "1px solid var(--line)" }}>
+                        {c.name}{c.phone ? ` — ${c.phone}` : ""}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {q && hits.length === 0 && (
+                  <p style={{ color: "var(--text3)" }} className="text-[11px] mt-1">لا عميل بهذا البحث</p>
+                )}
+                {onAddCustomer && (
+                  <button type="button" onClick={() => setNewCust({ name: /\d/.test(q) ? "" : custQuery.trim(), phone: /\d/.test(q) ? custQuery.trim() : "", busy: false })}
+                    className="mt-1 text-[12px] font-bold" style={{ color: "var(--accent)" }}>
+                    + عميل جديد
+                  </button>
+                )}
+              </>
+            )}
+          </Field>
+        );
+      })()}
       {openDeposits.length > 0 && (
         <Field label="خصم عربون حجز">
           <select style={inputStyle} value={depositRsv ? depositRsv.id : ""} onChange={(e) => setDepositFrom(e.target.value)}>
@@ -369,7 +455,7 @@ function NewSaleModal({ activeItems, priceData,
       {paymentMethod === "credit" && !customerId && (
         <p style={{ color: "var(--bad)" }} className="text-[11px] mb-3">
           {customers.length === 0
-            ? "أضف العميل من صفحة العملاء أولًا — البيع الآجل بلا عميل مبلغ لا يمكن تحصيله لاحقًا."
+            ? "أضف العميل بـ«+ عميل جديد» — البيع الآجل بلا عميل مبلغ لا يمكن تحصيله لاحقًا."
             : "اختر العميل — البيع الآجل بلا عميل مبلغ لا يمكن تحصيله لاحقًا."}
         </p>
       )}
@@ -880,6 +966,15 @@ function NewSaleModal({ activeItems, priceData,
           selectedCount > 0 && allPriced && tradeOk &&
           !(paymentMethod === "credit" && !customerId);
         return (
+          <>
+          {onHold && selectedCount > 0 && (
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              <button onClick={() => hold("held")} className="py-2 rounded-xl text-[12px] font-bold"
+                style={{ background: "var(--panel)", color: "var(--text2)", border: "1px solid var(--line)" }}>⏸ علّق الفاتورة</button>
+              <button onClick={() => hold("quote")} disabled={!allPriced} className="py-2 rounded-xl text-[12px] font-bold"
+                style={{ background: "var(--panel)", color: allPriced ? "var(--accent)" : "var(--text3)", border: "1px solid var(--line)" }}>عرض سعر للعميل</button>
+            </div>
+          )}
           <button
             disabled={!canConfirm}
             onClick={handleConfirm}
@@ -891,6 +986,7 @@ function NewSaleModal({ activeItems, priceData,
           >
             <Check size={18} /> تأكيد البيع
           </button>
+          </>
         );
       })()}
     </ModalShell>

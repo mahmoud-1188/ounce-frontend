@@ -134,6 +134,7 @@ const APPROVAL_STATUS = {
   rejected: { label: "مرفوض", color: "var(--bad)" },
   executed: { label: "نُفِّذ", color: "var(--text2)" },
   cancelled: { label: "ملغى", color: "var(--text3)" },
+  expired: { label: "انتهت مهلته", color: "var(--text3)" },
 };
 
 /// هل تحتاج العملية اعتمادًا؟

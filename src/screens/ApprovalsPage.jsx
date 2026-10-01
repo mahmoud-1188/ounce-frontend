@@ -14,7 +14,7 @@ import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 /// التنفيذ في معاملته)، والمرفوض يبقى شاهدًا.
 const LIVE_KINDS = ["expense", "refund", "supplier_settle", "asset_purchase", "asset_disposal", "payroll_run", "hq_purchase"];
 
-function ApprovalsPage({ approvals = [], currency, canDecide = false, settings = {}, routing = {}, onDecide, onExecute, onBack }) {
+function ApprovalsPage({ approvals = [], currency, canDecide = false, settings = {}, routing = {}, onDecide, onExecute, onBack, meId = null, onCancel = null }) {
   const [tab, setTab] = useState("pending");
   const [openId, setOpenId] = useState(null);
   const [note, setNote] = useState("");
@@ -84,9 +84,17 @@ function ApprovalsPage({ approvals = [], currency, canDecide = false, settings =
                   </p>
                   {a.status !== "pending" && (
                     <p style={{ color: st.color }} className="text-[11px] mt-1">
-                      {a.selfApproved ? "اعتمادٌ ذاتيّ للمدير — دُوِّن" : a.status === "rejected" ? "رُفض" : "اعتُمد"} — {a.approver || "—"}{a.approverKind === "hq" ? " (الإدارة)" : ""} · {a.decidedAt ? new Date(a.decidedAt).toLocaleString("en-GB") : ""}
+                      {a.status === "expired" ? "انتهت مهلته (72 ساعة) دون قرار" : a.status === "cancelled" ? "ألغاه طالبه" : a.selfApproved ? "اعتمادٌ ذاتيّ للمدير — دُوِّن" : a.status === "rejected" ? "رُفض" : "اعتُمد"} — {a.approver || "—"}{a.approverKind === "hq" ? " (الإدارة)" : ""} · {a.decidedAt ? new Date(a.decidedAt).toLocaleString("en-GB") : ""}
                       {a.decisionNote ? ` — ${a.decisionNote}` : ""}{a.executedAt ? ` · نُفِّذ ${new Date(a.executedAt).toLocaleString("en-GB")}` : ""}
                     </p>
+                  )}
+                  {/* الطالب يُلغي طلبه المعلّق (المرجع ت٢) */}
+                  {a.status === "pending" && onCancel && (a.requesterId === meId || canDecide) && (
+                    <button onClick={async () => { setBusyId(a.id); try { await onCancel(a); } finally { setBusyId(null); } }} disabled={busy}
+                      className="mt-2 px-3 py-1.5 rounded-xl text-[11px] font-bold"
+                      style={{ background: "var(--panel)", color: "var(--text2)", border: "1px solid var(--line)" }}>
+                      {a.requesterId === meId ? "ألغِ طلبي" : "ألغِ الطلب"}
+                    </button>
                   )}
                   {/* ⚠ معتمَدٌ لم يُنفَّذ: تعثّر تنفيذه (رصيدٌ لا يكفي، يومٌ مقفل) — يُعاد بالحمولة نفسها */}
                   {a.status === "approved" && !a.executedAt && canDecide && onExecute && (

@@ -10,7 +10,7 @@ import { BarChart3, ClipboardCheck, FileText, Flame, Receipt, Settings, UserRoun
 const BRANCH_HUBS = [
   { key: "sale", title: "البيع", icon: Receipt,
     tabs: [
-      { key: "invoice", label: "فاتورة", views: ["sales"] },
+      { key: "invoice", label: "فاتورة", views: ["sales", "saleDrafts"], labels: { sales: "فاتورة", saleDrafts: "معلّقة وعروض أسعار" } },
       { key: "history", label: "الفواتير والمرتجع", views: ["salesHistory", "salesReturn"],
         labels: { salesHistory: "الفواتير", salesReturn: "مرتجع واستبدال" } },
       { key: "orders", label: "الطلبات", views: ["reservations", "customOrders", "giftCards"],
@@ -74,8 +74,8 @@ const BRANCH_HUBS = [
         labels: { fullStatements: "القوائم الكاملة", financials: "الزكاة", ifrs: "IFRS" } },
       { key: "journal", label: "اليومية", views: ["journal", "documents", "queryBuilder", "docCycle"],
         labels: { journal: "اليومية", documents: "المستندات", queryBuilder: "تصفية متقدّمة", docCycle: "الدورة المستندية" } },
-      { key: "review", label: "المراجعة والاعتماد", views: ["accountantReview", "approvals"],
-        labels: { accountantReview: "المراجعة", approvals: "الاعتمادات" } },
+      { key: "review", label: "المراجعة والاعتماد", views: ["accountantReview", "approvals", "hqRequests"],
+        labels: { accountantReview: "المراجعة", approvals: "الاعتمادات", hqRequests: "طلباتي للإدارة" } },
       { key: "compliance", label: "الامتثال", views: ["vatReturn", "einvoice"] },
     ] },
   { key: "staff", title: "الموظفون", icon: UserRound,
@@ -85,7 +85,7 @@ const BRANCH_HUBS = [
     ] },
   { key: "settings", title: "الإعدادات", icon: Settings,
     tabs: [
-      { key: "basics", label: "الأساسيات", views: ["settings", "navCustomize"], labels: { settings: "الأساسيات", navCustomize: "تخصيص القائمة" } },
+      { key: "basics", label: "الأساسيات", views: ["settings", "navCustomize", "glossary"], labels: { settings: "الأساسيات", navCustomize: "تخصيص القائمة", glossary: "مسرد المصطلحات" } },
       { key: "security", label: "الصلاحيات", views: ["access"] },
       { key: "devices", label: "الأجهزة", views: ["printerSetup", "rfidSettings"], labels: { printerSetup: "الطابعة", rfidSettings: "قارئ RFID" } },
       { key: "links", label: "الربط", views: ["integration", "exchange", "storeLink"],

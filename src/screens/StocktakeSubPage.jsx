@@ -6,7 +6,7 @@ import { Card } from "../ui/Card.jsx";
 import { EmptyState } from "../ui/EmptyState.jsx";
 import { Hallmark } from "../ui/Hallmark.jsx";
 
-function StocktakeSubPage({ lock, onToggleLock,
+function StocktakeSubPage({ lock, onToggleLock, sellDuring = false,
   activeItems,
   allItems = [],
   onSoldFound,
@@ -361,8 +361,12 @@ function StocktakeSubPage({ lock, onToggleLock,
         </div>
         <p style={{ color: "var(--text2)" }} className="text-[11px] mb-3">
           {lock
-            ? `بدأه ${lock.startedBy}. البيع والتحويلات موقوفة حتى فتح القفل.`
-            : "يوقف البيع والتحويلات أثناء العدّ — وإلا ظهر البيع عجزًا."}
+            ? (sellDuring
+              ? `بدأه ${lock.startedBy}. البيع مسموح (إعداد) — ما يُباع الآن يُطابَق مبيعًا عند الاعتماد، والتحويلات موقوفة.`
+              : `بدأه ${lock.startedBy}. البيع والتحويلات موقوفة حتى فتح القفل.`)
+            : sellDuring
+              ? "يوقف التحويلات أثناء العدّ — والبيع مسموح (إعداد)."
+              : "يوقف البيع والتحويلات أثناء العدّ — وإلا ظهر البيع عجزًا."}
         </p>
         <button onClick={() => onToggleLock(!lock)}
           className="w-full py-2.5 rounded-xl text-xs font-bold"
