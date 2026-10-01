@@ -292,6 +292,7 @@ import { CashModal } from "../modals/CashModal.jsx";
 import { EntitySheet } from "../modals/EntitySheet.jsx";
 import { SaleDraftsPage, printQuote } from "../screens/SaleDraftsPage.jsx";
 import { PostSaleSheet } from "../modals/PostSaleSheet.jsx";
+import { HqRequestsPage } from "../screens/HqRequestsPage.jsx";
 import { entityActionsSpec } from "../domain/entities.js";
 import { BudgetsPage } from "../screens/BudgetsPage.jsx";
 import { VatReturnPage } from "../screens/VatReturnPage.jsx";
@@ -2759,6 +2760,8 @@ export default function GoldInventoryApp() {
     }
     // الفواتير المعلّقة وعروض الأسعار تتبع البيع: من يبيع يعلّق ويستأنف (الخادم يحرسها بصفحة البيع)
     if (tabs.includes("sales") && !more.includes("saleDrafts")) more.push("saleDrafts");
+    // طلباتي للإدارة تتبع الاعتمادات: من يرى الاعتمادات يرى ما رُفع منها للإدارة
+    if (more.includes("approvals") && !more.includes("hqRequests")) more.push("hqRequests");
 
     return { ...base, allowedTabs: [...tabs, "more"], allowedMore: more };
   };
@@ -9301,6 +9304,23 @@ export default function GoldInventoryApp() {
             onDecide={handleDecideApproval}
             onExecute={executeApproval}
             meId={currentUser?.id || null}
+            onCancel={async (ap) => {
+              try {
+                const res = await api.cancelApproval(ap.id);
+                setApprovals((prev) => prev.map((x) => (x.id === ap.id ? { ...x, ...res.approval } : x)));
+                flashToast(`أُلغي الطلب ${ap.ref}`);
+              } catch (err) { flashToast(apiErrorMessage(err, "تعذّر إلغاء الطلب")); }
+            }}
+            onBack={() => setMorePage(null)}
+          />
+        )}
+        {morePage === "hqRequests" && (
+          <HqRequestsPage
+            approvals={approvals}
+            currency={priceData.currency}
+            meId={currentUser?.id || null}
+            canManage={role === "manager"}
+            onOpenApprovals={() => openPage("approvals")}
             onCancel={async (ap) => {
               try {
                 const res = await api.cancelApproval(ap.id);
