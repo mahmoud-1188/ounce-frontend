@@ -442,6 +442,8 @@ const day = {
   close: (payload) => apiFetch("/day/close", { method: "POST", body: payload }),
   // إنهاء اليوم فعلٌ واحد: عدٌّ ← فرقه ← توريد ← إقفال (migration 069)
   end: (payload) => apiFetch("/day/end", { method: "POST", body: payload }),
+  ask: () => apiFetch("/day-ask", { method: "POST" }),
+  asks: () => apiFetch("/day-ask"),
 };
 
 const custody = {
@@ -516,6 +518,8 @@ const reservationsApi = {
   list: () => apiFetch("/reservations"),
   add: (payload) => apiFetch("/reservations", { method: "POST", body: payload }),
   cancel: (id, refund) => apiFetch(`/reservations/${id}/cancel`, { method: "POST", body: { refund: !!refund } }),
+  pay: (id, amount, method) => apiFetch(`/reservations/${id}/pay`, { method: "POST", body: { amount, method } }),
+  hold: (id, holdUntil) => apiFetch(`/reservations/${id}/hold`, { method: "POST", body: { holdUntil: holdUntil || null } }),
 };
 
 const repairsApi = {

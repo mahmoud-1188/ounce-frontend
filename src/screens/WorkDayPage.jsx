@@ -11,15 +11,20 @@ import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 
 function WorkDayPage({
   priceData, cashBalance, safeBalance, openCustodySession, sales, expenses, items, lots = [],
-  openDay, businessDays = [], onOpenDay, onCloseDay2, workdayOff = false,
+  openDay, businessDays = [], dayAsks = [], onOpenDay, onCloseDay2, workdayOff = false,
   currency, onOpenCustody, onCloseCustody, onCloseDay, onGo, onBack,
 }) {
   const [form, setForm] = useState(null); // "open" | "close"
   const [dayNote, setDayNote] = useState("");
   const [countCash, setCountCash] = useState("");
   const [countNet, setCountNet] = useState("");
-  const [tillFloat, setTillFloat] = useState("");
-  const [scrapFloat, setScrapFloat] = useState("");
+  // العهدة تُقترح من آخر يوم: من يفتح يومه كل صباح لا يكتب رقمه كل صباح — «نفس عهدة الأمس»
+  const lastDay = [...businessDays].filter((d) => d && d.openedAt && (d.tillFloat != null || d.scrapFloat != null))
+    .sort((a, b) => String(b.openedAt).localeCompare(String(a.openedAt)))[0] || null;
+  const sugTill = Number(lastDay?.tillFloat) || 0;
+  const sugScrap = Number(lastDay?.scrapFloat) || 0;
+  const [tillFloat, setTillFloat] = useState(sugTill > 0 ? String(sugTill) : "");
+  const [scrapFloat, setScrapFloat] = useState(sugScrap > 0 ? String(sugScrap) : "");
   // ⚠ onOpenDay/onCloseDay2/onOpenCustody/onCloseCustody صارت نداءات شبكة
   // غير متزامنة — بلا هذه الحالة كانت النماذج تُغلق وتُصفَّر فورًا بصرف
   // النظر عن نجاح الطلب من عدمه.
@@ -80,6 +85,11 @@ function WorkDayPage({
             <p style={{ color: "var(--text2)" }} className="text-[11px] mt-1 mb-3">
               افتح اليوم قبل أي بيع أو صرف. الحركات المسجّلة بلا يوم مفتوح لن تظهر في إقفال أي يوم.
             </p>
+            {dayAsks.length > 0 && (
+              <p style={{ color: "var(--accent)" }} className="text-[12px] font-bold mb-3" data-day-asks>
+                طلب فتح اليوم: {dayAsks.map((a) => a.name).filter(Boolean).join("، ") || "موظف"}
+              </p>
+            )}
             {form !== "openDay" ? (
               <button
                 onClick={() => setForm("openDay")}
@@ -94,6 +104,15 @@ function WorkDayPage({
                   العهدتان نقد فقط من الخزنة — الصندوق اليومي يستقبل نقدًا وشراء الكسر يُدفع نقدًا.
                   نقدي الخزنة المتاح: {currency}{fmt(safeBalance?.cash || 0, 0)}
                 </p>
+                {lastDay && (sugTill > 0 || sugScrap > 0) && (
+                  <p style={{ color: "var(--text3)" }} className="text-[11px] mb-2" data-day-float-sug>
+                    مقترحة من {lastDay.ref || "آخر يوم"}: صندوق {currency}{fmt(sugTill, 0)} · كسر {currency}{fmt(sugScrap, 0)}
+                    {(Number(tillFloat) || 0) !== sugTill || (Number(scrapFloat) || 0) !== sugScrap ? (
+                      <button type="button" className="mr-2 font-bold" style={{ color: "var(--accent)" }}
+                        onClick={() => { setTillFloat(String(sugTill)); setScrapFloat(String(sugScrap)); }}>نفس عهدة الأمس</button>
+                    ) : null}
+                  </p>
+                )}
                 <div className="grid grid-cols-2 gap-2">
                   <Field label={`عهدة الصندوق (${currency})`}>
                     <NumericInput value={tillFloat} onChange={setTillFloat} placeholder="0" />

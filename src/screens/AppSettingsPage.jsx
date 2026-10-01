@@ -24,7 +24,7 @@ const SETTINGS_ROWS = [
     screens: [], status: (s) => `${APP_MODES[s.appMode || DEFAULT_APP_MODE]?.label || ""} · يوم العمل ${s.workdayMode === "off" ? "مطفأ" : "مفعّل"}` },
   { id: "security", label: "الأمان والصلاحيات", icon: ShieldCheck, keys: ["الرقم السري", "الرقابة", "استرجاع"],
     screens: [["access", "الصلاحيات"]], status: (s) => `الرقم السري ${s.requirePin ? "مفعّل" : "مطفأ"} · الاعتماد ${s.approvalsEnabled ? "مفعّل" : "مطفأ"}` },
-  { id: "money", label: "المال والضريبة", icon: Coins, keys: ["الضريبه", "هوامش", "هامش", "عمولات", "مطابقة البنك", "الزكاه", "فحص الكسر", "حد الاجل"],
+  { id: "money", label: "المال والضريبة", icon: Coins, keys: ["الضريبه", "هوامش", "هامش", "عمولات", "مطابقة البنك", "الزكاه", "فحص الكسر", "حد الاجل", "بعد البيع", "واتساب", "البيع اثناء الجرد", "عرض السعر"],
     screens: [], status: (s) => (s.taxEnabled ? `ضريبة ${Math.round((Number(s.taxRate) || 0) * 1000) / 10}٪` : "بلا ضريبة") + ` · الزكاة ${s.zakatEnabled === false ? "مطفأة" : "مفعّلة"}` },
   { id: "devices", label: "الأجهزة", icon: Printer, keys: ["قارئ rfid", "الطابعه"],
     screens: [["printerSetup", "الطابعة"], ["rfidSettings", "القارئ"]], status: () => "الطابعة وقارئ RFID" },
@@ -274,7 +274,7 @@ function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSa
               onClick={() => onSave({ ...settings, workdayMode: settings.workdayMode !== "off" ? "off" : "required" })}
               style={{
                 width: 46, height: 25, borderRadius: 13, position: "relative", flexShrink: 0,
-                background: settings.workdayMode !== "off" ? "var(--goodSolid)" : "var(--edge)", transition: "background .2s",
+                background: settings.workdayMode !== "off" ? "var(--good)" : "var(--edge)", transition: "background .2s",
               }}
             >
               <div style={{ width: 19, height: 19, borderRadius: "50%", background: "var(--text)",
@@ -305,7 +305,7 @@ function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSa
               onClick={() => onSave({ ...settings, requirePin: !settings.requirePin })}
               style={{
                 width: 46, height: 25, borderRadius: 13, position: "relative",
-                background: settings.requirePin ? "var(--goodSolid)" : "var(--edge)", transition: "background .2s",
+                background: settings.requirePin ? "var(--good)" : "var(--edge)", transition: "background .2s",
               }}
             >
               <div style={{ width: 19, height: 19, borderRadius: "50%", background: "var(--text)",
@@ -335,7 +335,7 @@ function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSa
             <button
               onClick={() => onSave({ ...settings, bankReconEnabled: !settings.bankReconEnabled })}
               style={{ width: 46, height: 25, borderRadius: 13, position: "relative",
-                background: settings.bankReconEnabled ? "var(--goodSolid)" : "var(--edge)", transition: "background .2s" }}
+                background: settings.bankReconEnabled ? "var(--good)" : "var(--edge)", transition: "background .2s" }}
             >
               <div style={{ width: 19, height: 19, borderRadius: "50%", background: "var(--text)",
                 position: "absolute", top: 3, right: settings.bankReconEnabled ? 24 : 3, transition: "right .2s" }} />
@@ -621,7 +621,7 @@ function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSa
                 width: 44,
                 height: 24,
                 borderRadius: 12,
-                background: taxEnabled ? "var(--goodSolid)" : "var(--edge)",
+                background: taxEnabled ? "var(--good)" : "var(--edge)",
                 position: "relative",
                 transition: "background 0.2s",
               }}
@@ -670,7 +670,7 @@ function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSa
             <button
               onClick={() => onSave({ zakatEnabled: settings.zakatEnabled === false })}
               style={{ width: 44, height: 24, borderRadius: 12, position: "relative", transition: "background 0.2s",
-                background: settings.zakatEnabled !== false ? "var(--goodSolid)" : "var(--edge)" }}
+                background: settings.zakatEnabled !== false ? "var(--good)" : "var(--edge)" }}
             >
               <div style={{ width: 18, height: 18, borderRadius: "50%", background: "var(--text)", position: "absolute", top: 3,
                 right: settings.zakatEnabled !== false ? 23 : 3, transition: "right 0.2s" }} />
@@ -717,6 +717,42 @@ function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSa
                 className="w-full mt-1 px-3 py-2 rounded-xl text-[12px]" style={{ background: "var(--field)", color: "var(--text)", border: "1px solid var(--line)" }} />
             </label>
           </div>
+        </Card>
+
+        {/* ── تفضيلات البيع (migration 069): ورقة ما بعد البيع والبيع أثناء الجرد — مطفآن افتراضًا ── */}
+        <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2 mt-4">
+          البيع
+        </p>
+        <Card style={{ padding: 14, marginBottom: 12 }}>
+          {[
+            { key: "postSaleSheet", title: "بعد البيع: اطبع الفاتورة أو أرسلها بواتساب",
+              on: "مفعّل — بعد كل بيع تظهر ورقة: اطبع · أرسل بواتساب · بيع جديد",
+              off: "مطفأ — البيع ينتهي برسالته، وتطبع أيّ فاتورة متى شئت من سجلّ المبيعات" },
+            { key: "sellDuringStocktake", title: "البيع أثناء الجرد",
+              on: "مسموح — ما يُباع والقفل قائم يُطابَق مبيعًا عند اعتماد الجرد (لا يُحسب زيادة)",
+              off: "موقوف — قفل الجرد يوقف البيع حتى فتحه" },
+          ].map((t) => (
+            <div key={t.key} className="flex items-center justify-between gap-3 py-2" style={{ borderBottom: "1px solid var(--line)" }}>
+              <div className="min-w-0">
+                <p style={{ color: "var(--text)" }} className="text-[12px] font-bold">{t.title}</p>
+                <p style={{ color: "var(--text3)" }} className="text-[11px]">{settings[t.key] ? t.on : t.off}</p>
+              </div>
+              <button type="button" role="switch" aria-checked={!!settings[t.key]} aria-label={t.title}
+                onClick={() => onSave({ [t.key]: !settings[t.key] })}
+                className="shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold"
+                style={settings[t.key]
+                  ? { background: "var(--goodBg)", color: "var(--good)", border: "1px solid var(--goodLine)" }
+                  : { background: "var(--field)", color: "var(--text2)", border: "1px solid var(--line)" }}>
+                {settings[t.key] ? "مفعّل" : "مطفأ"}
+              </button>
+            </div>
+          ))}
+          <label className="block text-[11px] mt-3" style={{ color: "var(--text2)" }}>
+            صلاحية عرض السعر (أيام)
+            <input type="number" min="1" max="60" inputMode="numeric" defaultValue={Number(settings.quoteDays) || 7}
+              onBlur={(e) => { const v = Math.max(1, Math.min(60, Math.round(Number(e.target.value) || 7))); if (v !== (Number(settings.quoteDays) || 7)) onSave({ quoteDays: v }); }}
+              className="w-full mt-1 px-3 py-2 rounded-xl text-[12px]" style={{ background: "var(--field)", color: "var(--text)", border: "1px solid var(--line)" }} />
+          </label>
         </Card>
 
         {/* ── بثّ سعر الذهب ── */}

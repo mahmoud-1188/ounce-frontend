@@ -140,6 +140,8 @@ const API_ERROR_MESSAGES = {
   action_denied_by_hq: "منعت الإدارة المركزية هذه العملية",
   item_reserved_for_other: "القطعة محجوزة لعميل آخر",
   reservation_not_open: "الحجز لم يعد مفتوحًا",
+  amount_exceeds_remaining: "المبلغ أكبر من الباقي على الحجز",
+  invalid_hold_until: "تاريخ المهلة غير صالح",
   insufficient_pool_balance: "رصيد الصندوق المصدر لا يكفي",
   insufficient_safe_balance: "رصيد الخزنة لا يكفي",
   settings_locked_by_hq: "هذه الإعدادات مُدارة من الإدارة المركزية — تُعدَّل من هناك",
@@ -289,6 +291,7 @@ import { BundleSheet } from "../modals/BundleSheet.jsx";
 import { CashModal } from "../modals/CashModal.jsx";
 import { EntitySheet } from "../modals/EntitySheet.jsx";
 import { SaleDraftsPage, printQuote } from "../screens/SaleDraftsPage.jsx";
+import { PostSaleSheet } from "../modals/PostSaleSheet.jsx";
 import { entityActionsSpec } from "../domain/entities.js";
 import { BudgetsPage } from "../screens/BudgetsPage.jsx";
 import { VatReturnPage } from "../screens/VatReturnPage.jsx";
@@ -528,6 +531,8 @@ export default function GoldInventoryApp() {
   const [toast, setToast] = useState("");
   const [showPrice, setShowPrice] = useState(false);
   const [showNewSale, setShowNewSale] = useState(false);
+  // ورقة ما بعد البيع (إعداد postSaleSheet): الفاتورة الأخيرة لطباعتها أو إرسالها بواتساب
+  const [postSale, setPostSale] = useState(null);
   const [quickSaleItemId, setQuickSaleItemId] = useState(null);
   const [quickSaleCustomerId, setQuickSaleCustomerId] = useState(null);
   const [saleDrafts, setSaleDrafts] = useState([]);       // فواتير معلّقة وعروض أسعار (migration 069 ⑧)
@@ -1149,7 +1154,10 @@ export default function GoldInventoryApp() {
       (merged.zakatEnabled !== false) !== (appSettings.zakatEnabled !== false) ||
       (merged.zakatYear || "gregorian") !== (appSettings.zakatYear || "gregorian") ||
       (Number(merged.creditLimitDefault) || 0) !== (Number(appSettings.creditLimitDefault) || 0) ||
-      (Number(merged.creditOverdueDays) || 0) !== (Number(appSettings.creditOverdueDays) || 0);
+      (Number(merged.creditOverdueDays) || 0) !== (Number(appSettings.creditOverdueDays) || 0) ||
+      !!merged.postSaleSheet !== !!appSettings.postSaleSheet ||
+      !!merged.sellDuringStocktake !== !!appSettings.sellDuringStocktake ||
+      (Number(merged.quoteDays) || 7) !== (Number(appSettings.quoteDays) || 7);
     if (!taxOrFeesChanged) {
       flashToast("تم حفظ الإعدادات");
       return true;
@@ -1165,6 +1173,7 @@ export default function GoldInventoryApp() {
         zakatYear: merged.zakatYear === "hijri" ? "hijri" : "gregorian",
         creditLimitDefault: Number(merged.creditLimitDefault) || 0,
         creditOverdueDays: Number(merged.creditOverdueDays) || 0,
+        salePrefs: { postSaleSheet: !!merged.postSaleSheet, sellDuringStocktake: !!merged.sellDuringStocktake, quoteDays: Number(merged.quoteDays) || 7 },
       });
       persistSettings({
         ...merged,
@@ -1174,6 +1183,7 @@ export default function GoldInventoryApp() {
         workdayMode: res.settings.workday_mode || "required",
         ...(res.settings.zakat_enabled != null ? { zakatEnabled: res.settings.zakat_enabled !== false, zakatYear: res.settings.zakat_year || "gregorian" } : {}),
         ...(res.settings.credit_limit_default != null ? { creditLimitDefault: Number(res.settings.credit_limit_default) || 0, creditOverdueDays: Number(res.settings.credit_overdue_days) || 0 } : {}),
+        ...(res.settings.sale_prefs ? { postSaleSheet: res.settings.sale_prefs.postSaleSheet === true, sellDuringStocktake: res.settings.sale_prefs.sellDuringStocktake === true, quoteDays: Number(res.settings.sale_prefs.quoteDays) || 7 } : {}),
       });
       flashToast("تم حفظ الإعدادات");
       return true;
@@ -1269,6 +1279,8 @@ export default function GoldInventoryApp() {
         total: Number(entry.total) || 0,
         deposit: Number(entry.deposit) || 0,
         method: entry.method === "network" ? "network" : "cash",
+        holdUntil: entry.holdUntil || null,
+        plan: entry.plan || null,
       });
       const r = res.reservation;
       const rec = {
@@ -1276,6 +1288,7 @@ export default function GoldInventoryApp() {
         itemId: r.item_id, description: r.description || "", total: Number(r.total) || 0,
         deposit: Number(r.deposit) || 0, remaining: Number(r.remaining) || 0,
         status: r.status, method: r.method, date: r.created_at, createdBy: currentUser?.name || "",
+        holdUntil: r.hold_until ? String(r.hold_until).slice(0, 10) : "", plan: r.plan || null,
       };
       setReservations((prev) => [rec, ...prev]);
       // عربون الحجز دائمًا من صندوق اليومي (daily_cash/daily_network) في
@@ -1308,6 +1321,32 @@ export default function GoldInventoryApp() {
     } catch (err) {
       flashToast(apiErrorMessage(err, "تعذّر إلغاء الحجز"));
       return null;
+    }
+  };
+
+  // دفعةٌ على حجزٍ قائم (قسطٌ أو زيادة عربون) — الخادم يضيفها للعربون ويُدخل نقدها اليومي
+  const handlePayReservation = async (id, amount, method) => {
+    try {
+      const res = await api.reservationsApi.pay(id, Number(amount) || 0, method === "network" ? "network" : "cash");
+      const r = res.reservation;
+      setReservations((prev) => prev.map((x) => (x.id === id ? { ...x, deposit: Number(r.deposit) || 0, remaining: Number(r.remaining) || 0 } : x)));
+      if (res.cashTx) setCashTx((prev) => [normalizeCashTxRow(res.cashTx), ...prev]);
+      flashToast(`سُجّلت الدفعة ${fmtMoney(amount)} على ${r.ref}`);
+      return true;
+    } catch (err) {
+      flashToast(apiErrorMessage(err, "تعذّر تسجيل الدفعة"));
+      return false;
+    }
+  };
+  const handleHoldReservation = async (id, holdUntil) => {
+    try {
+      await api.reservationsApi.hold(id, holdUntil);
+      setReservations((prev) => prev.map((x) => (x.id === id ? { ...x, holdUntil: holdUntil || "" } : x)));
+      flashToast(holdUntil ? `محجوز حتى ${holdUntil}` : "أُزيلت المهلة");
+      return true;
+    } catch (err) {
+      flashToast(apiErrorMessage(err, "تعذّر تعديل المهلة"));
+      return false;
     }
   };
 
@@ -1368,6 +1407,26 @@ export default function GoldInventoryApp() {
   // عهدة الكسر في معاملة واحدة (نفس فلسفة الجمع في المرجع)، ويتحقق فعليًا
   // من رصيد الخزنة النقدي حيًّا (409 insufficient_safe_cash) بدل الفحص
   // المحلي المتفائل هنا.
+  // «نبّه المدير»: من لا يملك فتح اليوم يطلبه — يظهر لمن يدير اليوم في بطاقة «لا يوم مفتوح» وعلى يوم العمل
+  const [dayAsks, setDayAsks] = useState([]);
+  const canManageDayNow = !!ROLES[role]?.canManageDay;
+  useEffect(() => {
+    if (!currentUser || !canManageDayNow || openDay) { setDayAsks([]); return undefined; }
+    let alive = true;
+    const load = () => api.day.asks().then((r) => { if (alive) setDayAsks(r.asks || []); }).catch(() => {});
+    load();
+    const t = setInterval(load, 60000);
+    return () => { alive = false; clearInterval(t); };
+  }, [currentUser, canManageDayNow, openDay]);
+  const handleAskOpenDay = async () => {
+    try {
+      const r = await api.day.ask();
+      flashToast(r.already ? "نُبّه المدير قبل قليل — طلبك عنده" : "نُبّه المدير — يظهر له طلبك ليفتح اليوم");
+    } catch (err) {
+      flashToast(err?.body?.error === "day_already_open" ? "اليوم مفتوح — حدّث الصفحة" : apiErrorMessage(err, "تعذّر التنبيه"));
+    }
+  };
+
   const handleOpenBusinessDay = async (note, tillFloat, scrapFloat) => {
     if (!can("openDay") || !ROLES[role]?.canManageDay) {
       flashToast("فتح يوم العمل بيد المدير — راجعه");
@@ -3485,7 +3544,7 @@ export default function GoldInventoryApp() {
   /// تعليق الفاتورة أو حفظها عرض سعر — تُغلق النافذة ولا تتحرّك قطعة
   const handleHoldSale = async (kind, payload, total) => {
     try {
-      const validUntil = kind === "quote" ? new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10) : null;
+      const validUntil = kind === "quote" ? new Date(Date.now() + (Number(appSettings.quoteDays) || 7) * 86400000).toISOString().slice(0, 10) : null;
       const res = await api.saleDraftsApi.create({ kind, payload, total, validUntil });
       // المسودّة المستأنفة التي عُلّقت ثانيةً تُستبدل بالجديدة
       if (resumeDraft?.id) await api.saleDraftsApi.cancel(resumeDraft.id).catch(() => {});
@@ -3767,7 +3826,7 @@ export default function GoldInventoryApp() {
     pageOk: (id) => permsNow.allowedTabs.includes(id) || permsNow.allowedMore.includes(id),
     mgr: role === "manager" || role === "assistant",
     openDay,
-    locked: !!stocktakeLock,
+    locked: !!stocktakeLock && !appSettings.sellDuringStocktake,
   });
 
   /// صفوف العرض لكل تبويب.
@@ -4678,7 +4737,7 @@ export default function GoldInventoryApp() {
       // ⚠ دمج لا استبدال: appSettings يحمل أيضًا تفضيلات محلية بحتة
       // (الثيم، طباعة، requirePin...) لا وجود لها في الباك إند بعد —
       // استبدال الكائن كاملًا كان سيمحوها.
-      setAppSettings((prev) => ({ ...prev, taxEnabled: n.appSettings.taxEnabled, taxRate: n.appSettings.taxRate, cardFees: n.appSettings.cardFees, workdayMode: n.appSettings.workdayMode, openingMode: n.appSettings.openingMode, openingFinishedAt: n.appSettings.openingFinishedAt, approvalsEnabled: n.appSettings.approvalsEnabled, approvalThresholds: n.appSettings.approvalThresholds, periodLocks: n.appSettings.periodLocks, serverModules: n.appSettings.serverModules || {}, zakatEnabled: n.appSettings.zakatEnabled, zakatYear: n.appSettings.zakatYear, creditLimitDefault: n.appSettings.creditLimitDefault, creditOverdueDays: n.appSettings.creditOverdueDays }));
+      setAppSettings((prev) => ({ ...prev, taxEnabled: n.appSettings.taxEnabled, taxRate: n.appSettings.taxRate, cardFees: n.appSettings.cardFees, workdayMode: n.appSettings.workdayMode, openingMode: n.appSettings.openingMode, openingFinishedAt: n.appSettings.openingFinishedAt, approvalsEnabled: n.appSettings.approvalsEnabled, approvalThresholds: n.appSettings.approvalThresholds, periodLocks: n.appSettings.periodLocks, serverModules: n.appSettings.serverModules || {}, zakatEnabled: n.appSettings.zakatEnabled, zakatYear: n.appSettings.zakatYear, creditLimitDefault: n.appSettings.creditLimitDefault, creditOverdueDays: n.appSettings.creditOverdueDays, postSaleSheet: n.appSettings.postSaleSheet, sellDuringStocktake: n.appSettings.sellDuringStocktake, quoteDays: n.appSettings.quoteDays }));
     }
   };
 
@@ -5044,6 +5103,8 @@ export default function GoldInventoryApp() {
   const activeItems = useMemo(() => items.filter((i) => remainingQty(i) > 0), [items]);
   // بقايا الطقم لا تُباع قبل تكويدها قطعًا — الخادم يرفضها، فلا تُعرض في البيع.
   const sellableItems = useMemo(() => activeItems.filter((i) => !i.remnant), [activeItems]);
+  // البيع أثناء الجرد إعدادٌ (مطفأ افتراضًا): مفعّلًا لا يحجب القفلُ الفاتورة — الخادم يطابق ما بِيع عند تطبيق الجرد.
+  const saleLocked = !!stocktakeLock && !appSettings.sellDuringStocktake;
 
   const totals = useMemo(() => {
     // الأسطر الجديدة لها الأولوية؛ الحقول المفردة تبقى للتوافق مع بيانات سابقة.
@@ -6050,7 +6111,7 @@ export default function GoldInventoryApp() {
    * نجاح الطلب فعليًا (لا قبله ولا تخمينًا).
    */
   const handleCreateSale = async (draft) => {
-    if (stocktakeLock) {
+    if (saleLocked) {
       flashToast(`المخزون مقفل للجرد`);
       return;
     }
@@ -6197,6 +6258,7 @@ export default function GoldInventoryApp() {
     setShowNewSale(false); setResumeDraft(null);
     setQuickSaleItemId(null); setQuickSaleCustomerId(null);
     flashToast("تم إنشاء الفاتورة");
+    if (appSettings.postSaleSheet) setPostSale(sale);
   };
 
   // -------- handlers: cash --------
@@ -7983,7 +8045,7 @@ export default function GoldInventoryApp() {
             approvalsPending={approvals.filter((a) => a.status === "pending").length}
             onSell={() => {
               if (!openDay) { openPage("sales"); return; }
-              if (stocktakeLock) { flashToast("المخزون مقفل للجرد"); return; }
+              if (saleLocked) { flashToast("المخزون مقفل للجرد"); return; }
               setQuickSaleItemId(null); setQuickSaleCustomerId(null);
               setShowNewSale(true);
             }}
@@ -8020,6 +8082,11 @@ export default function GoldInventoryApp() {
                 إقفال أيّ يوم ولا في حصيلته — والصندوق يمتلئ بمالٍ لا يعرف
                 أحدٌ من أين جاء.
               </p>
+              {ROLES[role]?.canManageDay && dayAsks.length > 0 && (
+                <p style={{ color: "var(--accent)", margin: "10px 0 0" }} className="text-[12px] font-bold" data-day-asks>
+                  طلب فتح اليوم: {dayAsks.map((a) => a.name).filter(Boolean).join("، ") || "موظف"}
+                </p>
+              )}
               {ROLES[role]?.canManageDay ? (
                 <button
                   onClick={() => setMorePage("workday")}
@@ -8030,10 +8097,16 @@ export default function GoldInventoryApp() {
                   افتح اليوم الآن
                 </button>
               ) : (
-                <p style={{ color: "var(--accent)", margin: "12px 0 0" }}
-                   className="text-[12px] font-bold">
-                  راجع المدير ليفتح اليوم — فتحُه ليس بيدك.
-                </p>
+                <>
+                  <p style={{ color: "var(--accent)", margin: "12px 0 0" }}
+                     className="text-[12px] font-bold">
+                    فتحُ اليوم بيد المدير — اضغط «نبّه المدير» فيظهر له طلبك.
+                  </p>
+                  <button onClick={handleAskOpenDay} data-ask-open-day className="w-full mt-2 py-3 rounded-xl text-sm font-bold"
+                    style={{ minHeight: 48, background: "var(--panel)", color: "var(--accent)", border: "1px solid var(--accentLine)" }}>
+                    نبّه المدير ليفتح اليوم
+                  </button>
+                </>
               )}
             </Card>
           </div>
@@ -8112,6 +8185,7 @@ export default function GoldInventoryApp() {
             allItems={items}
             onSoldFound={handleSoldFound}
             lock={stocktakeLock}
+            sellDuring={!!appSettings.sellDuringStocktake}
             onToggleLock={handleToggleStocktakeLock}
             settings={appSettings}
             onSaveSettings={role === "manager" ? handleUpdateSettings : null}
@@ -8641,7 +8715,7 @@ export default function GoldInventoryApp() {
             shopName={branchIdentity?.name || ""}
             onResume={(d) => {
               if (!openDay) { flashToast("افتح يوم العمل أولًا"); openPage("workday"); return; }
-              if (stocktakeLock) { flashToast("المخزون مقفل للجرد"); return; }
+              if (saleLocked) { flashToast("المخزون مقفل للجرد"); return; }
               setQuickSaleItemId(null); setQuickSaleCustomerId(null); setResumeDraft(d); setShowNewSale(true);
             }}
             onCancel={async (d) => {
@@ -8802,6 +8876,7 @@ export default function GoldInventoryApp() {
         {morePage === "workday" && (
           <WorkDayPage
             openDay={realOpenDay}
+            dayAsks={dayAsks}
             workdayOff={workdayOff}
             businessDays={businessDays}
             lots={lots}
@@ -8831,6 +8906,8 @@ export default function GoldInventoryApp() {
             canManage={role !== "employee"}
             onAdd={handleAddReservation}
             onCancel={handleCancelReservation}
+            onPay={handlePayReservation}
+            onHold={handleHoldReservation}
             onBack={() => setMorePage(null)}
           />
         )}
@@ -9236,7 +9313,7 @@ export default function GoldInventoryApp() {
         )}
         {morePage === "showcase" && (
           <ShowcasePage items={items} categories={categories} price24={priceData.current} settings={appSettings} currency={priceData.currency}
-            onSell={(permsNow.allowedTabs || []).includes("sales") && openDay && !stocktakeLock ? (id) => { setQuickSaleItemId(id); setShowNewSale(true); } : null}
+            onSell={(permsNow.allowedTabs || []).includes("sales") && openDay && !saleLocked ? (id) => { setQuickSaleItemId(id); setShowNewSale(true); } : null}
             onBack={() => setMorePage(null)} />
         )}
         {morePage === "bankFees" && (
@@ -9531,7 +9608,7 @@ export default function GoldInventoryApp() {
                 openPage("workday");
                 return;
               }
-              if (stocktakeLock) {
+              if (saleLocked) {
                 flashToast("المخزون مقفل للجرد");
                 return;
               }
@@ -9582,11 +9659,23 @@ export default function GoldInventoryApp() {
       )}
 
       {showPrice && <SetPriceModal current={priceData} onClose={() => setShowPrice(false)} onSave={handleSetPrice} />}
+      {postSale && !showNewSale && (
+        <PostSaleSheet
+          sale={{ ...postSale, lines: (postSale.lines || []).map((l) => ({ ...l, itemName: categoryLabel(l.category) })) }}
+          customer={customers.find((c) => c.id === postSale.customerId) || null}
+          currency={priceData.currency || "ر.س"}
+          storeName={branchIdentity?.name || ""}
+          onPrint={() => printSale(postSale)}
+          onNew={() => { setPostSale(null); setQuickSaleItemId(null); setQuickSaleCustomerId(null); setShowNewSale(true); }}
+          onClose={() => setPostSale(null)}
+        />
+      )}
       {showNewSale && (
         <NewSaleModal
             settings={appSettings}
             role={role}
           customers={customers}
+          onAddCustomer={(permsNow.allowedTabs || []).includes("customers") || (permsNow.allowedMore || []).includes("customers") ? handleAddCustomer : null}
           customOrder={pendingCustomOrder}
           reservations={reservations}
           activeItems={sellableItems}
@@ -9633,7 +9722,7 @@ export default function GoldInventoryApp() {
             switch (cmd.action) {
               case "newSale":
                 if (!openDay) { flashToast("افتح يوم العمل أولًا"); openPage("workday"); return; }
-                if (stocktakeLock) { flashToast("المخزون مقفل للجرد"); return; }
+                if (saleLocked) { flashToast("المخزون مقفل للجرد"); return; }
                 setTab("sales"); setMorePage(null); setShowNewSale(true);
                 break;
               case "expense":
