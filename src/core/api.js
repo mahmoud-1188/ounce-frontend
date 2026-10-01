@@ -237,6 +237,11 @@ function repostSale(saleId) {
   return apiFetch(`/ledger/repost/${saleId}`, { method: "POST", body: {} });
 }
 
+/** POST /approvals/:id/cancel — الطالب يُلغي طلبه المعلّق. */
+function cancelApproval(id) {
+  return apiFetch(`/approvals/${id}/cancel`, { method: "POST", body: {} });
+}
+
 function ledgerHealth() {
   return apiFetch("/ledger/health");
 }
@@ -428,6 +433,8 @@ const safe = {
 const day = {
   open: (payload) => apiFetch("/day/open", { method: "POST", body: payload }),
   close: (payload) => apiFetch("/day/close", { method: "POST", body: payload }),
+  // إنهاء اليوم فعلٌ واحد: عدٌّ ← فرقه ← توريد ← إقفال (migration 069)
+  end: (payload) => apiFetch("/day/end", { method: "POST", body: payload }),
 };
 
 const custody = {
@@ -739,6 +746,7 @@ export {
   fiscalApi,
   einvoiceApi,
   ledgerHealth,
+  cancelApproval,
   repostSale,
   codeRemnant,
   createLotItems,

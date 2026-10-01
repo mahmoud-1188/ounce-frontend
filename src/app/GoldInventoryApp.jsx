@@ -59,6 +59,11 @@ const API_ERROR_MESSAGES = {
   approval_amount_mismatch: "المبلغ يختلف عمّا اعتُمد — أرسل طلبًا جديدًا",
   approval_already_decided: "قُرِّر هذا الطلب سلفًا",
   approval_state_changed: "تغيّر حال الطلب أثناء الإرسال — أعد المحاولة",
+  count_required: "عُدّ الصندوق أوّلًا — لا يُقفل يومٌ بلا عدّ",
+  approval_self_decide_blocked: "فرق العدّ لا يعتمده من عدّ — يعتمده شخصٌ آخر",
+  approval_self_decided: "اعتمده من عدّ نفسه — يحتاج شخصًا آخر",
+  approval_expired: "انتهت مهلة الطلب (72 ساعة) — أرسل طلبًا جديدًا",
+  not_your_request: "ليس طلبك",
   already_posted: "لهذه الفاتورة قيدٌ سلفًا",
   needs_manual_entry: "فاتورةٌ فيها عربون أو بطاقة أو بدل — قيدها يُكتب يدويًا",
   manager_only: "للمدير وحده",
@@ -1391,6 +1396,24 @@ export default function GoldInventoryApp() {
   // الصندوق/الخزنة/العهدة اللحظي، الكسر المعلَّق) بدل حسابها من الحالة
   // المحلية. "الربح" وحده يبقى محسوبًا محليًا (يحتاج تكلفة كل صنف —
   // بيانات bootstrap لا الخادم — راجع تعليق normalizeBusinessDays).
+  /// إنهاء اليوم فعلٌ واحد على الخادم: العدّ ← الفرق (فوق الحدّ باعتماد غير من عدّ) ← التوريد ← الإقفال
+  const handleEndOfDay = async (note, counts) => {
+    if (!realOpenDay) { flashToast("لا يوجد يوم مفتوح"); return null; }
+    try {
+      const res = await api.day.end({ ...counts, note: note || null });
+      if (res?.approvalPending) { notePendingApproval(res.approvalPending); return true; }
+      const c = res.count || {};
+      const v = (Number(c.varianceCash) || 0) + (Number(c.varianceNetwork) || 0);
+      flashToast(`أُقفل ${realOpenDay.ref} · وُرِّد ${fmtMoney((Number(res.swept?.cash) || 0) + (Number(res.swept?.network) || 0))} للخزنة` +
+        (Math.abs(v) >= 0.01 ? ` · ${v > 0 ? "زيادة" : "عجز"} ${fmtMoney(Math.abs(v))}` : " · بلا فرق"));
+      await loadBootstrap(currentUser).catch(() => {});
+      return res;
+    } catch (err) {
+      flashToast(apiErrorMessage(err, "تعذّر إنهاء اليوم"));
+      return null;
+    }
+  };
+
   const handleCloseBusinessDay = async (note) => {
     if (!realOpenDay) {
       flashToast("لا يوجد يوم مفتوح");
@@ -7776,13 +7799,7 @@ export default function GoldInventoryApp() {
            وكان يُستدعى الأول وحده، فيُورَّد الصندوق **ويبقى اليوم
            مفتوحًا** — يظنّ صاحبه أنه أقفل، ثم يجد يومه مفتوحًا غدًا
            فتختلط حركة يومين. */
-        onClose={async (note) => {
-          // ⚠ كلاهما نداء شبكة الآن — يُنتظر الأول (توريد الصندوق) قبل
-          // الثاني (إقفال اليوم وكتابة لقطته)، فلا يُقفَل اليوم قبل أن
-          // يُورَّد صندوقه فعليًا للخزنة.
-          await handleCloseDay();
-          return await handleCloseBusinessDay(note || "");
-        }}
+        onClose={(note, counts) => handleEndOfDay(note || "", counts)}
         onGoTo={(page) => openPage(page)}
       />
       )}
@@ -8742,7 +8759,7 @@ export default function GoldInventoryApp() {
             businessDays={businessDays}
             lots={lots}
             onOpenDay={handleOpenBusinessDay}
-            onCloseDay2={handleCloseBusinessDay}
+            onCloseDay2={(note, counts) => handleEndOfDay(note || "", counts)}
             priceData={priceData}
             cashBalance={cashBalance}
             safeBalance={safeBalance}
@@ -9159,6 +9176,14 @@ export default function GoldInventoryApp() {
             routing={approvalRouting}
             onDecide={handleDecideApproval}
             onExecute={executeApproval}
+            meId={currentUser?.id || null}
+            onCancel={async (ap) => {
+              try {
+                const res = await api.cancelApproval(ap.id);
+                setApprovals((prev) => prev.map((x) => (x.id === ap.id ? { ...x, ...res.approval } : x)));
+                flashToast(`أُلغي الطلب ${ap.ref}`);
+              } catch (err) { flashToast(apiErrorMessage(err, "تعذّر إلغاء الطلب")); }
+            }}
             onBack={() => setMorePage(null)}
           />
         )}

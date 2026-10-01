@@ -16,6 +16,8 @@ function WorkDayPage({
 }) {
   const [form, setForm] = useState(null); // "open" | "close"
   const [dayNote, setDayNote] = useState("");
+  const [countCash, setCountCash] = useState("");
+  const [countNet, setCountNet] = useState("");
   const [tillFloat, setTillFloat] = useState("");
   const [scrapFloat, setScrapFloat] = useState("");
   // ⚠ onOpenDay/onCloseDay2/onOpenCustody/onCloseCustody صارت نداءات شبكة
@@ -168,6 +170,15 @@ function WorkDayPage({
                 <p style={{ color: "var(--text2)" }} className="text-[11px] mb-2">
                   ستُحفظ لقطة بأرقام اليوم عند الإقفال، ولن يُقبل تسجيل حركات جديدة حتى تفتح يومًا آخر.
                 </p>
+                {/* ⚖ عدٌّ أعمى إلزامي (المرجع ت٢): المعدود يُورَّد للخزنة والفرق فوق 100 يعتمده غير من عدّ */}
+                <div className="grid grid-cols-2 gap-2">
+                  <Field label="النقد في الدرج">
+                    <input style={inputStyle} inputMode="decimal" value={countCash} onChange={(e) => setCountCash(e.target.value)} placeholder="0" />
+                  </Field>
+                  <Field label="إيصالات الشبكة">
+                    <input style={inputStyle} inputMode="decimal" value={countNet} onChange={(e) => setCountNet(e.target.value)} placeholder="0" />
+                  </Field>
+                </div>
                 <Field label="ملاحظة الإقفال (اختياري)">
                   <input style={inputStyle} value={dayNote} onChange={(e) => setDayNote(e.target.value)} />
                 </Field>
@@ -176,13 +187,13 @@ function WorkDayPage({
                     تراجع
                   </button>
                   <button
-                    disabled={submitting}
+                    disabled={submitting || String(countCash).trim() === ""}
                     onClick={async () => {
                       setSubmitting(true);
                       try {
-                        const ok = await onCloseDay2(dayNote);
+                        const ok = await onCloseDay2(dayNote, { countedCash: Number(countCash) || 0, countedNetwork: Number(countNet) || 0 });
                         if (ok) {
-                          setDayNote("");
+                          setDayNote(""); setCountCash(""); setCountNet("");
                           setForm(null);
                         }
                       } finally {
@@ -192,7 +203,7 @@ function WorkDayPage({
                     className="py-2 rounded-xl text-xs font-bold"
                     style={{ background: "var(--badBg)", color: "var(--bad)", border: "1px solid var(--badLine)" }}
                   >
-                    {submitting ? "جارٍ الإقفال..." : "تأكيد الإقفال"}
+                    {submitting ? "جارٍ الإقفال..." : String(countCash).trim() === "" ? "اكتب العدّ أوّلًا" : "عُدّ وورّد وأقفل"}
                   </button>
                 </div>
               </div>
