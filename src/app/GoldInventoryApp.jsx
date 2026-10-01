@@ -141,6 +141,11 @@ const API_ERROR_MESSAGES = {
   item_reserved_for_other: "القطعة محجوزة لعميل آخر",
   reservation_not_open: "الحجز لم يعد مفتوحًا",
   amount_exceeds_remaining: "المبلغ أكبر من الباقي على الحجز",
+  lot_at_hq: "الدفعة عند الإدارة للتكويد — استرجعها أولًا",
+  lot_not_at_hq: "الدفعة ليست عند الإدارة",
+  coding_by_hq_only: "نموذج فرعك: الإدارة تكوّد — أرسل الدفعة لها",
+  coding_by_branch_only: "نموذج فرعك: الفرع يكوّد بنفسه",
+  opening_lot_codes_here: "الدفعة الافتتاحية تُكوَّد هنا في وضع الافتتاح",
   invalid_hold_until: "تاريخ المهلة غير صالح",
   insufficient_pool_balance: "رصيد الصندوق المصدر لا يكفي",
   insufficient_safe_balance: "رصيد الخزنة لا يكفي",
@@ -4740,7 +4745,7 @@ export default function GoldInventoryApp() {
       // ⚠ دمج لا استبدال: appSettings يحمل أيضًا تفضيلات محلية بحتة
       // (الثيم، طباعة، requirePin...) لا وجود لها في الباك إند بعد —
       // استبدال الكائن كاملًا كان سيمحوها.
-      setAppSettings((prev) => ({ ...prev, taxEnabled: n.appSettings.taxEnabled, taxRate: n.appSettings.taxRate, cardFees: n.appSettings.cardFees, workdayMode: n.appSettings.workdayMode, openingMode: n.appSettings.openingMode, openingFinishedAt: n.appSettings.openingFinishedAt, approvalsEnabled: n.appSettings.approvalsEnabled, approvalThresholds: n.appSettings.approvalThresholds, periodLocks: n.appSettings.periodLocks, serverModules: n.appSettings.serverModules || {}, zakatEnabled: n.appSettings.zakatEnabled, zakatYear: n.appSettings.zakatYear, creditLimitDefault: n.appSettings.creditLimitDefault, creditOverdueDays: n.appSettings.creditOverdueDays, postSaleSheet: n.appSettings.postSaleSheet, sellDuringStocktake: n.appSettings.sellDuringStocktake, quoteDays: n.appSettings.quoteDays }));
+      setAppSettings((prev) => ({ ...prev, taxEnabled: n.appSettings.taxEnabled, taxRate: n.appSettings.taxRate, cardFees: n.appSettings.cardFees, workdayMode: n.appSettings.workdayMode, openingMode: n.appSettings.openingMode, openingFinishedAt: n.appSettings.openingFinishedAt, approvalsEnabled: n.appSettings.approvalsEnabled, approvalThresholds: n.appSettings.approvalThresholds, periodLocks: n.appSettings.periodLocks, serverModules: n.appSettings.serverModules || {}, zakatEnabled: n.appSettings.zakatEnabled, zakatYear: n.appSettings.zakatYear, creditLimitDefault: n.appSettings.creditLimitDefault, creditOverdueDays: n.appSettings.creditOverdueDays, postSaleSheet: n.appSettings.postSaleSheet, sellDuringStocktake: n.appSettings.sellDuringStocktake, quoteDays: n.appSettings.quoteDays, codingModel: n.appSettings.codingModel }));
     }
   };
 
@@ -8241,6 +8246,22 @@ export default function GoldInventoryApp() {
             onSave={handleAddItems}
             onSetPrinted={handleSetPrinted}
             onCreateSupplierLot={handleQuickCreateLot}
+            codingModel={appSettings.codingModel || "both"}
+            onSendLotToHq={async (lot) => {
+              if (!window.confirm(`إرسال الدفعة ${lot.ref || ""} للإدارة لتكوّدها؟ تبقى ملكك حتى تعود قطعًا.`)) return;
+              try {
+                const r = await api.sendLotToHq(lot.id);
+                setLots((prev) => prev.map((l) => (l.id === lot.id ? { ...l, codingAt: "hq", sentToHqAt: r.lot.sent_to_hq_at } : l)));
+                flashToast("أُرسلت الدفعة للتكويد في الإدارة");
+              } catch (err) { flashToast(apiErrorMessage(err, "تعذّر الإرسال")); }
+            }}
+            onRecallLot={async (lot) => {
+              try {
+                await api.recallLot(lot.id);
+                setLots((prev) => prev.map((l) => (l.id === lot.id ? { ...l, codingAt: "branch" } : l)));
+                flashToast("استُرجعت الدفعة — كوّدها هنا");
+              } catch (err) { flashToast(apiErrorMessage(err, "تعذّر الاسترجاع")); }
+            }}
             openingMode={!!appSettings.openingMode}
             onCreateOpeningLot={handleCreateOpeningLot}
             currency={priceData.currency}
@@ -8684,7 +8705,7 @@ export default function GoldInventoryApp() {
         {morePage === "amlRegister" && <AmlRegisterPage currency={priceData.currency || "ر.س"} onBack={() => setMorePage(null)} />}
         {morePage === "reorder" && <ReorderPage onBack={() => setMorePage(null)} onOpenModules={role === "manager" ? () => setMorePage("modules") : null} />}
         {morePage === "branchTransfers" && (
-          <BranchTransfersPage currency={priceData.currency || "ر.س"} canMove={["manager", "assistant"].includes(role)}
+          <BranchTransfersPage currency={priceData.currency || "ر.س"} canMove={["manager", "assistant"].includes(role)} isManager={role === "manager"}
             onChanged={() => loadBootstrap(currentUser).catch(() => {})} onBack={() => setMorePage(null)} />
         )}
         {morePage === "giftCards" && (

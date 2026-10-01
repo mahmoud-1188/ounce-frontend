@@ -379,6 +379,10 @@ function createSupplier(payload) {
 // migration 028_lot_item_coding.sql وitems.routes.js في الباك إند
 // للسياق الكامل)، فتُكتب items/item_units حقيقية في Postgres وتظهر في
 // bootstrap لكل جهاز/جلسة من الآن فصاعدًا.
+// التكويد في الإدارة (migration 069): إرسال الدفعة واسترجاعها
+const sendLotToHq = (lotId) => apiFetch(`/lots/${lotId}/send-to-hq`, { method: "POST", body: {} });
+const recallLot = (lotId) => apiFetch(`/lots/${lotId}/recall`, { method: "POST", body: {} });
+
 function createLotItems(lotId, rows, distributionMode) {
   return apiFetch(`/lots/${lotId}/items`, {
     method: "POST",
@@ -642,7 +646,8 @@ const modulesApi = {
   reorder: () => apiFetch("/reorder/status"),
   transfers: () => apiFetch("/branch-transfers"),
   sendTransfer: (body) => apiFetch("/branch-transfers", { method: "POST", body }),
-  receiveTransfer: (id) => apiFetch(`/branch-transfers/${id}/receive`, { method: "POST", body: {} }),
+  receiveTransfer: (id, count = {}) => apiFetch(`/branch-transfers/${id}/receive`, { method: "POST", body: count }),
+  settleTransferShort: (id, decision) => apiFetch(`/branch-transfers/${id}/settle-short`, { method: "POST", body: { decision } }),
   cancelTransfer: (id) => apiFetch(`/branch-transfers/${id}/cancel`, { method: "POST", body: {} }),
   giftCards: () => apiFetch("/gift-cards"),
   lookupGiftCard: (code) => apiFetch(`/gift-cards/lookup/${encodeURIComponent(code)}`),
@@ -762,6 +767,8 @@ export {
   repostSale,
   codeRemnant,
   createLotItems,
+  sendLotToHq,
+  recallLot,
   reconcileCategories,
   rfid,
   scrap,

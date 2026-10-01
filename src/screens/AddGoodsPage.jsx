@@ -16,7 +16,8 @@ import { QuickLotForm } from "../ui/QuickLotForm.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 
 function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions = [], onSetPrinted, onCreateSupplierLot, onDeleteItem, onBack, flashToast,
-  openingMode = false, onCreateOpeningLot = null, currency = "ر.س", price24 = 0, modules = {} }) {
+  openingMode = false, onCreateOpeningLot = null, currency = "ر.س", price24 = 0, modules = {},
+  codingModel = "both", onSendLotToHq = null, onRecallLot = null }) {
   const gemOn = !!modules?.gemstones?.on, watchOn = !!modules?.watches?.on;
   const defWarranty = Number(modules?.watches?.cfg?.warrantyMonths) || 24;
   const [detailItem, setDetailItem] = useState(null);
@@ -72,7 +73,10 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
 
   const rowValid = (r) => Number(r.weight) > 0 && Number(r.quantity) > 0;
   const allRowsValid = rows.every(rowValid);
-  const canSave = !!lotId && allRowsValid;
+  // التكويد في الإدارة (migration 069): الدفعة المُرسلة تكوّدها الإدارة، وفرعٌ نموذجه «الإدارة تكوّد» يرسل ولا يكوّد
+  const lotAtHq = selectedLot?.codingAt === "hq";
+  const codingBlocked = codingModel === "hq" && !isOpeningLot(selectedLot);
+  const canSave = !!lotId && allRowsValid && !lotAtHq && !codingBlocked;
 
   const [saving, setSaving] = useState(false);
 
@@ -200,7 +204,7 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
             <option value="">اختر دفعة...</option>
             {openLots.map((l) => (
               <option key={l.id} value={l.id}>
-                {lotLabel(l)} · عيار {l.karat} · {new Date(l.date).toLocaleDateString("en-GB")}
+                {lotLabel(l)} · عيار {l.karat} · {new Date(l.date).toLocaleDateString("en-GB")}{l.codingAt === "hq" ? " · عند الإدارة للتكويد" : ""}
               </option>
             ))}
           </select>
@@ -345,7 +349,34 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
           </p>
         )}
 
-        {lotId && selectedLot && (
+        {selectedLot && !isOpeningLot(selectedLot) && (lotAtHq || codingBlocked || (codingModel !== "branch" && onSendLotToHq)) && (
+          <Card style={{ padding: 12, marginBottom: 12, border: "1px solid var(--accentLine)" }} data-lot-hq>
+            {lotAtHq ? (
+              <>
+                <p style={{ color: "var(--accent)" }} className="text-xs font-bold">الدفعة عند الإدارة للتكويد</p>
+                <p style={{ color: "var(--text2)" }} className="text-[11px] mt-1">
+                  أُرسلت {selectedLot.sentToHqAt ? new Date(selectedLot.sentToHqAt).toLocaleDateString("en-GB") : ""} — تبقى ملكك (وزنها في مخزونك) حتى تعود قطعًا مكوَّدة تظهر في مخزونك مباشرةً.
+                </p>
+                {codingModel !== "hq" && onRecallLot && (
+                  <button onClick={() => onRecallLot(selectedLot)} className="mt-2 text-[11px] font-bold px-3 py-1.5 rounded-full"
+                    style={{ color: "var(--text2)", border: "1px solid var(--line)" }}>استرجعها لنكوّدها هنا</button>
+                )}
+              </>
+            ) : (
+              <>
+                <p style={{ color: "var(--text2)" }} className="text-[11px]">
+                  {codingBlocked ? "نموذج فرعك: الإدارة تكوّد البضاعة — أرسل الدفعة لها لتعود قطعًا." : "أو أرسلها للإدارة لتكوّدها — تبقى ملكك حتى تعود قطعًا."}
+                </p>
+                {onSendLotToHq && (
+                  <button onClick={() => onSendLotToHq(selectedLot)} className="mt-2 text-[11px] font-bold px-3 py-1.5 rounded-full"
+                    style={{ background: "var(--accentBg)", color: "var(--accent)", border: "1px solid var(--accentLine)" }}>أرسلها للتكويد في الإدارة</button>
+                )}
+              </>
+            )}
+          </Card>
+        )}
+
+        {lotId && selectedLot && !lotAtHq && !codingBlocked && (
           <div className="flex flex-col gap-4 mb-4">
             {rows.map((r, idx) => (
               <Card key={r.key} style={{ padding: 12 }}>
