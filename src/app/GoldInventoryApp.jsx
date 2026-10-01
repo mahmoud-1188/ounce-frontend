@@ -229,13 +229,43 @@ const API_ERROR_MESSAGES = {
 
 const SUBSCRIPTION_ERRORS = new Set(["subscription_expired", "store_suspended", "store_expired"]);
 
+// الرفض يقول ما العمل (المرجع: withFix) — الخطوة التالية بعد الشرطة، بالرمز لا بالنص
+const REFUSAL_FIXES = {
+  manager_only: "اطلب من المدير أن يقوم بها أو يدخل برقمه",
+  cannot_manage_day: "اطلب من المدير أو مساعده",
+  action_denied_for_role: "اطلبها من المدير",
+  page_not_allowed: "اطلب الصلاحية من المدير",
+  action_denied_by_hq: "تواصل مع الإدارة المركزية",
+  settings_locked_by_hq: "تواصل مع الإدارة المركزية",
+  stocktake_locked: "أكمل الجرد أو افتح القفل من شاشة الجرد",
+  no_open_business_day: "افتح يوم العمل من «يوم العمل»",
+  insufficient_daily_cash: "حوّل نقدًا من الخزنة للصندوق أولًا",
+  insufficient_pool_balance: "حوّل نقدًا من الخزنة أولًا",
+  insufficient_safe_balance: "أودع نقدًا في الخزنة من «النقد»",
+  insufficient_safe_cash: "أودع نقدًا في الخزنة من «النقد»",
+  no_open_custody: "افتح عهدة الدرج من «يوم العمل»",
+  credit_sale_requires_customer: "اختر العميل أو أضفه بـ«+ عميل جديد»",
+  module_off: "فعّل الوحدة من الإعدادات ← الوحدات الاختيارية",
+  device_not_enrolled: "اربط الجهاز برمز من المدير",
+  units_unavailable: "قد تكون مباعة أو محجوزة أو في الطريق — ابحث برمزها",
+  item_reserved_for_other: "تُباع لصاحب الحجز وحده — راجع «الحجوزات»",
+};
+function withFix(msg, code) {
+  const t = String(msg || "");
+  if (!t || t.includes(" — ")) return t;
+  if (code && REFUSAL_FIXES[code]) return `${t} — ${REFUSAL_FIXES[code]}`;
+  // لا رمز = لم يصل الخادم
+  if (!code && /^تعذّر/.test(t)) return `${t} — تحقّق من الاتصال وأعد المحاولة`;
+  return t;
+}
+
 function apiErrorMessage(err, fallback) {
   const code = err?.body?.error;
   // ⚖ الهوية بتجميع 24 ساعة: يُقال لماذا بلغ الحدّ وإن كانت الفاتورة وحدها دونه
   if (code === "aml_id_required" && Number(err.body.prior) > 0) {
     return `${API_ERROR_MESSAGES.aml_id_required} — مع ما دفعه نقدًا خلال 24 ساعة (${fmtMoney(err.body.prior)}) يبلغ الحدّ ${fmtMoney(err.body.threshold)}`;
   }
-  return API_ERROR_MESSAGES[code] || fallback || "حدث خطأ غير متوقع";
+  return withFix(API_ERROR_MESSAGES[code] || fallback || "حدث خطأ غير متوقع", code);
 }
 
 function addItemsErrorMessage(err) {
@@ -298,6 +328,8 @@ import { EntitySheet } from "../modals/EntitySheet.jsx";
 import { SaleDraftsPage, printQuote } from "../screens/SaleDraftsPage.jsx";
 import { PostSaleSheet } from "../modals/PostSaleSheet.jsx";
 import { HqRequestsPage } from "../screens/HqRequestsPage.jsx";
+import { StartHereCard, branchStartSteps } from "../ui/StartHereCard.jsx";
+import { GlossaryPage } from "../screens/GlossaryPage.jsx";
 import { entityActionsSpec } from "../domain/entities.js";
 import { BudgetsPage } from "../screens/BudgetsPage.jsx";
 import { VatReturnPage } from "../screens/VatReturnPage.jsx";
@@ -1415,6 +1447,12 @@ export default function GoldInventoryApp() {
   // المحلي المتفائل هنا.
   // «نبّه المدير»: من لا يملك فتح اليوم يطلبه — يظهر لمن يدير اليوم في بطاقة «لا يوم مفتوح» وعلى يوم العمل
   const [dayAsks, setDayAsks] = useState([]);
+  // «؟» في رأس كل صفحة يفتح المسرد
+  useEffect(() => {
+    const open = () => setMorePage("glossary");
+    window.addEventListener("ons-glossary", open);
+    return () => window.removeEventListener("ons-glossary", open);
+  }, []);
   const canManageDayNow = !!ROLES[role]?.canManageDay;
   useEffect(() => {
     if (!currentUser || !canManageDayNow || openDay) { setDayAsks([]); return undefined; }
@@ -2765,6 +2803,8 @@ export default function GoldInventoryApp() {
     }
     // الفواتير المعلّقة وعروض الأسعار تتبع البيع: من يبيع يعلّق ويستأنف (الخادم يحرسها بصفحة البيع)
     if (tabs.includes("sales") && !more.includes("saleDrafts")) more.push("saleDrafts");
+    // مسرد المصطلحات للجميع
+    if (!more.includes("glossary")) more.push("glossary");
     // طلباتي للإدارة تتبع الاعتمادات: من يرى الاعتمادات يرى ما رُفع منها للإدارة
     if (more.includes("approvals") && !more.includes("hqRequests")) more.push("hqRequests");
 
@@ -8034,6 +8074,18 @@ export default function GoldInventoryApp() {
               && !moduleHiddenPages.includes(id) && (id !== "bankRecon" || !!appSettings.bankReconEnabled)}
             onOpen={openPage} />
         )}
+        {morePage === null && tab === "home" && role === "manager" && (
+          <StartHereCard
+            steps={branchStartSteps({
+              storeName: branchIdentity?.name || "", price24: priceData.current || 0,
+              cashIn: (Number(safeBalance?.cash) || 0) + (Number(safeBalance?.network) || 0),
+              pieces: items.length, daysOpened: businessDays.length, daysClosed: businessDays.filter((d) => d.status === "closed").length,
+              salesCount: sales.length, workdayOff,
+              has: (id) => id === "price" || permsNow.allowedTabs.includes(id) || permsNow.allowedMore.includes(id),
+            })}
+            onGo={(id) => (id === "price" ? setShowPrice(true) : openPage(id))}
+          />
+        )}
         {morePage === null && tab === "home" && (
           <HomeScreen
             userName={currentUser?.name || ""}
@@ -8734,6 +8786,7 @@ export default function GoldInventoryApp() {
         {morePage === "saleDrafts" && (
           <SaleDraftsPage
             drafts={saleDrafts}
+            onNewSale={openDay && !saleLocked ? () => { setQuickSaleItemId(null); setQuickSaleCustomerId(null); setResumeDraft(null); setShowNewSale(true); } : null}
             items={activeItems}
             currency={priceData.currency}
             shopName={branchIdentity?.name || ""}
@@ -9335,6 +9388,7 @@ export default function GoldInventoryApp() {
             onBack={() => setMorePage(null)}
           />
         )}
+        {morePage === "glossary" && <GlossaryPage onBack={() => setMorePage(null)} />}
         {morePage === "hqRequests" && (
           <HqRequestsPage
             approvals={approvals}

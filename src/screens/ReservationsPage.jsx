@@ -199,7 +199,8 @@ function ReservationsPage({ reservations, customers, activeItems, currency, canM
           ))}
 
         {reservations.length === 0 ? (
-          <EmptyState icon={<BookmarkCheck size={36} color="var(--accentText)" />} title="لا حجوزات" sub="سجّل أول حجز بعربون" />
+          <EmptyState icon={<BookmarkCheck size={36} color="var(--accentText)" />} title="لا حجوزات" sub="سجّل أول حجز بعربون"
+            action={canManage && customers.length > 0 && !showAdd ? { label: "حجز جديد", onClick: () => setShowAdd(true) } : null} />
         ) : (
           <div className="flex flex-col gap-2">
             {reservations.map((r) => (

@@ -85,7 +85,7 @@ const BRANCH_HUBS = [
     ] },
   { key: "settings", title: "الإعدادات", icon: Settings,
     tabs: [
-      { key: "basics", label: "الأساسيات", views: ["settings", "navCustomize"], labels: { settings: "الأساسيات", navCustomize: "تخصيص القائمة" } },
+      { key: "basics", label: "الأساسيات", views: ["settings", "navCustomize", "glossary"], labels: { settings: "الأساسيات", navCustomize: "تخصيص القائمة", glossary: "مسرد المصطلحات" } },
       { key: "security", label: "الصلاحيات", views: ["access"] },
       { key: "devices", label: "الأجهزة", views: ["printerSetup", "rfidSettings"], labels: { printerSetup: "الطابعة", rfidSettings: "قارئ RFID" } },
       { key: "links", label: "الربط", views: ["integration", "exchange", "storeLink"],

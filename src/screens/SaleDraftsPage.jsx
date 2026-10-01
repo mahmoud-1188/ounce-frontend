@@ -30,7 +30,7 @@ th{background:#f3f0e8}.t{font-weight:700;font-size:15px;margin-top:10px}.m{color
 }
 
 /// الفواتير المعلّقة وعروض الأسعار (المرجع D — SaleDraftsPage): تُستأنف فاتورةً بكل رقابتها، أو تُطبع، أو تُلغى.
-function SaleDraftsPage({ drafts = [], items = [], currency = "ر.س", shopName = "", onResume, onCancel, onBack }) {
+function SaleDraftsPage({ drafts = [], items = [], currency = "ر.س", shopName = "", onResume, onCancel, onNewSale = null, onBack }) {
   const open = drafts.filter((d) => d.status === "open");
   const closed = drafts.filter((d) => d.status !== "open").slice(0, 20);
   const Row = ({ d }) => {
@@ -81,7 +81,8 @@ function SaleDraftsPage({ drafts = [], items = [], currency = "ر.س", shopName 
           من نافذة البيع: «علّق الفاتورة» لزبونٍ يعود، أو «عرض سعر» يُطبع له. لا تُحجز القطع ولا يُكتب قيد — الحركة كلّها عند إتمامها.
         </p>
         {open.length === 0 ? (
-          <EmptyState icon={<ClipboardList size={34} color="var(--accentText)" />} title="لا فواتير معلّقة" sub="علّق فاتورةً أو احفظ عرض سعرٍ من نافذة البيع" />
+          <EmptyState icon={<ClipboardList size={34} color="var(--accentText)" />} title="لا فواتير معلّقة" sub="علّق فاتورةً أو احفظ عرض سعرٍ من نافذة البيع"
+            action={onNewSale ? { label: "فاتورة بيع جديدة", onClick: onNewSale } : null} />
         ) : open.map((d) => <Row key={d.id} d={d} />)}
         {closed.length > 0 && (
           <>
