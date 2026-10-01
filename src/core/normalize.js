@@ -203,7 +203,8 @@ function normalizeSafeAudits(rows) {
 }
 
 function normalizeCustomers(rows) {
-  return rows.map((c) => ({ id: c.id, ref: c.ref, name: c.name, phone: c.phone, idNumber: c.id_number || "", note: c.note || "", createdBy: c.created_by, createdAt: c.created_at }));
+  return rows.map((c) => ({ id: c.id, ref: c.ref, name: c.name, phone: c.phone, idNumber: c.id_number || "", note: c.note || "", createdBy: c.created_by, createdAt: c.created_at,
+    creditLimit: c.credit_limit != null ? Number(c.credit_limit) : null }));
 }
 
 function normalizeSuppliers(rows) {
@@ -728,6 +729,8 @@ function normalizeBootstrap(boot) {
           serverModules: boot.settings.modules || {},
           // الزكاة (migration 065): مفعّلةٌ افتراضًا، والسنة ميلادية افتراضًا
           zakatEnabled: boot.settings.zakat_enabled !== false,
+          creditLimitDefault: Number(boot.settings.credit_limit_default) || 0,
+          creditOverdueDays: Number(boot.settings.credit_overdue_days) || 0,
           zakatYear: boot.settings.zakat_year === "hijri" ? "hijri" : "gregorian",
         }
       : null,

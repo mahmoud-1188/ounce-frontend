@@ -232,6 +232,11 @@ const einvoiceApi = {
 };
 
 /** GET /ledger/health — صحّة الدفتر من الدفاتر كاملةً. */
+/** POST /ledger/repost/:saleId — المدير يُرحّل قيد فاتورةٍ قديمة بلا قيد (migration 069). */
+function repostSale(saleId) {
+  return apiFetch(`/ledger/repost/${saleId}`, { method: "POST", body: {} });
+}
+
 function ledgerHealth() {
   return apiFetch("/ledger/health");
 }
@@ -734,6 +739,7 @@ export {
   fiscalApi,
   einvoiceApi,
   ledgerHealth,
+  repostSale,
   codeRemnant,
   createLotItems,
   reconcileCategories,

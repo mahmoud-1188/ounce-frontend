@@ -24,7 +24,7 @@ const SETTINGS_ROWS = [
     screens: [], status: (s) => `${APP_MODES[s.appMode || DEFAULT_APP_MODE]?.label || ""} · يوم العمل ${s.workdayMode === "off" ? "مطفأ" : "مفعّل"}` },
   { id: "security", label: "الأمان والصلاحيات", icon: ShieldCheck, keys: ["الرقم السري", "الرقابة", "استرجاع"],
     screens: [["access", "الصلاحيات"]], status: (s) => `الرقم السري ${s.requirePin ? "مفعّل" : "مطفأ"} · الاعتماد ${s.approvalsEnabled ? "مفعّل" : "مطفأ"}` },
-  { id: "money", label: "المال والضريبة", icon: Coins, keys: ["الضريبه", "هوامش", "هامش", "عمولات", "مطابقة البنك", "الزكاه", "فحص الكسر"],
+  { id: "money", label: "المال والضريبة", icon: Coins, keys: ["الضريبه", "هوامش", "هامش", "عمولات", "مطابقة البنك", "الزكاه", "فحص الكسر", "حد الاجل"],
     screens: [], status: (s) => (s.taxEnabled ? `ضريبة ${Math.round((Number(s.taxRate) || 0) * 1000) / 10}٪` : "بلا ضريبة") + ` · الزكاة ${s.zakatEnabled === false ? "مطفأة" : "مفعّلة"}` },
   { id: "devices", label: "الأجهزة", icon: Printer, keys: ["قارئ rfid", "الطابعه"],
     screens: [["printerSetup", "الطابعة"], ["rfidSettings", "القارئ"]], status: () => "الطابعة وقارئ RFID" },
@@ -693,6 +693,30 @@ function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSa
               })}
             </div>
           )}
+        </Card>
+
+        {/* ── حدّ الآجل (migration 069): الخادم يفرضه على كل بيعٍ آجل، وما فوقه يحتاج اعتمادًا ── */}
+        <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2 mt-4">
+          حدّ الآجل
+        </p>
+        <Card style={{ padding: 14, marginBottom: 12 }}>
+          <p style={{ color: "var(--text3)" }} className="text-[11px] mb-3">
+            صفرٌ = بلا فحص. لكل عميلٍ حدّه الخاص من «العملاء»، وهذا افتراضيٌّ لمن لا حدّ له. ما فوقه يحتاج اعتماد المدير.
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="text-[11px]" style={{ color: "var(--text2)" }}>
+              الحدّ الافتراضي ({priceData.currency || "ر.س"})
+              <input type="number" min="0" inputMode="decimal" defaultValue={Number(settings.creditLimitDefault) || 0}
+                onBlur={(e) => { const v = Math.max(0, Number(e.target.value) || 0); if (v !== (Number(settings.creditLimitDefault) || 0)) onSave({ creditLimitDefault: v }); }}
+                className="w-full mt-1 px-3 py-2 rounded-xl text-[12px]" style={{ background: "var(--field)", color: "var(--text)", border: "1px solid var(--line)" }} />
+            </label>
+            <label className="text-[11px]" style={{ color: "var(--text2)" }}>
+              لا آجل لمن تأخّر أكثر من (يوم)
+              <input type="number" min="0" inputMode="numeric" defaultValue={Number(settings.creditOverdueDays) || 0}
+                onBlur={(e) => { const v = Math.max(0, Math.round(Number(e.target.value) || 0)); if (v !== (Number(settings.creditOverdueDays) || 0)) onSave({ creditOverdueDays: v }); }}
+                className="w-full mt-1 px-3 py-2 rounded-xl text-[12px]" style={{ background: "var(--field)", color: "var(--text)", border: "1px solid var(--line)" }} />
+            </label>
+          </div>
         </Card>
 
         {/* ── بثّ سعر الذهب ── */}

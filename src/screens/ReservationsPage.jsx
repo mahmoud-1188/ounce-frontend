@@ -164,7 +164,7 @@ function ReservationsPage({ reservations, customers, activeItems, currency, canM
                       className="py-2 rounded-xl text-[11px] font-bold"
                       style={{ background: "var(--badBg)", color: "var(--bad)", border: "1px solid var(--badLine)" }}
                     >
-                      إلغاء واحتجاز العربون
+                      إلغاء ومصادرة العربون (إيراد)
                     </button>
                   </div>
                 )}

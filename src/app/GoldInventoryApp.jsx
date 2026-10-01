@@ -58,6 +58,10 @@ const API_ERROR_MESSAGES = {
   approval_not_approved: "الطلب لم يُعتمد بعد",
   approval_amount_mismatch: "المبلغ يختلف عمّا اعتُمد — أرسل طلبًا جديدًا",
   approval_already_decided: "قُرِّر هذا الطلب سلفًا",
+  approval_state_changed: "تغيّر حال الطلب أثناء الإرسال — أعد المحاولة",
+  already_posted: "لهذه الفاتورة قيدٌ سلفًا",
+  needs_manual_entry: "فاتورةٌ فيها عربون أو بطاقة أو بدل — قيدها يُكتب يدويًا",
+  manager_only: "للمدير وحده",
   approval_requires_hq: "هذا الطلب تعتمده الإدارة — بانتظار قرارها",
   rejection_reason_required: "اكتب سبب الرفض",
   reviewer_role_required: "الحكم بيد المحاسب أو المدير",
@@ -213,6 +217,10 @@ const SUBSCRIPTION_ERRORS = new Set(["subscription_expired", "store_suspended", 
 
 function apiErrorMessage(err, fallback) {
   const code = err?.body?.error;
+  // ⚖ الهوية بتجميع 24 ساعة: يُقال لماذا بلغ الحدّ وإن كانت الفاتورة وحدها دونه
+  if (code === "aml_id_required" && Number(err.body.prior) > 0) {
+    return `${API_ERROR_MESSAGES.aml_id_required} — مع ما دفعه نقدًا خلال 24 ساعة (${fmtMoney(err.body.prior)}) يبلغ الحدّ ${fmtMoney(err.body.threshold)}`;
+  }
   return API_ERROR_MESSAGES[code] || fallback || "حدث خطأ غير متوقع";
 }
 
@@ -1129,7 +1137,9 @@ export default function GoldInventoryApp() {
       (merged.workdayMode || "required") !== (appSettings.workdayMode || "required") ||
       JSON.stringify(merged.cardFees) !== JSON.stringify(appSettings.cardFees) ||
       (merged.zakatEnabled !== false) !== (appSettings.zakatEnabled !== false) ||
-      (merged.zakatYear || "gregorian") !== (appSettings.zakatYear || "gregorian");
+      (merged.zakatYear || "gregorian") !== (appSettings.zakatYear || "gregorian") ||
+      (Number(merged.creditLimitDefault) || 0) !== (Number(appSettings.creditLimitDefault) || 0) ||
+      (Number(merged.creditOverdueDays) || 0) !== (Number(appSettings.creditOverdueDays) || 0);
     if (!taxOrFeesChanged) {
       flashToast("تم حفظ الإعدادات");
       return true;
@@ -1143,6 +1153,8 @@ export default function GoldInventoryApp() {
         workdayMode: merged.workdayMode || "required",
         zakatEnabled: merged.zakatEnabled !== false,
         zakatYear: merged.zakatYear === "hijri" ? "hijri" : "gregorian",
+        creditLimitDefault: Number(merged.creditLimitDefault) || 0,
+        creditOverdueDays: Number(merged.creditOverdueDays) || 0,
       });
       persistSettings({
         ...merged,
@@ -1151,6 +1163,7 @@ export default function GoldInventoryApp() {
         cardFees: res.settings.card_fees || {},
         workdayMode: res.settings.workday_mode || "required",
         ...(res.settings.zakat_enabled != null ? { zakatEnabled: res.settings.zakat_enabled !== false, zakatYear: res.settings.zakat_year || "gregorian" } : {}),
+        ...(res.settings.credit_limit_default != null ? { creditLimitDefault: Number(res.settings.credit_limit_default) || 0, creditOverdueDays: Number(res.settings.credit_overdue_days) || 0 } : {}),
       });
       flashToast("تم حفظ الإعدادات");
       return true;
@@ -1193,7 +1206,10 @@ export default function GoldInventoryApp() {
       Object.entries(countedGoldByKarat || {}).map(([k, w]) => [k, Number(w) || 0])
     );
     try {
-      const res = await api.safe.audit({ countedCash: cc, countedNetwork: cn, gold, note: note || null });
+      // سعر اليوم يُقيّم فرق الذهب حين لا تكلفة في الخزنة (الخادم يقيّد الفرق بقيمته)
+      const res = await api.safe.audit({ countedCash: cc, countedNetwork: cn, gold, note: note || null, price24: priceData.current || 0 });
+      if (res?.approvalPending) { notePendingApproval(res.approvalPending); return null; }
+      if (res?.audit?.unvalued) flashToast("فرق الذهب سُجّل بالوزن وحده — لا تكلفة في الخزنة ولا سعر اليوم لتقييمه");
       const rec = {
         id: res.audit.id,
         ref: res.audit.ref,
@@ -1277,7 +1293,7 @@ export default function GoldInventoryApp() {
       setReservations((prev) => prev.map((x) => (x.id === id ? { ...x, status: "cancelled", cancelledAt: new Date().toISOString(), refunded: !!refund } : x)));
       if (res.cashTx) setCashTx((prev) => [normalizeCashTxRow(res.cashTx), ...prev]);
       if (r.itemId) setItems((prev) => prev.map((it) => (it.id === r.itemId ? { ...it, reservedFor: null } : it)));
-      flashToast(refund ? "أُلغي الحجز وأُرجع العربون" : "أُلغي الحجز — العربون محتجز");
+      flashToast(refund ? "أُلغي الحجز وأُرجع العربون" : Number(res?.forfeited) > 0 ? `أُلغي الحجز — صودر العربون ${fmtMoney(res.forfeited)} إيرادًا` : "أُلغي الحجز");
       return res;
     } catch (err) {
       flashToast(apiErrorMessage(err, "تعذّر إلغاء الحجز"));
@@ -1621,6 +1637,13 @@ export default function GoldInventoryApp() {
         await api.fixedAssetsApi.dispose(assetId, body);
       } else if (ap.kind === "payroll_run") await api.payrollApi.accrue(p.period, ap.id);
       else if (ap.kind === "hq_purchase") await api.hiddenApi.execHqPurchase(ap.id);
+      // البيع تحت الأرضية أو فوق حدّ الآجل: الفاتورة نفسها بحمولتها، والاعتماد لنوعه (approvals[kind])
+      else if (ap.kind === "price_floor" || ap.kind === "credit_limit") {
+        const body = { ...(ap.payload || {}), approvals: { ...(ap.payload?.approvals || {}), [ap.kind]: ap.id } };
+        delete body.approvalId;
+        const res = body.sellWeight ? await api.createPartialSale(body) : body.partLabel ? await api.sellSetPart(body) : await api.createSale(body);
+        if (res?.approvalPending) { notePendingApproval(res.approvalPending); return false; }
+      } else if (ap.kind === "safe_audit") await api.safe.audit(p);
       else {
         flashToast("نوع طلبٍ لا يُنفَّذ من هنا");
         return false;
@@ -3428,6 +3451,19 @@ export default function GoldInventoryApp() {
   /// تجعله أكثر وقوعًا — فيحتاج الأثر أكثر لا أقلّ.
   const canEditRecords = role === "manager" || role === "assistant";
 
+  /// حدّ آجل العميل يُحفظ على الخادم — هو من يفرضه عند البيع (migration 069)
+  const handleSetCreditLimit = async (id, value) => {
+    if (!canEditRecords) { flashToast("خارج صلاحيتك"); return; }
+    const v = String(value ?? "").trim() === "" ? null : Math.max(0, Number(value) || 0);
+    try {
+      const res = await api.modulesApi.updateCustomer(id, { creditLimit: v });
+      setCustomers((prev) => prev.map((c) => (c.id === id ? { ...c, creditLimit: res.customer.creditLimit } : c)));
+      flashToast(v == null ? "حدّ الآجل: افتراضي الفرع" : `حدّ الآجل ${fmtMoney(v)}`);
+    } catch (err) {
+      flashToast(apiErrorMessage(err, "تعذّر حفظ حدّ الآجل"));
+    }
+  };
+
   const editRecord = (storeKey, setter, list, id, field, value) => {
     if (!canEditRecords) { flashToast("خارج صلاحيتك"); return; }
     const before = list.find((r) => r.id === id);
@@ -4593,7 +4629,7 @@ export default function GoldInventoryApp() {
       // ⚠ دمج لا استبدال: appSettings يحمل أيضًا تفضيلات محلية بحتة
       // (الثيم، طباعة، requirePin...) لا وجود لها في الباك إند بعد —
       // استبدال الكائن كاملًا كان سيمحوها.
-      setAppSettings((prev) => ({ ...prev, taxEnabled: n.appSettings.taxEnabled, taxRate: n.appSettings.taxRate, cardFees: n.appSettings.cardFees, workdayMode: n.appSettings.workdayMode, openingMode: n.appSettings.openingMode, openingFinishedAt: n.appSettings.openingFinishedAt, approvalsEnabled: n.appSettings.approvalsEnabled, approvalThresholds: n.appSettings.approvalThresholds, periodLocks: n.appSettings.periodLocks, serverModules: n.appSettings.serverModules || {}, zakatEnabled: n.appSettings.zakatEnabled, zakatYear: n.appSettings.zakatYear }));
+      setAppSettings((prev) => ({ ...prev, taxEnabled: n.appSettings.taxEnabled, taxRate: n.appSettings.taxRate, cardFees: n.appSettings.cardFees, workdayMode: n.appSettings.workdayMode, openingMode: n.appSettings.openingMode, openingFinishedAt: n.appSettings.openingFinishedAt, approvalsEnabled: n.appSettings.approvalsEnabled, approvalThresholds: n.appSettings.approvalThresholds, periodLocks: n.appSettings.periodLocks, serverModules: n.appSettings.serverModules || {}, zakatEnabled: n.appSettings.zakatEnabled, zakatYear: n.appSettings.zakatYear, creditLimitDefault: n.appSettings.creditLimitDefault, creditOverdueDays: n.appSettings.creditOverdueDays }));
     }
   };
 
@@ -5830,6 +5866,8 @@ export default function GoldInventoryApp() {
     if (stocktakeLock) { flashToast("المخزون مقفل للجرد"); return false; }
     try {
       const res = await api.sellSetPart(draft);
+      // ⚖ تحت أرضية السعر أو فوق حدّ الآجل: لم يُبع شيء، وأُرسل طلب اعتماد يُنفَّذ من «الاعتمادات»
+      if (res?.approvalPending) { notePendingApproval(res.approvalPending); return true; }
       await loadBootstrap(currentUser).catch(() => {});
       flashToast(`${res.sale.ref} · ${res.sale.lineLabel} — ${fmtMoney(res.sale.total)} · بقي ${fmtW(res.remainingWeight)} جم للتكويد`);
       return true;
@@ -5872,11 +5910,13 @@ export default function GoldInventoryApp() {
         sellWeight: sellW,
         unitPrice,
         price24Snapshot: draft.frozenPrice != null ? Number(draft.frozenPrice) : priceData.current,
+        ...(draft.kycIdNumber ? { kycIdNumber: draft.kycIdNumber, kycName: draft.kycName } : {}),
       });
     } catch (e) {
       flashToast(apiErrorMessage(e, "تعذّر إتمام البيع الجزئي"));
       return null;
     }
+    if (res?.approvalPending) { notePendingApproval(res.approvalPending); setShowPartialSale(false); return null; }
 
     const { sale: srvSale, soldOut, remainingWeight } = res;
     const now = new Date().toISOString();
@@ -5990,6 +6030,12 @@ export default function GoldInventoryApp() {
       res = await api.createSale(payload);
     } catch (e) {
       flashToast(apiErrorMessage(e, "تعذّر إنشاء الفاتورة"));
+      return;
+    }
+    if (res?.approvalPending) {
+      notePendingApproval(res.approvalPending);
+      setShowNewSale(false);
+      setQuickSaleItemId(null); setQuickSaleCustomerId(null);
       return;
     }
 
@@ -8753,7 +8799,7 @@ export default function GoldInventoryApp() {
         )}
         {morePage === "customers" && (
           <CustomersPage
-            onEditCustomer={(id, f, v) => editRecord(CUSTOMERS_KEY, setCustomers, customers, id, f, v)}
+            onEditCustomer={(id, f, v) => (f === "creditLimit" ? handleSetCreditLimit(id, v) : editRecord(CUSTOMERS_KEY, setCustomers, customers, id, f, v))}
             onOpenEntity={(k, r, tab) => setSheetEntity({ kind: k, record: r, tab })} rowActs={entityActionsFor} onRowAct={runEntityAction}
             customers={customers}
             sales={sales}
@@ -9060,6 +9106,8 @@ export default function GoldInventoryApp() {
         )}
         {morePage === "accountantReview" && (
           <AccountantReviewPage
+            canRepost={role === "manager"}
+            onReposted={() => loadBootstrap(currentUser).catch(() => {})}
             queue={reviewQueue}
             reviews={reviews}
             audits={audits}
