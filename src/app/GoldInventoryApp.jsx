@@ -8097,7 +8097,7 @@ export default function GoldInventoryApp() {
         {morePage === null && tab === "home" && role === "manager" && (
           <StartHereCard
             steps={branchStartSteps({
-              storeName: branchIdentity?.name || "", price24: priceData.current || 0,
+              storeName: branchIdentity?.name || appSettings?.storeName || branchLink?.branchName || "", price24: priceData.current || 0,
               cashIn: (Number(safeBalance?.cash) || 0) + (Number(safeBalance?.network) || 0),
               pieces: items.length, daysOpened: businessDays.length, daysClosed: businessDays.filter((d) => d.status === "closed").length,
               salesCount: sales.length, workdayOff,
