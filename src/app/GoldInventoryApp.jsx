@@ -330,6 +330,7 @@ import { PostSaleSheet } from "../modals/PostSaleSheet.jsx";
 import { HqRequestsPage } from "../screens/HqRequestsPage.jsx";
 import { StartHereCard, branchStartSteps } from "../ui/StartHereCard.jsx";
 import { GlossaryPage } from "../screens/GlossaryPage.jsx";
+import { ACCOUNTING_PAGES } from "../core/storePackage.js";
 import { entityActionsSpec } from "../domain/entities.js";
 import { BudgetsPage } from "../screens/BudgetsPage.jsx";
 import { VatReturnPage } from "../screens/VatReturnPage.jsx";
@@ -526,6 +527,8 @@ export default function GoldInventoryApp() {
   // ⚠ migration 017: هل فرع هذا المستخدم مُعلَّم HQ؟ يُقرأ من bootstrap
   // (n.isHq) — لا واجهة تُغيّره من هنا، عملية تشغيلية على القاعدة فقط.
   const [isHq, setIsHq] = useState(false);
+  // باقة المحل (migration 070): "full" أو "no_accounting"
+  const [storePackage, setStorePackage] = useState("full");
   const [costCenters, setCostCenters] = useState([]);
   const [budgets, setBudgets] = useState([]);
   const [periodCloses, setPeriodCloses] = useState([]);
@@ -2809,6 +2812,11 @@ export default function GoldInventoryApp() {
     // طلباتي للإدارة تتبع الاعتمادات: من يرى الاعتمادات يرى ما رُفع منها للإدارة
     if (more.includes("approvals") && !more.includes("hqRequests")) more.push("hqRequests");
 
+    // باقة «بدون محاسبة» (migration 070): القسم المحاسبي يسقط من القوائم والمراكز (والخادم يرفضه بالصلاحيات)
+    if (storePackage === "no_accounting") {
+      tabs = tabs.filter((id) => !ACCOUNTING_PAGES.includes(id));
+      more = more.filter((id) => !ACCOUNTING_PAGES.includes(id));
+    }
     return { ...base, allowedTabs: [...tabs, "more"], allowedMore: more };
   };
 
@@ -4782,6 +4790,7 @@ export default function GoldInventoryApp() {
     setJournal(n.journal);
     setGoldLedger(n.goldLedger);
     setIsHq(n.isHq);
+    setStorePackage(n.storePackage);
     if (n.appSettings) {
       // ⚠ دمج لا استبدال: appSettings يحمل أيضًا تفضيلات محلية بحتة
       // (الثيم، طباعة، requirePin...) لا وجود لها في الباك إند بعد —

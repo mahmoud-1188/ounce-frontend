@@ -781,6 +781,7 @@ function normalizeBootstrap(boot) {
     // منذ البداية لكن بلا أي مستهلك في كل الفرونت إند — أول استخدام له
     // هنا فقط: isHq يقرّر ظهور تبويب "تقرير الفروع" من عدمه.
     isHq: !!boot.branch?.is_hq,
+    storePackage: boot.storePackage === "no_accounting" ? "no_accounting" : "full",
   };
 }
 
