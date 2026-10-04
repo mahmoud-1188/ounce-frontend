@@ -78,7 +78,7 @@ function CustomersPage({ customers, sales, returns = [], repairs = [], trustGold
           </Card>
 
           <div className="grid grid-cols-2 gap-2 mb-3">
-            <Stat label="إجمالي مشترياته" value={`${currency}${fmt(st.spent, 0)}`} accent="var(--accent)" />
+            <Stat label="إجمالي مشترياته" value={`${fmt(st.spent, 0)} ${currency}`} accent="var(--accent)" />
             <Stat label="عدد الفواتير" value={st.sales.length} />
             <Stat label="مرتجعات" value={st.returns.length} accent={st.returns.length ? "var(--bad)" : undefined} />
             <Stat label="ذهب أمانة" value={st.trustWeight > 0 ? `${fmtW(st.trustWeight)} جم` : "—"} accent={st.trustWeight > 0 ? "var(--accentSoft)" : undefined} />
@@ -108,7 +108,7 @@ function CustomersPage({ customers, sales, returns = [], repairs = [], trustGold
                   <div key={i} className="flex items-center justify-between py-1" style={{ borderBottom: "1px solid var(--line)" }}>
                     <span style={{ color: "var(--text2)" }} className="text-[11px]">{l}</span>
                     <span style={{ color: col }} className="text-xs font-bold">
-                      {currency}{fmt(v, 0)}
+                      {fmt(v, 0)} {currency}
                     </span>
                   </div>
                 ))}
@@ -202,7 +202,7 @@ function CustomersPage({ customers, sales, returns = [], repairs = [], trustGold
                             {r.createdBy ? ` · ${r.createdBy}` : ""}
                           </span>
                           <span style={{ color: "var(--good)" }} className="text-[11px] font-bold">
-                            {currency}{fmt(r.amount, 0)}
+                            {fmt(r.amount, 0)} {currency}
                           </span>
                         </div>
                       ))}
@@ -237,7 +237,7 @@ function CustomersPage({ customers, sales, returns = [], repairs = [], trustGold
                       {s.ref || "—"}
                     </span>
                     <span style={{ color: "var(--accent)" }} className="text-sm font-bold">
-                      {currency}{fmt(s.total, 0)}
+                      {fmt(s.total, 0)} {currency}
                     </span>
                   </div>
                   <p style={{ color: "var(--text3)" }} className="text-[11px] mt-0.5">
@@ -256,7 +256,7 @@ function CustomersPage({ customers, sales, returns = [], repairs = [], trustGold
                   <Card key={r.id} style={{ padding: 10 }}>
                     <p style={{ color: "var(--text)" }} className="text-xs">{r.description || "إصلاح"}</p>
                     <p style={{ color: "var(--text3)" }} className="text-[10px] mt-0.5">
-                      {new Date(r.date).toLocaleDateString("en-GB")} · {currency}{fmt(r.price || 0, 0)}
+                      {new Date(r.date).toLocaleDateString("en-GB")} · {fmt(r.price || 0, 0)} {currency}
                     </p>
                   </Card>
                 ))}
@@ -354,7 +354,7 @@ function CustomersPage({ customers, sales, returns = [], repairs = [], trustGold
                 { key: "_sales", label: "الفواتير",
                   render: (c) => statsFor(c.id).sales.length },
                 { key: "_spent", label: "المشتريات", align: "left",
-                  render: (c) => `${currency}${fmt(statsFor(c.id).spent, 0)}` },
+                  render: (c) => `${fmt(statsFor(c.id).spent, 0)} ${currency}` },
                 { key: "note", label: "ملاحظة", editable: canManage },
                 // حدّ الآجل (migration 069): فارغٌ = افتراضي الفرع من الإعدادات
                 { key: "creditLimit", label: "حدّ الآجل", editable: canManage, type: "number", align: "left" },

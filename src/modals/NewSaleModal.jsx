@@ -687,7 +687,7 @@ function NewSaleModal({ activeItems, priceData,
                       )}
                     </span>
                     <span style={{ color: "var(--accent)" }} className="text-[11px]">
-                      {currency}{fmtMoney(l.total)}
+                      {fmtMoney(l.total)} {currency}
                     </span>
                     <button onClick={() => setTradeLines((p2) => p2.filter((x) => x.id !== l.id))}
                       style={{ color: "var(--bad)" }}>
@@ -700,13 +700,13 @@ function NewSaleModal({ activeItems, priceData,
                   <div className="flex items-center justify-between">
                     <span style={{ color: "var(--text2)" }} className="text-[11px]">قيمة الفاتورة</span>
                     <span style={{ color: "var(--text)" }} className="text-xs font-bold">
-                      {currency}{fmtMoney(total)}
+                      {fmtMoney(total)} {currency}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span style={{ color: "var(--text2)" }} className="text-[11px]">قيمة الكسر</span>
                     <span style={{ color: "var(--accentText)" }} className="text-xs font-bold">
-                      −{currency}{fmtMoney(scrapVal)}
+                      −{fmtMoney(scrapVal)} {currency}
                     </span>
                   </div>
                   {/* ── الاتجاه تلقائي ──
@@ -738,7 +738,7 @@ function NewSaleModal({ activeItems, priceData,
                         </span>
                         <span style={{ color: diff > 0 ? "var(--goodSolid)" : "var(--bad)" }}
                           className="text-lg font-extrabold">
-                          {currency}{fmtMoney(Math.abs(diff))}
+                          {fmtMoney(Math.abs(diff))} {currency}
                         </span>
                       </div>
                       <p style={{ color: "var(--text2)", margin: "3px 0 0" }} className="text-[10px]">

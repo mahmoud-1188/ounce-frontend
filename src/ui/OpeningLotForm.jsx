@@ -52,8 +52,8 @@ function OpeningLotForm({ onCancel, onCreate, price24 = 0, currency = "ر.س" })
       </div>
       <p style={{ color: "var(--text3)" }} className="text-[11px] mb-2">
         {costRef === "market"
-          ? `⚠ تقييمٌ بسعر اليوم لا بتكلفة شراء — يُوسم على الدفعة وتقاريرها. (سعر جم24 اليوم ${currency}${fmt(price24, 2)})`
-          : `يُقيَّد ما يُكوَّد بهذه التكلفة مخزونًا مقابل رأس المال. للمقارنة: سعر جم${karat} اليوم ${currency}${fmt(pricePerGram(karat, price24), 2)}.`}
+          ? `⚠ تقييمٌ بسعر اليوم لا بتكلفة شراء — يُوسم على الدفعة وتقاريرها. (سعر جم24 اليوم ${fmt(price24, 2)} ${currency})`
+          : `يُقيَّد ما يُكوَّد بهذه التكلفة مخزونًا مقابل رأس المال. للمقارنة: سعر جم${karat} اليوم ${fmt(pricePerGram(karat, price24), 2)} ${currency}.`}
       </p>
       <div className="grid grid-cols-2 gap-2">
         <button onClick={onCancel} className="py-2 rounded-xl text-xs font-bold"

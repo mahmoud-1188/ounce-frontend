@@ -65,7 +65,7 @@ function FixedAssetsPage({
                 {[["التكلفة", totals.cost, "text"], ["مجمّع الإهلاك", totals.accum, "bad"], ["القيمة الدفترية", totals.book, "accent"]].map(([l, v, tone]) => (
                   <div key={l}>
                     <p style={{ color: "var(--text3)", margin: 0 }} className="text-[10px]">{l}</p>
-                    <p style={{ color: `var(--${tone})`, margin: 0 }} className="text-[13px] font-bold">{currency}{fmtMoney(fromHalalas(v))}</p>
+                    <p style={{ color: `var(--${tone})`, margin: 0 }} className="text-[13px] font-bold">{fmtMoney(fromHalalas(v))} {currency}</p>
                   </div>
                 ))}
               </div>
@@ -87,7 +87,7 @@ function FixedAssetsPage({
                 ) : preview.total > 0 ? (
                   <button onClick={runDepreciation} disabled={running} className="w-full py-2.5 rounded-xl text-[12px] font-bold"
                     style={{ background: "linear-gradient(135deg,var(--gradFrom),var(--gradTo))", color: "var(--panel)" }}>
-                    {running ? "جارٍ التسجيل…" : `تسجيل إهلاك ${period} — ${preview.details.length} أصل · ${currency}${fmtMoney(preview.total)}`}
+                    {running ? "جارٍ التسجيل…" : `تسجيل إهلاك ${period} — ${preview.details.length} أصل · ${fmtMoney(preview.total)} ${currency}`}
                   </button>
                 ) : (
                   <p style={{ color: "var(--text3)" }} className="text-[11px]">لا إهلاك مستحقّ — لا أصول قيد التشغيل أو كلّها مُهلَكة</p>
@@ -120,7 +120,7 @@ function FixedAssetsPage({
                   <span style={{ color: "var(--text3)" }} className="text-[10px]">
                     {fmtMoney(st.accumulated)} من {fmtMoney(st.cost - st.salvage)} · {st.monthsRun}/{st.monthsTotal} شهر
                   </span>
-                  <span style={{ color: "var(--accent)" }} className="text-[12px] font-bold">{currency}{fmtMoney(st.bookValue)}</span>
+                  <span style={{ color: "var(--accent)" }} className="text-[12px] font-bold">{fmtMoney(st.bookValue)} {currency}</span>
                 </div>
                 {canManage && (
                   <button onClick={() => { setSel(a); setView("dispose"); }} className="mt-2 text-[10px] px-2 py-1 rounded-full"

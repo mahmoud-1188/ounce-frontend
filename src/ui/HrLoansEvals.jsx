@@ -9,7 +9,7 @@ import { Card } from "./Card.jsx";
 function LoansPanel({ currency = "ر.س" }) {
   const [loans, setLoans] = useState(null);
   useEffect(() => { api.payrollApi.loans().then((d) => setLoans(d.loans || [])).catch(() => setLoans([])); }, []);
-  const m = (v) => `${currency}${fmtMoney(v)}`;
+  const m = (v) => `${fmtMoney(v)} ${currency}`;
   if (!loans) return <div className="flex justify-center py-6"><Loader2 className="animate-spin" size={18} color="var(--accent)" /></div>;
   const open = loans.filter((l) => !l.settled);
   return (

@@ -74,7 +74,7 @@ function WorkDayPage({
             <p style={{ color: "var(--text3)" }} className="text-[11px]">
               فتحها {openCustodySession.openedBy} ·{" "}
               {new Date(openCustodySession.openedAt).toLocaleString("en-GB")} · تسليم{" "}
-              {currency}{fmt(openCustodySession.floatCash || 0, 0)}
+              {fmt(openCustodySession.floatCash || 0, 0)} {currency}
             </p>
           </Card>
         ) : !openDay ? (
@@ -102,11 +102,11 @@ function WorkDayPage({
               <>
                 <p style={{ color: "var(--text2)" }} className="text-[11px] mb-2">
                   العهدتان نقد فقط من الخزنة — الصندوق اليومي يستقبل نقدًا وشراء الكسر يُدفع نقدًا.
-                  نقدي الخزنة المتاح: {currency}{fmt(safeBalance?.cash || 0, 0)}
+                  نقدي الخزنة المتاح: {fmt(safeBalance?.cash || 0, 0)} {currency}
                 </p>
                 {lastDay && (sugTill > 0 || sugScrap > 0) && (
                   <p style={{ color: "var(--text3)" }} className="text-[11px] mb-2" data-day-float-sug>
-                    مقترحة من {lastDay.ref || "آخر يوم"}: صندوق {currency}{fmt(sugTill, 0)} · كسر {currency}{fmt(sugScrap, 0)}
+                    مقترحة من {lastDay.ref || "آخر يوم"}: صندوق {fmt(sugTill, 0)} {currency} · كسر {fmt(sugScrap, 0)} {currency}
                     {(Number(tillFloat) || 0) !== sugTill || (Number(scrapFloat) || 0) !== sugScrap ? (
                       <button type="button" className="mr-2 font-bold" style={{ color: "var(--accent)" }}
                         onClick={() => { setTillFloat(String(sugTill)); setScrapFloat(String(sugScrap)); }}>نفس عهدة الأمس</button>
@@ -240,7 +240,7 @@ function WorkDayPage({
                   <div className="flex items-center justify-between">
                     <span style={{ color: "var(--text)" }} className="text-xs font-bold">{d.ref}</span>
                     <span style={{ color: "var(--accent)" }} className="text-xs font-bold">
-                      {currency}{fmt(d.snapshot?.salesSum || 0, 0)}
+                      {fmt(d.snapshot?.salesSum || 0, 0)} {currency}
                     </span>
                   </div>
                   <p style={{ color: "var(--text3)" }} className="text-[10px] mt-0.5">
@@ -262,7 +262,7 @@ function WorkDayPage({
             <div>
               <p style={{ color: "var(--text2)" }} className="text-xs">سعر جرام عيار 24 اليوم</p>
               <p style={{ fontFamily: "'Cairo', sans-serif", color: "var(--accent)" }} className="text-xl font-extrabold">
-                {currency}{fmt(price24)}
+                {fmt(price24)} {currency}
               </p>
             </div>
             <button
@@ -286,7 +286,7 @@ function WorkDayPage({
                 <Check size={13} /> العهدة مفتوحة باسم {openCustodySession.openedBy || "—"}
               </p>
               <p style={{ color: "var(--text3)" }} className="text-[11px] mt-1">
-                المتوقع بالصندوق اليومي الآن: {currency}{fmt(cashBalance.total, 0)}
+                المتوقع بالصندوق اليومي الآن: {fmt(cashBalance.total, 0)} {currency}
               </p>
               {form !== "close" ? (
                 <button
@@ -345,7 +345,7 @@ function WorkDayPage({
           <Card style={{ padding: 12 }}>
             <p style={{ color: "var(--text2)" }} className="text-[11px]">المبيعات</p>
             <p style={{ color: "var(--text)", fontFamily: "'Cairo', sans-serif" }} className="text-base font-extrabold">
-              {currency}{fmt(salesSum, 0)}
+              {fmt(salesSum, 0)} {currency}
             </p>
             <p style={{ color: "var(--text3)" }} className="text-[10px]">{todaySales.length} فاتورة</p>
           </Card>
@@ -354,12 +354,12 @@ function WorkDayPage({
             <p style={{ color: "var(--good)", fontFamily: "'Cairo', sans-serif" }} className="text-base font-extrabold">
               {fmtW(g(profit))} جم
             </p>
-            <p style={{ color: "var(--text3)" }} className="text-[10px]">{currency}{fmt(profit, 0)}</p>
+            <p style={{ color: "var(--text3)" }} className="text-[10px]">{fmt(profit, 0)} {currency}</p>
           </Card>
           <Card style={{ padding: 12 }}>
             <p style={{ color: "var(--text2)" }} className="text-[11px]">المصروفات</p>
             <p style={{ color: "var(--bad)", fontFamily: "'Cairo', sans-serif" }} className="text-base font-extrabold">
-              {currency}{fmt(expSum, 0)}
+              {fmt(expSum, 0)} {currency}
             </p>
             <p style={{ color: "var(--text3)" }} className="text-[10px]">{todayExpenses.length} عملية</p>
           </Card>
@@ -369,7 +369,7 @@ function WorkDayPage({
               style={{ color: salesSum - expSum >= 0 ? "var(--goodSolid)" : "var(--bad)", fontFamily: "'Cairo', sans-serif" }}
               className="text-base font-extrabold"
             >
-              {currency}{fmt(salesSum - expSum, 0)}
+              {fmt(salesSum - expSum, 0)} {currency}
             </p>
             <p style={{ color: "var(--text3)" }} className="text-[10px]">{fmtW(g(salesSum - expSum))} جم</p>
           </Card>
@@ -407,7 +407,7 @@ function WorkDayPage({
               color: cashBalance.total > 0 ? "var(--panel)" : "var(--text3)",
             }}
           >
-            <Lock size={14} /> {submitting ? "جارٍ التوريد..." : `توريد ${currency}${fmt(cashBalance.total, 0)} للخزنة`}
+            <Lock size={14} /> {submitting ? "جارٍ التوريد..." : `توريد ${fmt(cashBalance.total, 0)} ${currency} للخزنة`}
           </button>
         </Card>
       </div>

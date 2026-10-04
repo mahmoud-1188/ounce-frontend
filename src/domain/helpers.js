@@ -1439,17 +1439,17 @@ function reportFindings(M, MB, ctx) {
 
   // ── الربحية ──
   if (M.salesSum > 0 && M.salesProfit <= 0) {
-    add("error", "بيع بلا ربح", `مبيعات ${cur}${fmt(M.salesSum, 0)} بربح ${fmt(M.salesProfit, 0)} — القطع تُباع عند التكلفة أو دونها.`);
+    add("error", "بيع بلا ربح", `مبيعات ${fmt(M.salesSum, 0)} ${cur} بربح ${fmt(M.salesProfit, 0)} — القطع تُباع عند التكلفة أو دونها.`);
   } else if (M.salesSum > 0 && M.margin < 8) {
     add("warning", "هامش ربح منخفض", `الهامش ${fmt(M.margin, 1)}٪ فقط. راجع التسعير أو تكلفة الشراء.`);
   }
 
   // ── المصروفات مقابل الدخل ──
   if (M.expSum > M.salesSum && M.salesSum > 0) {
-    add("error", "المصروفات تتجاوز المبيعات", `صُرف ${cur}${fmt(M.expSum, 0)} مقابل مبيعات ${cur}${fmt(M.salesSum, 0)}.`);
+    add("error", "المصروفات تتجاوز المبيعات", `صُرف ${fmt(M.expSum, 0)} ${cur} مقابل مبيعات ${fmt(M.salesSum, 0)} ${cur}.`);
   }
   if (M.net < 0) {
-    add("warning", "صافي الحركة سالب", `الفرق ${cur}${fmt(Math.abs(M.net), 0)} — الخارج أكثر من الداخل في هذه الفترة.`);
+    add("warning", "صافي الحركة سالب", `الفرق ${fmt(Math.abs(M.net), 0)} ${cur} — الخارج أكثر من الداخل في هذه الفترة.`);
   }
 
   // ── الهالك ──
@@ -1467,7 +1467,7 @@ function reportFindings(M, MB, ctx) {
     const drop = (a, b) => (b > 0 ? ((a - b) / b) * 100 : null);
     const salesΔ = drop(M.salesSum, MB.salesSum);
     if (salesΔ !== null && salesΔ <= -25) {
-      add("warning", "انخفاض المبيعات", `أقل بـ${fmt(Math.abs(salesΔ), 0)}٪ عن ${ctx.labelB} (${cur}${fmt(M.salesSum, 0)} مقابل ${cur}${fmt(MB.salesSum, 0)}).`);
+      add("warning", "انخفاض المبيعات", `أقل بـ${fmt(Math.abs(salesΔ), 0)}٪ عن ${ctx.labelB} (${fmt(M.salesSum, 0)} ${cur} مقابل ${fmt(MB.salesSum, 0)} ${cur}).`);
     }
     const expΔ = drop(M.expSum, MB.expSum);
     if (expΔ !== null && expΔ >= 30) {
@@ -1485,7 +1485,7 @@ function reportFindings(M, MB, ctx) {
       const a = byA[k], b = byB[k] || 0;
       if (b > 0 && a > b * 1.8 && a - b > 500) {
         const label = EXPENSE_CATEGORIES.find((c) => c.id === k)?.label || k;
-        add("info", `قفزة في «${label}»`, `${cur}${fmt(a, 0)} مقابل ${cur}${fmt(b, 0)} في ${ctx.labelB}.`);
+        add("info", `قفزة في «${label}»`, `${fmt(a, 0)} ${cur} مقابل ${fmt(b, 0)} ${cur} في ${ctx.labelB}.`);
       }
     });
   }
@@ -1499,8 +1499,8 @@ function reportFindings(M, MB, ctx) {
   if (noInvoice.length > 0) {
     add("info", "فواتير مفقودة", `${noInvoice.length} دفعة شراء بلا فاتورة مرفقة.`);
   }
-  if ((ctx.cashBalance?.total ?? 0) < -0.01) add("error", "صندوق يومي سالب", `الرصيد ${cur}${fmt(ctx.cashBalance.total, 0)} — حركة لم تُسجّل.`);
-  if ((ctx.safeBalance?.total ?? 0) < -0.01) add("error", "خزنة سالبة", `الرصيد ${cur}${fmt(ctx.safeBalance.total, 0)}.`);
+  if ((ctx.cashBalance?.total ?? 0) < -0.01) add("error", "صندوق يومي سالب", `الرصيد ${fmt(ctx.cashBalance.total, 0)} ${cur} — حركة لم تُسجّل.`);
+  if ((ctx.safeBalance?.total ?? 0) < -0.01) add("error", "خزنة سالبة", `الرصيد ${fmt(ctx.safeBalance.total, 0)} ${cur}.`);
 
   // ── الرواتب ──
   (ctx.users || []).forEach((u) => {
@@ -1511,7 +1511,7 @@ function reportFindings(M, MB, ctx) {
       .filter((e) => e.employeeId === u.id && (e.periodMonth || e.date.slice(0, 7)) === month)
       .reduce((a, e) => a + e.amount, 0);
     if (taken > salary + 0.01) {
-      add("warning", `صرف زائد — ${u.name}`, `استلم ${cur}${fmt(taken, 0)} مقابل راتب ${cur}${fmt(salary, 0)}.`);
+      add("warning", `صرف زائد — ${u.name}`, `استلم ${fmt(taken, 0)} ${cur} مقابل راتب ${fmt(salary, 0)} ${cur}.`);
     }
   });
 
@@ -1553,7 +1553,7 @@ function hiddenNumbersScan(ctx) {
   if (!near(ledgerCash + baseCash, shownCash)) {
     const gap = shownCash - (ledgerCash + baseCash);
     add("error", "فرق غير مفسَّر في صندوق اليومي",
-      `مجموع القيود ${cur}${fmt(ledgerCash + baseCash, 2)} والرصيد المعروض ${cur}${fmt(shownCash, 2)}.`, gap);
+      `مجموع القيود ${fmt(ledgerCash + baseCash, 2)} ${cur} والرصيد المعروض ${fmt(shownCash, 2)} ${cur}.`, gap);
   }
 
   // ٢. مطابقة دفتر الخزنة
@@ -1562,7 +1562,7 @@ function hiddenNumbersScan(ctx) {
   const baseSafe = (ctx.openingBalance?.safeCash || 0) + (ctx.openingBalance?.safeNetwork || 0);
   if (!near(ledgerSafe + baseSafe, shownSafe)) {
     add("error", "فرق غير مفسَّر في الخزنة",
-      `مجموع القيود ${cur}${fmt(ledgerSafe + baseSafe, 2)} والرصيد المعروض ${cur}${fmt(shownSafe, 2)}.`,
+      `مجموع القيود ${fmt(ledgerSafe + baseSafe, 2)} ${cur} والرصيد المعروض ${fmt(shownSafe, 2)} ${cur}.`,
       shownSafe - (ledgerSafe + baseSafe));
   }
 
@@ -1575,7 +1575,7 @@ function hiddenNumbersScan(ctx) {
   if (unbooked.length > 0) {
     const amt = (ctx.sales || []).filter((x) => unbooked.includes(x.id)).reduce((a, x) => a + x.total, 0);
     add("error", "فواتير بلا قيد في الصندوق",
-      `${unbooked.length} فاتورة بقيمة ${cur}${fmt(amt, 0)} لم يقابلها دخول نقدي.`, amt);
+      `${unbooked.length} فاتورة بقيمة ${fmt(amt, 0)} ${cur} لم يقابلها دخول نقدي.`, amt);
   }
 
   // ٤. قيود بلا تصنيف محاسبي — لا تظهر في أي تقرير حسب التصنيف
@@ -1583,7 +1583,7 @@ function hiddenNumbersScan(ctx) {
   if (untagged.length > 0) {
     const amt = untagged.reduce((a, t) => a + Math.abs(t.amount), 0);
     add("warning", "قيود بلا تصنيف",
-      `${untagged.length} قيد بقيمة ${cur}${fmt(amt, 0)} لا يظهر في التقارير المصنّفة.`, amt);
+      `${untagged.length} قيد بقيمة ${fmt(amt, 0)} ${cur} لا يظهر في التقارير المصنّفة.`, amt);
   }
 
   // ٥. مشتريات بلا قيد خروج نقدي (وليست آجلة ولا تسكيرًا)
@@ -1596,7 +1596,7 @@ function hiddenNumbersScan(ctx) {
   if (uniqUnpaid.length > 0) {
     const amt = unpaid.reduce((a, l) => a + (Number(l.totalCost) || 0), 0);
     add("error", "مشتريات بلا قيد سداد",
-      `${uniqUnpaid.length} عملية شراء بقيمة ${cur}${fmt(amt, 0)} لم يُسجَّل خروج مقابلها.`, amt);
+      `${uniqUnpaid.length} عملية شراء بقيمة ${fmt(amt, 0)} ${cur} لم يُسجَّل خروج مقابلها.`, amt);
   }
 
   // ٦. وزن مشترى لم يدخل المخزون ولم يُسجَّل هالكًا
@@ -1639,7 +1639,7 @@ function hiddenNumbersScan(ctx) {
   if (noSource.length > 0) {
     const amt = noSource.reduce((a, e) => a + e.amount, 0);
     add("error", "مصروفات لم تُخصم من صندوق",
-      `${noSource.length} مصروف بقيمة ${cur}${fmt(amt, 0)} بلا مصدر صرف.`, amt);
+      `${noSource.length} مصروف بقيمة ${fmt(amt, 0)} ${cur} بلا مصدر صرف.`, amt);
   }
 
   // ١٠. قطع مباعة ما زالت تُحسب في المخزون
@@ -1672,15 +1672,15 @@ function reportFactsText(M, MB, ctx) {
   const cur = ctx.currency;
   const lines = [
     `الفترة: ${ctx.label}`,
-    `المبيعات: ${cur}${fmt(M.salesSum, 0)} من ${M.salesCount} فاتورة · متوسط الفاتورة ${cur}${fmt(M.avgSale, 0)}`,
-    `الأرباح المحققة: ${cur}${fmt(M.salesProfit, 0)} · هامش ${fmt(M.margin, 1)}٪`,
-    `  منها ربح تشغيلي (من المصنعية والهامش): ${cur}${fmt(M.operatingProfit, 0)} · هامش تشغيلي ${fmt(M.operatingMargin, 1)}٪`,
-    `  منها ربح رأسمالي (من تغيّر سعر المعدن): ${cur}${fmt(M.capitalGain, 0)}`,
-    `  قيمة المعدن المباع: ${cur}${fmt(M.metalValueSold, 0)} — ليست ربحًا`,
-    `مشتريات الذهب: ${cur}${fmt(M.purchGold, 0)} (موردون ${fmt(M.supplierGold, 0)} · أجور ${fmt(M.supplierFees, 0)} · كسر ${fmt(M.scrapCost, 0)} · تسكير ${fmt(M.taskirCost, 0)})`,
+    `المبيعات: ${fmt(M.salesSum, 0)} ${cur} من ${M.salesCount} فاتورة · متوسط الفاتورة ${fmt(M.avgSale, 0)} ${cur}`,
+    `الأرباح المحققة: ${fmt(M.salesProfit, 0)} ${cur} · هامش ${fmt(M.margin, 1)}٪`,
+    `  منها ربح تشغيلي (من المصنعية والهامش): ${fmt(M.operatingProfit, 0)} ${cur} · هامش تشغيلي ${fmt(M.operatingMargin, 1)}٪`,
+    `  منها ربح رأسمالي (من تغيّر سعر المعدن): ${fmt(M.capitalGain, 0)} ${cur}`,
+    `  قيمة المعدن المباع: ${fmt(M.metalValueSold, 0)} ${cur} — ليست ربحًا`,
+    `مشتريات الذهب: ${fmt(M.purchGold, 0)} ${cur} (موردون ${fmt(M.supplierGold, 0)} · أجور ${fmt(M.supplierFees, 0)} · كسر ${fmt(M.scrapCost, 0)} · تسكير ${fmt(M.taskirCost, 0)})`,
     `الوزن المشترى: ${fmtW(M.purchWeight)} جم · هالك ${fmtW(M.wastage)} جم · فائض ${fmtW(M.surplus)} جم`,
-    `المصروفات: ${cur}${fmt(M.expSum, 0)} (ثابتة ${fmt(M.expFixed, 0)} · يومية ${fmt(M.expDaily, 0)} · مشتريات غير ذهبية ${fmt(M.purchNonGold, 0)})`,
-    `صافي الحركة: ${cur}${fmt(M.net, 0)}`,
+    `المصروفات: ${fmt(M.expSum, 0)} ${cur} (ثابتة ${fmt(M.expFixed, 0)} · يومية ${fmt(M.expDaily, 0)} · مشتريات غير ذهبية ${fmt(M.purchNonGold, 0)})`,
+    `صافي الحركة: ${fmt(M.net, 0)} ${cur}`,
   ];
   const byCat = {};
   M.fExpenses.forEach((e) => (byCat[e.category] = (byCat[e.category] || 0) + e.amount));
@@ -1691,19 +1691,19 @@ function reportFactsText(M, MB, ctx) {
   if (catStr) lines.push(`تفصيل المصروفات: ${catStr}`);
 
   lines.push(
-    `الأرصدة الحالية: صندوق يومي ${cur}${fmt(ctx.cashBalance?.total || 0, 0)} · خزنة ${cur}${fmt(ctx.safeBalance?.total || 0, 0)} · عهدة ${cur}${fmt(ctx.custodyTotal || 0, 0)}`
+    `الأرصدة الحالية: صندوق يومي ${fmt(ctx.cashBalance?.total || 0, 0)} ${cur} · خزنة ${fmt(ctx.safeBalance?.total || 0, 0)} ${cur} · عهدة ${fmt(ctx.custodyTotal || 0, 0)} ${cur}`
   );
   lines.push(
-    `المخزون: ${ctx.totals?.pieces || 0} قطعة · ${fmtW(ctx.totals?.fineWeight || 0)} جم عيار 24 · تكلفة ${cur}${fmt(ctx.totals?.cost || 0, 0)} · قيمة ${cur}${fmt(ctx.totals?.value || 0, 0)}`
+    `المخزون: ${ctx.totals?.pieces || 0} قطعة · ${fmtW(ctx.totals?.fineWeight || 0)} جم عيار 24 · تكلفة ${fmt(ctx.totals?.cost || 0, 0)} ${cur} · قيمة ${fmt(ctx.totals?.value || 0, 0)} ${cur}`
   );
-  lines.push(`الرصيد الإجمالي بعيار 24: ${fmtW(ctx.goldEquivalentGrams || 0)} جم · سعر الجرام ${cur}${fmt(ctx.price24 || 0)}`);
+  lines.push(`الرصيد الإجمالي بعيار 24: ${fmtW(ctx.goldEquivalentGrams || 0)} جم · سعر الجرام ${fmt(ctx.price24 || 0)} ${cur}`);
 
   if (MB) {
     lines.push("");
     lines.push(`— للمقارنة، ${ctx.labelB} —`);
-    lines.push(`المبيعات: ${cur}${fmt(MB.salesSum, 0)} من ${MB.salesCount} فاتورة · هامش ${fmt(MB.margin, 1)}٪`);
-    lines.push(`مشتريات الذهب: ${cur}${fmt(MB.purchGold, 0)} · المصروفات: ${cur}${fmt(MB.expSum, 0)}`);
-    lines.push(`صافي الحركة: ${cur}${fmt(MB.net, 0)}`);
+    lines.push(`المبيعات: ${fmt(MB.salesSum, 0)} ${cur} من ${MB.salesCount} فاتورة · هامش ${fmt(MB.margin, 1)}٪`);
+    lines.push(`مشتريات الذهب: ${fmt(MB.purchGold, 0)} ${cur} · المصروفات: ${fmt(MB.expSum, 0)} ${cur}`);
+    lines.push(`صافي الحركة: ${fmt(MB.net, 0)} ${cur}`);
   }
   return lines.join("\n");
 }
@@ -3145,7 +3145,7 @@ function renderLabelCanvas({ item, code, cfg, currency, price24, logoImg }) {
   if (item?.weight) fitText(`W ${fmtW(item.weight)}`, L.weight);
   if (price24 && item?.weight && item?.karat) {
     const p = item.weight * item.karat / 24 * price24 + (Number(item.workmanshipPerUnit) || 0);
-    fitText(`${currency}${fmtMoney(Math.round(p))}`, L.price);
+    fitText(`${fmtMoney(Math.round(p))} ${currency}`, L.price);
   }
   const theCode = String(code || item?.ref || "");
   const useQr = cfg.symbology === "qr";
@@ -3510,7 +3510,7 @@ function documentPdfSections(doc, { currency = "ر.س" } = {}) {
 }
 
 function printDocumentPdf(doc, { currency = "ر.س", branchName = "", onBlocked } = {}) {
-  return exportTablesPdf({ title: `${DOC_KINDS[doc.kind] || doc.kind} ${doc.ref || ""}`, subtitle: `${doc.party || ""} · ${new Date(doc.date).toLocaleString("en-GB")} · ${currency}${fmtMoney(doc.amount)}`, branchName, sections: documentPdfSections(doc, { currency }), sign: false, onBlocked });
+  return exportTablesPdf({ title: `${DOC_KINDS[doc.kind] || doc.kind} ${doc.ref || ""}`, subtitle: `${doc.party || ""} · ${new Date(doc.date).toLocaleString("en-GB")} · ${fmtMoney(doc.amount)} ${currency}`, branchName, sections: documentPdfSections(doc, { currency }), sign: false, onBlocked });
 }
 
 /// توقيعٌ داخليّ للمساءلة — من أصدر القائمة ومتى (لا توقيعٌ رقميّ معتمد).

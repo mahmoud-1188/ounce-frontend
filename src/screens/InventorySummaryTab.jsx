@@ -104,7 +104,7 @@ function InventorySummaryTab({ totals, currency, items = [], scrapEntries = [],
             </p>
             {price24 > 0 && (
               <p style={{ color: "var(--text2)" }} className="text-[11px] mt-1.5">
-                قيمته بسعر اليوم {currency}{fmt(weightTimesPrice(gold.totalFine, price24), 0)}
+                قيمته بسعر اليوم {fmt(weightTimesPrice(gold.totalFine, price24), 0)} {currency}
               </p>
             )}
           </Card>
@@ -264,7 +264,7 @@ function InventorySummaryTab({ totals, currency, items = [], scrapEntries = [],
                     </span>
                   </span>
                   <span style={{ color: "var(--accent)" }} className="text-[11px]">
-                    {currency}{fmtMoney(fine24(it.weight, it.karat) * (price24 || 0))}
+                    {fmtMoney(fine24(it.weight, it.karat) * (price24 || 0))} {currency}
                   </span>
                 </EntityRow>
               );

@@ -77,11 +77,11 @@ function HqReportPage({ currency = "ر.س", onBack, flashToast }) {
               <div className="grid grid-cols-2 gap-2 mt-2">
                 <div>
                   <p style={{ color: "var(--text3)", margin: 0 }} className="text-[10px]">مبيعات (صافٍ)</p>
-                  <p style={{ color: "var(--accent)", margin: 0 }} className="text-[15px] font-bold">{currency}{fmtMoney(report.totals.salesNet)}</p>
+                  <p style={{ color: "var(--accent)", margin: 0 }} className="text-[15px] font-bold">{fmtMoney(report.totals.salesNet)} {currency}</p>
                 </div>
                 <div>
                   <p style={{ color: "var(--text3)", margin: 0 }} className="text-[10px]">تكلفة المشتريات</p>
-                  <p style={{ color: "var(--text)", margin: 0 }} className="text-[15px] font-bold">{currency}{fmtMoney(report.totals.purchasesCost)}</p>
+                  <p style={{ color: "var(--text)", margin: 0 }} className="text-[15px] font-bold">{fmtMoney(report.totals.purchasesCost)} {currency}</p>
                 </div>
                 <div>
                   <p style={{ color: "var(--text3)", margin: 0 }} className="text-[10px]">مخزون قائم (عيار24)</p>
@@ -89,15 +89,15 @@ function HqReportPage({ currency = "ر.س", onBack, flashToast }) {
                 </div>
                 <div>
                   <p style={{ color: "var(--text3)", margin: 0 }} className="text-[10px]">خزنة (نقدي + شبكة)</p>
-                  <p style={{ color: "var(--text)", margin: 0 }} className="text-[15px] font-bold">{currency}{fmtMoney(report.totals.safeCash + report.totals.safeNetwork)}</p>
+                  <p style={{ color: "var(--text)", margin: 0 }} className="text-[15px] font-bold">{fmtMoney(report.totals.safeCash + report.totals.safeNetwork)} {currency}</p>
                 </div>
                 <div>
                   <p style={{ color: "var(--text3)", margin: 0 }} className="text-[10px]">ذمم مدينة (عملاء)</p>
-                  <p style={{ color: "var(--good)", margin: 0 }} className="text-[13px] font-bold">{currency}{fmtMoney(report.totals.receivable)}</p>
+                  <p style={{ color: "var(--good)", margin: 0 }} className="text-[13px] font-bold">{fmtMoney(report.totals.receivable)} {currency}</p>
                 </div>
                 <div>
                   <p style={{ color: "var(--text3)", margin: 0 }} className="text-[10px]">ذمم دائنة (موردون)</p>
-                  <p style={{ color: "var(--bad)", margin: 0 }} className="text-[13px] font-bold">{currency}{fmtMoney(report.totals.payable)}</p>
+                  <p style={{ color: "var(--bad)", margin: 0 }} className="text-[13px] font-bold">{fmtMoney(report.totals.payable)} {currency}</p>
                 </div>
               </div>
             </Card>
@@ -107,20 +107,20 @@ function HqReportPage({ currency = "ر.س", onBack, flashToast }) {
                 <p style={{ color: "var(--text)", margin: "0 0 6px" }} className="text-[13px] font-bold">{b.branchName}</p>
                 <div className="grid grid-cols-2 gap-y-1.5 gap-x-2">
                   <p style={{ color: "var(--text3)", margin: 0 }} className="text-[10px]">مبيعات ({b.sales.count})</p>
-                  <p style={{ color: "var(--text)", margin: 0 }} className="text-[11px] font-bold text-left">{currency}{fmtMoney(b.sales.net)}</p>
+                  <p style={{ color: "var(--text)", margin: 0 }} className="text-[11px] font-bold text-left">{fmtMoney(b.sales.net)} {currency}</p>
                   <p style={{ color: "var(--text3)", margin: 0 }} className="text-[10px]">مشتريات ({b.purchases.count})</p>
-                  <p style={{ color: "var(--text)", margin: 0 }} className="text-[11px] font-bold text-left">{currency}{fmtMoney(b.purchases.cost)}</p>
+                  <p style={{ color: "var(--text)", margin: 0 }} className="text-[11px] font-bold text-left">{fmtMoney(b.purchases.cost)} {currency}</p>
                   <p style={{ color: "var(--text3)", margin: 0 }} className="text-[10px]">مخزون قائم</p>
                   <p style={{ color: "var(--text)", margin: 0 }} className="text-[11px] font-bold text-left">{fmtW(b.inventory.fineWeight)} جم24</p>
                   <p style={{ color: "var(--text3)", margin: 0 }} className="text-[10px]">خزنة نقدي/شبكة</p>
-                  <p style={{ color: "var(--text)", margin: 0 }} className="text-[11px] font-bold text-left">{currency}{fmtMoney(b.safe.cash)} / {currency}{fmtMoney(b.safe.network)}</p>
+                  <p style={{ color: "var(--text)", margin: 0 }} className="text-[11px] font-bold text-left">{fmtMoney(b.safe.cash)} {currency} / {fmtMoney(b.safe.network)} {currency}</p>
                   <p style={{ color: "var(--text3)", margin: 0 }} className="text-[10px]">ذهب الخزنة</p>
                   <p style={{ color: "var(--text)", margin: 0 }} className="text-[11px] font-bold text-left">{fmtW(b.safe.goldFineWeight)} جم24</p>
                   <p style={{ color: "var(--text3)", margin: 0 }} className="text-[10px]">ذمم مدينة/دائنة</p>
                   <p style={{ margin: 0 }} className="text-[11px] font-bold text-left">
-                    <span style={{ color: "var(--good)" }}>{currency}{fmtMoney(b.receivable)}</span>
+                    <span style={{ color: "var(--good)" }}>{fmtMoney(b.receivable)} {currency}</span>
                     {" / "}
-                    <span style={{ color: "var(--bad)" }}>{currency}{fmtMoney(b.payable)}</span>
+                    <span style={{ color: "var(--bad)" }}>{fmtMoney(b.payable)} {currency}</span>
                   </p>
                 </div>
               </Card>

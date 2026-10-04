@@ -76,11 +76,11 @@ function CustomerReportPage({
             title: "الأرصدة",
             head: ["البند", "القيمة"],
             rows: [
-              ["عليه نقدًا", `${currency}${fmtMoney(detail.stats.owedCash)}`],
-              ["أمانة نقدية له", `${currency}${fmtMoney(detail.stats.trustCash)}`],
+              ["عليه نقدًا", `${fmtMoney(detail.stats.owedCash)} ${currency}`],
+              ["أمانة نقدية له", `${fmtMoney(detail.stats.trustCash)} ${currency}`],
               ["ذهب أمانة له", `${fmtW(detail.stats.trustFine)} جم24`],
               ["قطع في عهدتك", String(detail.stats.heldItems)],
-              ["إجمالي مشترياته", `${currency}${fmtMoney(detail.stats.spend)}`],
+              ["إجمالي مشترياته", `${fmtMoney(detail.stats.spend)} ${currency}`],
             ],
           },
           {
@@ -88,7 +88,7 @@ function CustomerReportPage({
             head: ["التاريخ", "الحدث", "المرجع", "المبلغ", "الوزن", "ملاحظة"],
             rows: detail.events.map((e) => [
               fmtD(e.date), CUST_EVENTS[e.kind]?.label || e.kind, e.ref || "—",
-              e.amount ? `${currency}${fmtMoney(e.amount)}` : "—",
+              e.amount ? `${fmtMoney(e.amount)} ${currency}` : "—",
               e.weight ? `${fmtW(e.weight)} جم` : "—",
               e.note || "—",
             ]),
@@ -107,8 +107,8 @@ function CustomerReportPage({
           "أمانة ذهب", "بعهدتك"],
         rows: filtered.map((s) => [
           s.customer.name, s.customer.ref || "—", String(s.count),
-          `${currency}${fmtMoney(s.spend)}`, `${currency}${fmtMoney(s.owedCash)}`,
-          `${currency}${fmtMoney(s.trustCash)}`, `${fmtW(s.trustFine)} جم24`,
+          `${fmtMoney(s.spend)} ${currency}`, `${fmtMoney(s.owedCash)} ${currency}`,
+          `${fmtMoney(s.trustCash)} ${currency}`, `${fmtW(s.trustFine)} جم24`,
           String(s.heldItems),
         ]),
       }],
@@ -178,7 +178,7 @@ function CustomerReportPage({
               <div className="grid grid-cols-3 gap-2">
                 {[
                   ["العملاء", totals.customers, ""],
-                  ["عليهم لك", `${currency}${fmtMoney(totals.owed)}`, "accent"],
+                  ["عليهم لك", `${fmtMoney(totals.owed)} ${currency}`, "accent"],
                   ["بعهدتك", totals.held, "bad"],
                 ].map(([l, v, tone], i) => (
                   <div key={i}>
@@ -195,7 +195,7 @@ function CustomerReportPage({
                     أمانة نقدية لهم
                   </p>
                   <p style={{ color: "var(--bad)", margin: 0 }} className="text-[13px] font-bold">
-                    {currency}{fmtMoney(totals.trustCash)}
+                    {fmtMoney(totals.trustCash)} {currency}
                   </p>
                 </div>
                 <div>
@@ -236,13 +236,13 @@ function CustomerReportPage({
                       </div>
                       <div className="flex flex-wrap items-baseline gap-x-3 mt-1">
                         <span style={{ color: "var(--accent)" }} className="text-[11px] font-bold">
-                          {currency}{fmtMoney(s.spend)}
+                          {fmtMoney(s.spend)} {currency}
                         </span>
                         {Math.abs(s.owedCash) > 0.004 && (
                           <span style={{ color: s.owedCash > 0 ? "var(--bad)" : "var(--good)" }}
                             className="text-[10px]">
                             {s.owedCash > 0 ? "عليه " : "له "}
-                            {currency}{fmtMoney(Math.abs(s.owedCash))}
+                            {fmtMoney(Math.abs(s.owedCash))} {currency}
                           </span>
                         )}
                         {s.trustFine > 0.0005 && (
@@ -318,7 +318,7 @@ function CustomerReportPage({
                         )}
                         {e.amount > 0.004 && (
                           <span style={{ color: "var(--text)" }} className="text-[11px] font-bold">
-                            {currency}{fmtMoney(e.amount)}
+                            {fmtMoney(e.amount)} {currency}
                           </span>
                         )}
                         {e.weight > 0.0005 && (

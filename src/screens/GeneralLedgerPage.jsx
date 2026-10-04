@@ -72,7 +72,7 @@ function GeneralLedgerPage({ journal = [], goldLedger = [], accounts = [], aging
     return list.filter((r) => normalizeArabicQuery(`${r.code} ${r.name}`).includes(needle));
   }, [tree, q, treeView]);
 
-  const money = (v) => `${currency}${fmtMoney(v || 0)}`;
+  const money = (v) => `${fmtMoney(v || 0)} ${currency}`;
   const meta = [`الفرع: ${branchName || "—"}`, `الفترة: من ${from} إلى ${to}`,
     `طُبع: ${new Date().toLocaleString("en-GB")}`];
 
@@ -185,7 +185,7 @@ function GeneralLedgerPage({ journal = [], goldLedger = [], accounts = [], aging
           const isW = agingUnit === "weight";
           const ag = buildAging({ asOf: to, unit: agingUnit,
             entries: isW ? agingWeightEntries : agingEntries });
-          const fmtU = (v) => (isW ? `${fmtW(v)} جم24` : `${currency}${fmtMoney(v)}`);
+          const fmtU = (v) => (isW ? `${fmtW(v)} جم24` : `${fmtMoney(v)} ${currency}`);
           return (
             <>
               <div className="grid grid-cols-2 gap-2 mb-3">

@@ -161,20 +161,20 @@ function SellerReportsPage({ sales, users, commissions, expenses = [], currency,
 
           <div className="grid grid-cols-2 gap-3 mb-3">
             <Stat label="عدد الفواتير" value={r.count} />
-            <Stat label="المبيعات" value={`${currency}${fmt(r.salesTotal, 0)}`} />
+            <Stat label="المبيعات" value={`${fmt(r.salesTotal, 0)} ${currency}`} />
             <Stat
               label="ربح تشغيلي (أداؤه)"
               value={`${fmtW(r.operatingGrams)} جم`}
-              sub={`${currency}${fmt(r.operatingProfit, 0)} · هامش ${fmt(r.operatingMargin, 1)}٪`}
+              sub={`${fmt(r.operatingProfit, 0)} ${currency} · هامش ${fmt(r.operatingMargin, 1)}٪`}
               accent="var(--goodSolid)"
             />
             <Stat
               label="ربح رأسمالي (من السوق)"
               value={`${fmtW(r.capitalGrams)} جم`}
-              sub={`${currency}${fmt(r.capitalGain, 0)} — لا يُنسب لأدائه`}
+              sub={`${fmt(r.capitalGain, 0)} ${currency} — لا يُنسب لأدائه`}
               accent="var(--accentSoft)"
             />
-            <Stat label="متوسط الفاتورة" value={`${currency}${fmt(r.count ? r.salesTotal / r.count : 0, 0)}`} />
+            <Stat label="متوسط الفاتورة" value={`${fmt(r.count ? r.salesTotal / r.count : 0, 0)} ${currency}`} />
           </div>
 
           {(() => {
@@ -195,7 +195,7 @@ function SellerReportsPage({ sales, users, commissions, expenses = [], currency,
                     <span style={{ color: "var(--text2)" }} className="text-xs">{l}</span>
                     <div className="text-left">
                       <span style={{ color: c }} className="text-xs font-bold">
-                        {currency}{fmt(v, 0)}
+                        {fmt(v, 0)} {currency}
                       </span>
                       <span style={{ color: "var(--text3)" }} className="text-[10px] block">
                         {price24 > 0 ? fmt(v / price24) : "0.00"} جم
@@ -209,7 +209,7 @@ function SellerReportsPage({ sales, users, commissions, expenses = [], currency,
                   </span>
                   <div className="text-left">
                     <span style={{ color: netDue >= 0 ? "var(--goodSolid)" : "var(--bad)" }} className="text-base font-bold">
-                      {currency}{fmt(Math.abs(netDue), 0)}
+                      {fmt(Math.abs(netDue), 0)} {currency}
                     </span>
                     <span style={{ color: "var(--text3)" }} className="text-[10px] block">
                       {price24 > 0 ? fmt(Math.abs(netDue) / price24) : "0.00"} جم
@@ -249,10 +249,10 @@ function SellerReportsPage({ sales, users, commissions, expenses = [], currency,
             </p>
             {[
               ["الأساس", COMMISSION_BASES.find((b) => b.id === rule.basis)?.label],
-              ["المبلغ الخاضع", `${currency}${fmt(r.base, 0)}`],
+              ["المبلغ الخاضع", `${fmt(r.base, 0)} ${currency}`],
               ["النسبة", `${fmt((Number(rule.rate) || 0) * 100, 2)}٪`],
-              ["قيمة النسبة", `${currency}${fmt(r.pct, 0)}`],
-              ["عمولة ثابتة", `${currency}${fmt(r.flat, 0)} (${r.count} × ${fmt(Number(rule.perInvoice) || 0, 0)})`],
+              ["قيمة النسبة", `${fmt(r.pct, 0)} ${currency}`],
+              ["عمولة ثابتة", `${fmt(r.flat, 0)} ${currency} (${r.count} × ${fmt(Number(rule.perInvoice) || 0, 0)})`],
             ].map(([l, v], i) => (
               <div key={i} className="flex items-center justify-between py-1.5" style={{ borderBottom: "1px solid var(--line)" }}>
                 <span style={{ color: "var(--text2)" }} className="text-xs">
@@ -347,9 +347,9 @@ function SellerReportsPage({ sales, users, commissions, expenses = [], currency,
         </div>
 
         <div className="grid grid-cols-2 gap-3 mb-3">
-          <Stat label={`مبيعات ${periodLabel}`} value={`${currency}${fmt(totals.salesTotal, 0)}`} />
+          <Stat label={`مبيعات ${periodLabel}`} value={`${fmt(totals.salesTotal, 0)} ${currency}`} />
           <Stat label="عدد الفواتير" value={totals.count} />
-          <Stat label="الأرباح المحققة" value={`${currency}${fmt(totals.profitTotal, 0)}`} accent="var(--goodSolid)" />
+          <Stat label="الأرباح المحققة" value={`${fmt(totals.profitTotal, 0)} ${currency}`} accent="var(--goodSolid)" />
           <Stat label="إجمالي العمولات" value={`${fmtW(totals.commissionGrams)} جم`} accent="var(--accent)" />
         </div>
 
@@ -413,7 +413,7 @@ function SellerReportsPage({ sales, users, commissions, expenses = [], currency,
                         return (
                           <span style={{ color: net >= 0 ? "var(--text2)" : "var(--bad)" }} className="block text-[10px]">
                             {net >= 0 ? "صافي له " : "عليه "}
-                            {currency}{fmt(Math.abs(net), 0)}
+                            {fmt(Math.abs(net), 0)} {currency}
                           </span>
                         );
                       })()}

@@ -211,17 +211,17 @@ function ReportsTab({
             style={{ color: flat ? "var(--text2)" : good ? "var(--goodSolid)" : "var(--bad)" }}
             className="text-[11px] font-bold"
           >
-            {flat ? "بلا تغيير" : `${diff > 0 ? "▲" : "▼"} ${prefix}${fmtFn(Math.abs(diff))}${pct !== null ? ` (${fmt(Math.abs(pct), 0)}٪)` : ""}`}
+            {flat ? "بلا تغيير" : `${diff > 0 ? "▲" : "▼"} ${fmtFn(Math.abs(diff))}${prefix ? ` ${prefix}` : ""}${pct !== null ? ` (${fmt(Math.abs(pct), 0)}٪)` : ""}`}
           </span>
         </div>
         <div className="grid grid-cols-2 gap-2">
           <div className="px-2 py-1.5 rounded-lg" style={{ background: "var(--panel)" }}>
             <p style={{ color: "var(--text3)" }} className="text-[10px]">{rangeLabel}</p>
-            <p style={{ color: "var(--text)" }} className="text-xs font-bold">{prefix}{fmtFn(a)}</p>
+            <p style={{ color: "var(--text)" }} className="text-xs font-bold">{fmtFn(a)}{prefix ? ` ${prefix}` : ""}</p>
           </div>
           <div className="px-2 py-1.5 rounded-lg" style={{ background: "var(--panel)", border: "1px solid var(--line)" }}>
             <p style={{ color: "var(--text3)" }} className="text-[10px]">{rangeLabelB}</p>
-            <p style={{ color: "var(--text2)" }} className="text-xs font-bold">{prefix}{fmtFn(b)}</p>
+            <p style={{ color: "var(--text2)" }} className="text-xs font-bold">{fmtFn(b)}{prefix ? ` ${prefix}` : ""}</p>
           </div>
         </div>
       </div>
@@ -487,12 +487,12 @@ function ReportsTab({
             </Section>
 
             <Section title="الأرصدة الحالية">
-              <Row label="صندوق اليومي" value={`${currency}${fmt(cashBalance.total, 0)}`} />
-              <Row label="نقدي" value={`${currency}${fmt(cashBalance.cash, 0)}`} indent />
-              <Row label="شبكة" value={`${currency}${fmt(cashBalance.network, 0)}`} indent />
-              <Row label="الخزنة" value={`${currency}${fmt(safeBalance.total, 0)}`} />
-              <Row label="عهدة الكسر" value={`${currency}${fmt(scrapCustodyBalance.total, 0)}`} />
-              <Row label="إجمالي النقد" value={`${currency}${fmt(cashBalance.total + safeBalance.total + scrapCustodyBalance.total, 0)}`} strong />
+              <Row label="صندوق اليومي" value={`${fmt(cashBalance.total, 0)} ${currency}`} />
+              <Row label="نقدي" value={`${fmt(cashBalance.cash, 0)} ${currency}`} indent />
+              <Row label="شبكة" value={`${fmt(cashBalance.network, 0)} ${currency}`} indent />
+              <Row label="الخزنة" value={`${fmt(safeBalance.total, 0)} ${currency}`} />
+              <Row label="عهدة الكسر" value={`${fmt(scrapCustodyBalance.total, 0)} ${currency}`} />
+              <Row label="إجمالي النقد" value={`${fmt(cashBalance.total + safeBalance.total + scrapCustodyBalance.total, 0)} ${currency}`} strong />
             </Section>
 
             <Section title="الذهب">
@@ -503,7 +503,7 @@ function ReportsTab({
               <Row label="الذهب الفعلي بعيار 24" value={`${fmtW(goldEquivalent.goldGrams)} جم`} accent="var(--accent)" strong />
               <Row
                 label="النقد (لا يُجمع مع الذهب)"
-                value={`${priceData.currency}${fmt(goldEquivalent.cashAmount, 0)} · يعادل ${fmtW(goldEquivalent.cashGrams)} جم`}
+                value={`${fmt(goldEquivalent.cashAmount, 0)} ${priceData.currency} · يعادل ${fmtW(goldEquivalent.cashGrams)} جم`}
               />
             </Section>
             <div style={{ height: 20 }} />
@@ -560,7 +560,7 @@ function ReportsTab({
                           {x.ref && <span style={{ color: "var(--text3)" }} className="text-[10px] mr-1">{x.ref}</span>}
                         </span>
                         <span style={{ color: "var(--accent)" }} className="text-sm font-bold">
-                          {currency}{fmt(x.total, 0)}
+                          {fmt(x.total, 0)} {currency}
                         </span>
                       </div>
                       <p style={{ color: "var(--text3)" }} className="text-[11px] mt-0.5">
@@ -594,13 +594,13 @@ function ReportsTab({
         {tab === "purchases" && !compare && (
           <>
             <Section title={`المشتريات — ${rangeLabel}`}>
-              <Row label={`من الموردين (${fLots.length} دفعة)`} value={`${currency}${fmt(fLots.reduce((a, l) => a + (Number(l.goldCost) || 0), 0), 0)}`} />
-              <Row label="أجور ومصنعية" value={`${currency}${fmt(fLots.reduce((a, l) => a + (Number(l.workmanshipTotal) || 0), 0), 0)}`} indent />
-              <Row label={`شراء كسر (${fScrap.length})`} value={`${currency}${fmt(fScrap.reduce((a, e) => a + e.total, 0), 0)}`} />
-              <Row label={`تسكيرات (${fTaskir.length})`} value={`${currency}${fmt(fTaskir.reduce((a, t) => a + (t.goldSource === "purchased" ? Number(t.goldCost) || 0 : 0) + (Number(t.workmanshipAmount) || 0), 0), 0)}`} />
+              <Row label={`من الموردين (${fLots.length} دفعة)`} value={`${fmt(fLots.reduce((a, l) => a + (Number(l.goldCost) || 0), 0), 0)} ${currency}`} />
+              <Row label="أجور ومصنعية" value={`${fmt(fLots.reduce((a, l) => a + (Number(l.workmanshipTotal) || 0), 0), 0)} ${currency}`} indent />
+              <Row label={`شراء كسر (${fScrap.length})`} value={`${fmt(fScrap.reduce((a, e) => a + e.total, 0), 0)} ${currency}`} />
+              <Row label={`تسكيرات (${fTaskir.length})`} value={`${fmt(fTaskir.reduce((a, t) => a + (t.goldSource === "purchased" ? Number(t.goldCost) || 0 : 0) + (Number(t.workmanshipAmount) || 0), 0), 0)} ${currency}`} />
               <GramRow label="إجمالي مشتريات الذهب" grams={M.purchGoldGrams} amount={purchGold} currency={currency} accent="var(--accent)" strong />
               <Row label="الوزن المشترى" value={`${fmtW(fLots.reduce((a, l) => a + l.weight, 0) + fScrap.reduce((a, e) => a + e.weight, 0))} جم`} />
-              <Row label="مشتريات غير ذهبية" value={`${currency}${fmt(purchNonGold, 0)}`} accent="var(--bad)" />
+              <Row label="مشتريات غير ذهبية" value={`${fmt(purchNonGold, 0)} ${currency}`} accent="var(--bad)" />
             </Section>
             {fAdj.length > 0 && (
               <Section title="فروقات الوزن">
@@ -621,11 +621,11 @@ function ReportsTab({
                           {l.ref && <span style={{ color: "var(--text3)" }} className="text-[10px] mr-1">{l.ref}</span>}
                         </span>
                         <span style={{ color: "var(--accent)" }} className="text-sm font-bold">
-                          {currency}{fmt(l.totalCost, 0)}
+                          {fmt(l.totalCost, 0)} {currency}
                         </span>
                       </div>
                       <p style={{ color: "var(--text3)" }} className="text-[11px] mt-0.5">
-                        عيار {l.karat} · {fmtW(l.weight)} جم · {currency}{fmt(l.costPerGram)}/جم · {new Date(l.date).toLocaleDateString("en-GB")}
+                        عيار {l.karat} · {fmtW(l.weight)} جم · {fmt(l.costPerGram)} {currency}/جم · {new Date(l.date).toLocaleDateString("en-GB")}
                       </p>
                     </Card>
                   ))
@@ -667,8 +667,8 @@ function ReportsTab({
             <Section title={`المصروفات — ${rangeLabel}`}>
               <Row label="عدد العمليات" value={fExpenses.length} />
               <GramRow label="الإجمالي" grams={-M.expGrams} amount={expSum} currency={currency} accent="var(--bad)" strong />
-              <Row label="ثابتة" value={`${currency}${fmt(fExpenses.filter((e) => e.recurring).reduce((a, e) => a + e.amount, 0), 0)}`} indent />
-              <Row label="يومية" value={`${currency}${fmt(fExpenses.filter((e) => !e.recurring).reduce((a, e) => a + e.amount, 0), 0)}`} indent />
+              <Row label="ثابتة" value={`${fmt(fExpenses.filter((e) => e.recurring).reduce((a, e) => a + e.amount, 0), 0)} ${currency}`} indent />
+              <Row label="يومية" value={`${fmt(fExpenses.filter((e) => !e.recurring).reduce((a, e) => a + e.amount, 0), 0)} ${currency}`} indent />
             </Section>
             <Section title="حسب التصنيف">
               {(() => {
@@ -681,7 +681,7 @@ function ReportsTab({
                     <div className="flex items-center justify-between">
                       <span style={{ color: "var(--text2)" }} className="text-xs">{catLabel(id)}</span>
                       <span style={{ color: "var(--text)" }} className="text-xs font-bold">
-                        {currency}{fmt(v, 0)} · {fmt(expSum ? (v / expSum) * 100 : 0, 0)}٪
+                        {fmt(v, 0)} {currency} · {fmt(expSum ? (v / expSum) * 100 : 0, 0)}٪
                       </span>
                     </div>
                     <div className="mt-1" style={{ height: 3, background: "var(--line)", borderRadius: 2, overflow: "hidden" }}>
@@ -704,7 +704,7 @@ function ReportsTab({
                           {e.ref && <span style={{ color: "var(--text3)" }} className="text-[10px] mr-1">{e.ref}</span>}
                         </span>
                         <span style={{ color: "var(--bad)" }} className="text-sm font-bold">
-                          −{currency}{fmt(e.amount, 0)}
+                          −{fmt(e.amount, 0)} {currency}
                         </span>
                       </div>
                       <p style={{ color: "var(--text3)" }} className="text-[11px] mt-0.5">
@@ -742,8 +742,8 @@ function ReportsTab({
               <Row label="عدد القطع" value={totals.pieces} />
               <Row label="الوزن الإجمالي" value={`${fmtW(totals.weight)} جم`} />
               <Row label="بعيار 24" value={`${fmtW(totals.fineWeight)} جم`} indent />
-              <Row label="التكلفة" value={`${currency}${fmt(totals.cost, 0)}`} />
-              <Row label="القيمة بسعر اليوم" value={`${currency}${fmt(totals.value, 0)}`} accent="var(--accent)" />
+              <Row label="التكلفة" value={`${fmt(totals.cost, 0)} ${currency}`} />
+              <Row label="القيمة بسعر اليوم" value={`${fmt(totals.value, 0)} ${currency}`} accent="var(--accent)" />
               <GramRow label="أرباح غير محققة" grams={toGrams(totals.value - totals.cost)} amount={totals.value - totals.cost} currency={currency} strong />
             </Section>
 
@@ -1233,14 +1233,14 @@ function ReportsTab({
           <h1 style={{ fontSize: 16, marginBottom: 2 }}>تقرير {rangeLabel}</h1>
           <p style={{ fontSize: 11, color: "#555", marginBottom: "5mm" }}>{new Date().toLocaleString("en-GB")}</p>
           <p style={{ fontSize: 12 }}>
-            المبيعات: {currency}{fmt(salesSum, 0)} ({fSales.length} فاتورة) · الأرباح: {currency}{fmt(salesProfit, 0)}
+            المبيعات: {fmt(salesSum, 0)} {currency} ({fSales.length} فاتورة) · الأرباح: {fmt(salesProfit, 0)} {currency}
           </p>
           <p style={{ fontSize: 12 }}>
-            مشتريات الذهب: {currency}{fmt(purchGold, 0)} · المصروفات: {currency}{fmt(expSum, 0)}
+            مشتريات الذهب: {fmt(purchGold, 0)} {currency} · المصروفات: {fmt(expSum, 0)} {currency}
           </p>
-          <p style={{ fontSize: 12 }}>صافي الحركة: {currency}{fmt(netMovement, 0)}</p>
+          <p style={{ fontSize: 12 }}>صافي الحركة: {fmt(netMovement, 0)} {currency}</p>
           <p style={{ fontSize: 12 }}>
-            الأرصدة — يومي: {currency}{fmt(cashBalance.total, 0)} · خزنة: {currency}{fmt(safeBalance.total, 0)} · عهدة: {currency}{fmt(scrapCustodyBalance.total, 0)}
+            الأرصدة — يومي: {fmt(cashBalance.total, 0)} {currency} · خزنة: {fmt(safeBalance.total, 0)} {currency} · عهدة: {fmt(scrapCustodyBalance.total, 0)} {currency}
           </p>
           <p style={{ fontSize: 12 }}>
             المخزون: {totals.pieces} قطعة · {fmtW(totals.fineWeight)} جم عيار 24 · الذهب الفعلي: {fmtW(goldEquivalent.goldGrams)} جم · النقد {fmt(goldEquivalent.cashAmount, 0)} (يعادل {fmtW(goldEquivalent.cashGrams)} جم، لا يُجمع)

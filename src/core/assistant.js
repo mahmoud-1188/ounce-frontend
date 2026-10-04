@@ -62,7 +62,7 @@ const AI_INTENTS = [
       const s = C.today.sales;
       if (!s.count) return "لم تُسجَّل أي فاتورة اليوم بعد.";
       return (
-        `اليوم ${s.count} فاتورة بإجمالي ${C.cur}${fmt(s.total, 2)}.\n` +
+        `اليوم ${s.count} فاتورة بإجمالي ${fmt(s.total, 2)} ${C.cur}.\n` +
         `الذهب الخارج ${fmtW(s.fine)} جم عيار 24.` +
         (s.topSeller ? `\nأكثر البائعين: ${s.topSeller}.` : "")
       );
@@ -77,8 +77,8 @@ const AI_INTENTS = [
       const p = C.today.profit;
       if (p == null) return null;
       return (
-        `الربح التشغيلي اليوم ${C.cur}${fmt(p.operating, 2)}.\n` +
-        `⚖ هذا ربح عملك — قيمة المعدن (${C.cur}${fmt(p.metal, 2)}) ليست ربحًا،\n` +
+        `الربح التشغيلي اليوم ${fmt(p.operating, 2)} ${C.cur}.\n` +
+        `⚖ هذا ربح عملك — قيمة المعدن (${fmt(p.metal, 2)} ${C.cur}) ليست ربحًا،\n` +
         `فهي معدن كنت تملكه.`
       );
     },
@@ -89,10 +89,10 @@ const AI_INTENTS = [
     must: ["صندوق", "رصيد", "نقد", "درج", "خزنه", "كاش"],
     q: "كم رصيد الصندوق؟",
     answer: (C) =>
-      `الخزنة ${C.cur}${fmt(C.pools.safe, 2)}\n` +
-      `الصندوق اليومي ${C.cur}${fmt(C.pools.daily, 2)}\n` +
-      `عهدة الكسر ${C.cur}${fmt(C.pools.custody, 2)}\n` +
-      `الإجمالي ${C.cur}${fmt(C.pools.safe + C.pools.daily + C.pools.custody, 2)}`,
+      `الخزنة ${fmt(C.pools.safe, 2)} ${C.cur}\n` +
+      `الصندوق اليومي ${fmt(C.pools.daily, 2)} ${C.cur}\n` +
+      `عهدة الكسر ${fmt(C.pools.custody, 2)} ${C.cur}\n` +
+      `الإجمالي ${fmt(C.pools.safe + C.pools.daily + C.pools.custody, 2)} ${C.cur}`,
   },
   {
     id: "stock",
@@ -136,7 +136,7 @@ const AI_INTENTS = [
       if (!p.gold && !p.fees) return "لا مستحقات على الموردين.";
       return (
         `ذهب مستحق ${fmtW(p.gold)} جم24\n` +
-        `أجور مستحقة ${C.cur}${fmt(p.fees, 2)}\n` +
+        `أجور مستحقة ${fmt(p.fees, 2)} ${C.cur}\n` +
         `⚖ بُعدان لا يُخلطان: الذهب يُسدَّد ذهبًا والأجور نقدًا.`
       );
     },
@@ -148,7 +148,7 @@ const AI_INTENTS = [
     q: "ما المستحق لي على العملاء؟",
     answer: (C) =>
       C.receivable > 0
-        ? `لك على العملاء ${C.cur}${fmt(C.receivable, 2)}.`
+        ? `لك على العملاء ${fmt(C.receivable, 2)} ${C.cur}.`
         : "لا ذمم على العملاء.",
   },
   {
@@ -173,7 +173,7 @@ const AI_INTENTS = [
       if (!r.length) return "لا مبيعات مسجّلة بعد.";
       return r
         .slice(0, 5)
-        .map((x, i) => `${i + 1}. ${x.name}: ${C.cur}${fmt(x.total, 0)} · ${x.count} فاتورة`)
+        .map((x, i) => `${i + 1}. ${x.name}: ${fmt(x.total, 0)} ${C.cur} · ${x.count} فاتورة`)
         .join("\n");
     },
   },
@@ -185,7 +185,7 @@ const AI_INTENTS = [
     answer: (C) => {
       if (!C.price24) return "لم يُحدَّث سعر الذهب بعد.";
       return [24, 22, 21, 18]
-        .map((k) => `عيار ${k}: ${C.cur}${fmt(pricePerGram(k, C.price24), 2)}`)
+        .map((k) => `عيار ${k}: ${fmt(pricePerGram(k, C.price24), 2)} ${C.cur}`)
         .join("\n");
     },
   },

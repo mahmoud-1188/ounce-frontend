@@ -189,7 +189,7 @@ function PriceFixPage({ priceData = {}, openDay, canManage, onBack, flashToast }
                 && Math.abs(Number(price) - priceData.current) / priceData.current > 0.02 && (
                 <p style={{ color: "var(--bad)" }} className="text-[10px] mt-1">
                   ⚠ يبعد {Math.round(Math.abs(Number(price) - priceData.current) / priceData.current * 100)}٪
-                  عن سعر المحل {currency}{fmtMoney(priceData.current)}
+                  عن سعر المحل {fmtMoney(priceData.current)} {currency}
                 </p>
               )}
             </Field>

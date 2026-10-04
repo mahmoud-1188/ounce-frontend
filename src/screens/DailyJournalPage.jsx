@@ -1039,7 +1039,7 @@ ${tbl(["البيان", "الذهب (جم24)", `النقد (${currency})`], [
                     {fmt(g)}
                   </td>
                   <td style={{ ...cell, textAlign: "center", color: "var(--text2)" }}>
-                    {currency}{fmt(c, 0)}
+                    {fmt(c, 0)} {currency}
                     <span style={{ color: "var(--text3)" }} className="block text-[9px]">
                       {J.price24 > 0 ? `${fmtW(c / J.price24)} جم` : ""}
                     </span>
@@ -1052,7 +1052,7 @@ ${tbl(["البيان", "الذهب (جم24)", `النقد (${currency})`], [
 
         {J.transfersTotal > 0 && (
           <p style={{ color: "var(--text3)" }} className="text-[10px] mt-2">
-            التحويلات الداخلية {currency}{fmt(J.transfersTotal, 0)} — معروضة ومستثناة من المجاميع، لأن نقل المال بين صناديقك ليس دخلًا ولا خرجًا.
+            التحويلات الداخلية {fmt(J.transfersTotal, 0)} {currency} — معروضة ومستثناة من المجاميع، لأن نقل المال بين صناديقك ليس دخلًا ولا خرجًا.
           </p>
         )}
         <p style={{ color: "var(--text3)" }} className="text-[10px] mt-2">
@@ -1140,8 +1140,8 @@ ${tbl(["البيان", "الذهب (جم24)", `النقد (${currency})`], [
                 <div key={i} className="flex items-center justify-between py-1" style={{ borderBottom: "1px solid var(--line)" }}>
                   <span style={{ color: "var(--text2)" }} className="text-[11px]">{label}</span>
                   <span className="text-[11px]">
-                    <span style={{ color: "var(--text)" }}>{unit}{fmt(a, unit ? 0 : 2)}</span>
-                    <span style={{ color: "var(--text3)" }}> مقابل {unit}{fmt(b, unit ? 0 : 2)} · </span>
+                    <span style={{ color: "var(--text)" }}>{fmt(a, unit ? 0 : 2)}{unit ? ` ${unit}` : ""}</span>
+                    <span style={{ color: "var(--text3)" }}> مقابل {fmt(b, unit ? 0 : 2)}{unit ? ` ${unit}` : ""} · </span>
                     <span style={{ color: Math.abs(d) < 0.005 ? "var(--text2)" : d > 0 ? "var(--goodSolid)" : "var(--bad)", fontWeight: 700 }}>
                       {Math.abs(d) < 0.005 ? "متساوٍ" : `${d > 0 ? "▲" : "▼"} ${unit}${fmt(Math.abs(d), unit ? 0 : 2)}`}
                     </span>
@@ -1160,7 +1160,7 @@ ${tbl(["البيان", "الذهب (جم24)", `النقد (${currency})`], [
           <Card style={{ padding: 12, marginBottom: 10 }}>
             <div className="flex items-center justify-between mb-2">
               <span style={{ color: "var(--accent)" }} className="text-[11px] font-bold">
-                عمولات الشبكة — {currency}{fmt(A.netFeesTotal, 2)}
+                عمولات الشبكة — {fmt(A.netFeesTotal, 2)} {currency}
               </span>
               <button
                 onClick={onEditFees}
@@ -1208,7 +1208,7 @@ ${tbl(["البيان", "الذهب (جم24)", `النقد (${currency})`], [
                     <span style={{ color: "var(--accent)" }} className="text-[11px]">{fmtW(p2.fine)} جم24</span>
                     {p2.cash > 0 && (
                       <span style={{ color: "var(--text2)" }} className="text-[11px]">
-                        {currency}{fmt(p2.cash, 0)}
+                        {fmt(p2.cash, 0)} {currency}
                       </span>
                     )}
                   </div>
@@ -1239,7 +1239,7 @@ ${tbl(["البيان", "الذهب (جم24)", `النقد (${currency})`], [
                   </span>
                   <span style={{ color: "var(--text3)", fontFamily: "monospace" }} className="text-[9px]">{e.account}</span>
                   <span style={{ color: "var(--bad)" }} className="text-[11px]">
-                    {currency}{fmt(e.total, 2)}
+                    {fmt(e.total, 2)} {currency}
                   </span>
                 </div>
               ))}
@@ -1247,7 +1247,7 @@ ${tbl(["البيان", "الذهب (جم24)", `النقد (${currency})`], [
                 style={{ borderTop: "1px solid var(--line)" }}>
                 <span style={{ color: "var(--text2)" }} className="text-[11px]">المجموع</span>
                 <span style={{ color: "var(--bad)" }} className="text-xs font-bold">
-                  {currency}{fmt(A.expenseDetail.reduce((a, e) => a + e.total, 0), 2)}
+                  {fmt(A.expenseDetail.reduce((a, e) => a + e.total, 0), 2)} {currency}
                 </span>
               </div>
             </Card>
@@ -1276,7 +1276,7 @@ ${tbl(["البيان", "الذهب (جم24)", `النقد (${currency})`], [
                     </span>
                   </div>
                   <p style={{ color: "var(--text2)" }} className="text-[10px]">
-                    تكلفته {currency}{fmt(w.value, 2)}
+                    تكلفته {fmt(w.value, 2)} {currency}
                     {w.note ? ` · ${w.note}` : ""}
                     {w.by ? ` · ${w.by}` : ""}
                   </p>
@@ -1290,7 +1290,7 @@ ${tbl(["البيان", "الذهب (جم24)", `النقد (${currency})`], [
                     {fmtW(A.wasteDetail.reduce((a, w) => a + w.fine, 0))} جم24
                   </span>
                   <span style={{ color: "var(--text2)" }}>
-                    {" · "}{currency}{fmt(A.wasteDetail.reduce((a, w) => a + w.value, 0), 2)}
+                    {" · "}{fmt(A.wasteDetail.reduce((a, w) => a + w.value, 0), 2)} {currency}
                   </span>
                 </span>
               </div>
@@ -1340,10 +1340,10 @@ ${tbl(["البيان", "الذهب (جم24)", `النقد (${currency})`], [
           <Card style={{ padding: 11 }}>
             <p style={{ color: "var(--text2)" }} className="text-[11px] mb-1">ذمم العملاء</p>
             <p style={{ color: "var(--bad)" }} className="text-xs font-bold">
-              + {currency}{fmt(A.receivable.up, 0)}
+              + {fmt(A.receivable.up, 0)} {currency}
             </p>
             <p style={{ color: "var(--good)" }} className="text-xs font-bold">
-              − {currency}{fmt(A.receivable.down, 0)}
+              − {fmt(A.receivable.down, 0)} {currency}
             </p>
             <p style={{ color: "var(--text3)" }} className="text-[10px] mt-0.5">
               صافي {fmt(A.receivable.up - A.receivable.down, 0)}
@@ -1355,7 +1355,7 @@ ${tbl(["البيان", "الذهب (جم24)", `النقد (${currency})`], [
               {fmtW(A.payable.goldUp)} جم24
             </p>
             <p style={{ color: "var(--text2)" }} className="text-xs">
-              + أجور {currency}{fmt(A.payable.feesUp, 0)}
+              + أجور {fmt(A.payable.feesUp, 0)} {currency}
             </p>
             <p style={{ color: "var(--text3)" }} className="text-[10px] mt-0.5">
               ⚖ الذهب بالجرام والأجور بالعملة
@@ -1370,11 +1370,11 @@ ${tbl(["البيان", "الذهب (جم24)", `النقد (${currency})`], [
                 ضريبة محصّلة ({A.vat.invoices} فاتورة)
               </span>
               <span style={{ color: "var(--text)" }} className="text-xs font-bold">
-                {currency}{fmt(A.vat.collected, 2)}
+                {fmt(A.vat.collected, 2)} {currency}
               </span>
             </div>
             <p style={{ color: "var(--text3)" }} className="text-[10px] mt-0.5">
-              على وعاء {currency}{fmt(A.vat.base, 0)} · حساب 2220
+              على وعاء {fmt(A.vat.base, 0)} {currency} · حساب 2220
             </p>
           </Card>
         )}
@@ -1397,7 +1397,7 @@ ${tbl(["البيان", "الذهب (جم24)", `النقد (${currency})`], [
                     </span>
                     <span className="text-[11px] whitespace-nowrap">
                       {v.fine > 0 && <span style={{ color: "var(--accent)" }}>{fmtW(v.fine)} جم · </span>}
-                      <span style={{ color: "var(--text2)" }}>{currency}{fmt(v.amount, 0)}</span>
+                      <span style={{ color: "var(--text2)" }}>{fmt(v.amount, 0)} {currency}</span>
                     </span>
                   </div>
                 ))}
@@ -1429,7 +1429,7 @@ ${tbl(["البيان", "الذهب (جم24)", `النقد (${currency})`], [
                       </span>
                       <span className="text-[10px] whitespace-nowrap">
                         {sumFine > 0 && <span style={{ color: "var(--accent)" }}>{fmtW(sumFine)} جم · </span>}
-                        {sumAmt > 0 && <span style={{ color: "var(--text2)" }}>{currency}{fmt(sumAmt, 0)}</span>}
+                        {sumAmt > 0 && <span style={{ color: "var(--text2)" }}>{fmt(sumAmt, 0)} {currency}</span>}
                       </span>
                     </div>
                     {list.slice(0, 8).map((r) => (

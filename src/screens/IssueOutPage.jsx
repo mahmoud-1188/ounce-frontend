@@ -212,7 +212,7 @@ function IssueOutPage({
                   التكلفة الدفترية
                 </span>
                 <span style={{ color: "var(--bad)" }} className="text-xs font-bold">
-                  {currency}{fmtMoney(totals.cost)}
+                  {fmtMoney(totals.cost)} {currency}
                 </span>
               </div>
               {reason && (

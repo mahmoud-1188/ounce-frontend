@@ -172,7 +172,7 @@ function SuppliersSubPage({ suppliers, lots, items, safeTx, cashTx, taskirEntrie
               <div>
                 <p style={{ color: "var(--text3)" }} className="text-[11px]">أجور</p>
                 <p style={{ fontFamily: "'Cairo', sans-serif", color: acc.feesOwed > 0.0001 ? "var(--bad)" : "var(--goodSolid)" }} className="text-xl font-extrabold">
-                  {currency}{fmt(Math.abs(acc.feesOwed), 0)}
+                  {fmt(Math.abs(acc.feesOwed), 0)} {currency}
                 </p>
                 <p style={{ color: "var(--text3)" }} className="text-[10px]">نقدًا</p>
               </div>
@@ -315,11 +315,11 @@ function SuppliersSubPage({ suppliers, lots, items, safeTx, cashTx, taskirEntrie
                       {l.ref && <span style={{ color: "var(--text3)" }} className="text-[10px] mr-1">{l.ref}</span>}
                     </span>
                     <span style={{ color: "var(--accent)" }} className="text-sm font-bold">
-                      {currency}{fmt(l.totalCost, 0)}
+                      {fmt(l.totalCost, 0)} {currency}
                     </span>
                   </div>
                   <p style={{ color: "var(--text3)" }} className="text-[11px] mt-0.5">
-                    {currency}{fmt(l.costPerGram)}/جم · أجور {fmt(l.workmanshipTotal || 0, 0)} · {new Date(l.date).toLocaleDateString("en-GB")}
+                    {fmt(l.costPerGram)} {currency}/جم · أجور {fmt(l.workmanshipTotal || 0, 0)} · {new Date(l.date).toLocaleDateString("en-GB")}
                   </p>
                   {(l.workmanshipTotal || 0) > 0 && (
                     <p style={{ color: wmVar > 0 ? "var(--accent)" : wmVar < 0 ? "var(--bad)" : "var(--goodSolid)" }} className="text-[11px] mt-0.5">

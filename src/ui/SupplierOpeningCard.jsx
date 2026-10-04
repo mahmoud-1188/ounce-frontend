@@ -51,7 +51,7 @@ function SupplierOpeningCard({ supplier, openings = [], price24 = 0, currency = 
       {mine.map((o) => (
         <div key={o.id} className="flex items-center gap-2 py-1.5" style={{ borderTop: "1px solid var(--line)" }}>
           <span className="text-[11px] font-bold flex-1" style={{ color: o.side === "owed" ? "var(--bad)" : "var(--good)" }}>
-            {o.kind === "gold" ? `ذهب ${fmtW(o.weight)} جم عيار ${o.karat} (${fmtW(o.fineWeight)} جم24)` : "نقد"} · {o.side === "owed" ? "علينا له" : "لنا عنده"} · {currency}{fmt(o.amount, 2)}
+            {o.kind === "gold" ? `ذهب ${fmtW(o.weight)} جم عيار ${o.karat} (${fmtW(o.fineWeight)} جم24)` : "نقد"} · {o.side === "owed" ? "علينا له" : "لنا عنده"} · {fmt(o.amount, 2)} {currency}
             {o.note ? <span style={{ color: "var(--text3)", fontWeight: 400 }}> · {o.note}</span> : null}
           </span>
           {canManage && onVoid && (
@@ -91,7 +91,7 @@ function SupplierOpeningCard({ supplier, openings = [], price24 = 0, currency = 
             <input style={inputStyle} value={f.note} onChange={(e) => set("note", e.target.value)} />
           </Field>
           {f.kind === "gold" && fine > 0 && (
-            <p style={{ color: "var(--accentText)" }} className="text-[11px]">بعيار 24: {fmtW(fine)} جم · يدخل كشف المورد وزنًا، ويُرحَّل {currency}{fmt(amount, 2)} على {f.side === "owed" ? "2110" : "1320"}</p>
+            <p style={{ color: "var(--accentText)" }} className="text-[11px]">بعيار 24: {fmtW(fine)} جم · يدخل كشف المورد وزنًا، ويُرحَّل {fmt(amount, 2)} {currency} على {f.side === "owed" ? "2110" : "1320"}</p>
           )}
           {err && <p style={{ color: "var(--bad)" }} className="text-[11px]">{err}</p>}
           <div className="grid grid-cols-2 gap-2">

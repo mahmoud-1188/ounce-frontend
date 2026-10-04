@@ -54,7 +54,7 @@ function UniversalSearchPage({ index, currency, onAsk, onBack }) {
           <span className="flex-1" />
           {r.amount > 0 && (
             <span style={{ color: "var(--text2)" }} className="text-[11px] whitespace-nowrap">
-              {currency}{fmt(r.amount, 0)}
+              {fmt(r.amount, 0)} {currency}
             </span>
           )}
           {r.fine > 0 && (
@@ -100,7 +100,7 @@ function UniversalSearchPage({ index, currency, onAsk, onBack }) {
                 {[
                   ["التاريخ", trace.root.date ? new Date(trace.root.date).toLocaleString("en-GB") : "—"],
                   ["بواسطة", trace.root.who || "—"],
-                  ["المبلغ", trace.root.amount ? `${currency}${fmt(trace.root.amount, 2)}` : "—"],
+                  ["المبلغ", trace.root.amount ? `${fmt(trace.root.amount, 2)} ${currency}` : "—"],
                   ["الوزن", trace.root.fine ? `${fmtW(trace.root.fine)} جم24` : "—"],
                   ["الحساب", trace.root.account || "—"],
                   ["يوم العمل", trace.root.day || "—"],

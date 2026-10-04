@@ -186,7 +186,7 @@ function GoldTicker({ shopPrice = 0, currency = "ر.س", onUseLive, canUse,
             {state === "fail" && !live
               ? "تعذّر جلب السعر"
               : live
-                ? `${currency}${fmtMoney(live.gram24)}`
+                ? `${fmtMoney(live.gram24)} ${currency}`
                 : "…"}
           </span>
           <span style={{ color: "var(--text3)" }} className="text-[10px] mr-1.5">
@@ -221,13 +221,13 @@ function GoldTicker({ shopPrice = 0, currency = "ر.س", onUseLive, canUse,
           <div className="flex items-baseline justify-between py-1">
             <span style={{ color: "var(--text3)" }} className="text-[11px]">سعر المحل</span>
             <span style={{ color: "var(--accent)" }} className="text-[13px] font-bold">
-              {currency}{fmtMoney(shopPrice)}
+              {fmtMoney(shopPrice)} {currency}
             </span>
           </div>
           <div className="flex items-baseline justify-between py-1">
             <span style={{ color: "var(--text3)" }} className="text-[11px]">السوق الآن</span>
             <span style={{ color: `var(--${tone})` }} className="text-[13px] font-bold">
-              {live ? `${currency}${fmtMoney(live.gram24)}` : "—"}
+              {live ? `${fmtMoney(live.gram24)} ${currency}` : "—"}
             </span>
           </div>
           {gap != null && (
@@ -238,7 +238,7 @@ function GoldTicker({ shopPrice = 0, currency = "ر.س", onUseLive, canUse,
                 style={{ color: gap > 0 ? "var(--good)" : gap < 0 ? "var(--bad)" : "var(--text2)" }}
                 className="text-[13px] font-bold"
               >
-                {gap > 0 ? "+" : ""}{currency}{fmtMoney(gap)} ({gapPct > 0 ? "+" : ""}{gapPct}٪)
+                {gap > 0 ? "+" : ""}{fmtMoney(gap)} {currency} ({gapPct > 0 ? "+" : ""}{gapPct}٪)
               </span>
             </div>
           )}
@@ -255,7 +255,7 @@ function GoldTicker({ shopPrice = 0, currency = "ر.س", onUseLive, canUse,
                 border: "1px solid var(--accentLine)",
               }}
             >
-              اعتمد سعر السوق لليوم — {currency}{fmtMoney(live.gram24)}
+              اعتمد سعر السوق لليوم — {fmtMoney(live.gram24)} {currency}
             </button>
           )}
 

@@ -101,7 +101,7 @@ function TaskirOfficesPage({
                 </span>
               </div>
               <p style={{ color: "var(--text3)" }} className="text-[10px]">
-                بعيار 24 · {price24 > 0 ? `يعادل ${currency}${fmt(totalOwed * price24, 0)}` : ""}
+                بعيار 24 · {price24 > 0 ? `يعادل ${fmt(totalOwed * price24, 0)} ${currency}` : ""}
               </p>
               <p style={{ color: "var(--text2)" }} className="text-[11px] mt-1">
                 ⚖ المكتب يسلّم الذهب للمورد نيابةً عنك، فينتقل التزامك إليه — لا يزول.
@@ -175,7 +175,7 @@ function TaskirOfficesPage({
               </div>
               {A.owed > 0.0005 && price24 > 0 && (
                 <p style={{ color: "var(--text3)" }} className="text-[10px]">
-                  يعادل {currency}{fmt(A.owed * price24, 2)} بسعر اليوم
+                  يعادل {fmt(A.owed * price24, 2)} {currency} بسعر اليوم
                 </p>
               )}
             </Card>
@@ -313,7 +313,7 @@ function TaskirOfficesPage({
                       )}
                       {t.amount > 0 && t.kind === "cash" && (
                         <span style={{ color: "var(--text2)" }} className="text-[11px]">
-                          {currency}{fmtMoney(t.amount)}
+                          {fmtMoney(t.amount)} {currency}
                         </span>
                       )}
                     </div>

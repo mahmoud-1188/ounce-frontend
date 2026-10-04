@@ -259,7 +259,7 @@ function ConversionsPage({
                     ["الوزن الإجمالي", `${fmtW(cGross)} جم`, false],
                     ...(cStones > 0 ? [["الفصوص (لا تُصهر)", `−${fmtW(cStones)} جم`, false]] : []),
                     ["الداخل لمخزون الكسر", `${fmtW(cGold)} جم عيار ${sel.karat}`, false],
-                    ["المصنعية المُعدمة", `${currency}${fmt(cWm, 0)}`, true],
+                    ["المصنعية المُعدمة", `${fmt(cWm, 0)} ${currency}`, true],
                   ].map(([l, v, red], i, arr) => (
                     <div
                       key={i}
@@ -332,7 +332,7 @@ function ConversionsPage({
                   <div className="flex items-center justify-between">
                     <span style={{ color: "var(--text2)" }} className="text-[11px]">{x.note}</span>
                     <span style={{ color: "var(--bad)" }} className="text-xs font-bold">
-                      −{currency}{fmt(x.value, 0)}
+                      −{fmt(x.value, 0)} {currency}
                     </span>
                   </div>
                   <p style={{ color: "var(--text3)" }} className="text-[10px] mt-0.5">

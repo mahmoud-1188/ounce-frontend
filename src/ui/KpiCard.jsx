@@ -4,7 +4,7 @@ import { Card } from "./Card.jsx";
 
 function KpiCard({ def, value, cmp, currency }) {
   const fmtV = (v) =>
-    def.unit === "money" ? `${currency}${fmtMoney(v)}`
+    def.unit === "money" ? `${fmtMoney(v)} ${currency}`
       : def.unit === "weight" ? `${fmtW(v)} جم`
       : String(v);
 

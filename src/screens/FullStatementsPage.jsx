@@ -20,7 +20,7 @@ function FullStatementsPage({
   const [from, setFrom] = useState(`${new Date().getFullYear()}-01-01`);
   const [to, setTo] = useState(today);
   const [tab, setTab] = useState("guide");
-  const money = (v) => `${currency}${fmtMoney(v || 0)}`;
+  const money = (v) => `${fmtMoney(v || 0)} ${currency}`;
 
   const inc = useMemo(() => buildIncomeStatement({ journal, accounts, from, to }), [journal, accounts, from, to]);
   const np = inc.netProfit;

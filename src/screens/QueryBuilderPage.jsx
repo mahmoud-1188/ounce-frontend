@@ -41,7 +41,7 @@ function QueryBuilderPage({ journal = [], goldLedger = [], accounts = [],
     [journal, goldLedger, accounts, filters, from, to, unit, displayKarat]);
   const desc = useMemo(() => describeQuery({ filters, from, to, unit, accounts, displayKarat }),
     [filters, from, to, unit, accounts, displayKarat]);
-  const money = (v) => `${currency}${fmtMoney(v || 0)}`;
+  const money = (v) => `${fmtMoney(v || 0)} ${currency}`;
   const active = Object.keys(filters).filter((k) => {
     const v = filters[k];
     return v && v.value !== "" && v.value !== undefined && v.value !== false;

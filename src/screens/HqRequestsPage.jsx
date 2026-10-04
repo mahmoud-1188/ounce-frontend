@@ -59,7 +59,7 @@ function HqRequestsPage({ approvals = [], currency = "ر.س", meId = null, canMa
                   <span style={{ color: st.tone }} className="text-[11px] font-bold shrink-0">{st.label}</span>
                 </div>
                 <p style={{ color: "var(--text2)" }} className="text-[11px] mt-0.5">
-                  {a.ref} · {currency}{fmtMoney(a.amount || 0)} · طلبه {a.requester || "—"} · {a.requestedAt ? new Date(a.requestedAt).toLocaleString("en-GB") : ""}
+                  {a.ref} · {fmtMoney(a.amount || 0)} {currency} · طلبه {a.requester || "—"} · {a.requestedAt ? new Date(a.requestedAt).toLocaleString("en-GB") : ""}
                 </p>
                 {a.note && <p style={{ color: "var(--text3)" }} className="text-[11px] mt-0.5">{a.note}</p>}
                 {a.decidedAt && (

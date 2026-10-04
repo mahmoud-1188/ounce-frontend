@@ -22,7 +22,7 @@ function AnyStatementPage({
   const [from, setFrom] = useState(`${new Date().getFullYear()}-01-01`);
   const [to, setTo] = useState(today);
   const [q, setQ] = useState("");
-  const money = (v) => `${currency}${fmtMoney(v || 0)}`;
+  const money = (v) => `${fmtMoney(v || 0)} ${currency}`;
 
   // ⚠ قائمة الأهداف من الكيان نفسه: لا جداول ثابتة تنحرف عن البيانات
   const options = useMemo(() => {

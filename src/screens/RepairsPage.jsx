@@ -22,7 +22,7 @@ function RepairsPage({ repairs, currency, price24, onAdd, onBack }) {
         </p>
         <div className="grid grid-cols-3 gap-2 mb-4">
           <Stat label="عدد الإصلاحات" value={repairs.length} />
-          <Stat label="إجمالي التكلفة" value={`${currency}${fmt(totalCost, 0)}`} />
+          <Stat label="إجمالي التكلفة" value={`${fmt(totalCost, 0)} ${currency}`} />
           <Stat label="إجمالي المكسب (بعيار 24)" value={`${fmtW(totalProfitGrams)} جم`} />
         </div>
 

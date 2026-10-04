@@ -38,7 +38,7 @@ function FiscalMonthsCard({ currency = "ر.س", reloadKey = 0, flashToast }) {
             {[["الإيرادات", yr.revenue], ["المصروفات", yr.expenses], ["الصافي", yr.netIncome]].map(([l, v]) => (
               <div key={l}>
                 <p style={{ color: "var(--text3)", margin: 0 }} className="text-[10px]">{l}</p>
-                <p style={{ color: l === "الصافي" ? (v >= 0 ? "var(--goodSolid)" : "var(--bad)") : "var(--text)", margin: 0 }} className="text-xs font-bold">{currency}{fmt(v, 0)}</p>
+                <p style={{ color: l === "الصافي" ? (v >= 0 ? "var(--goodSolid)" : "var(--bad)") : "var(--text)", margin: 0 }} className="text-xs font-bold">{fmt(v, 0)} {currency}</p>
               </div>
             ))}
           </div>

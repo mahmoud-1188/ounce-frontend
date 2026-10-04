@@ -161,7 +161,7 @@ function BankReconPage({ sales, cashTx, safeTx, bankTx, settings, currency, onSa
               {localTx.length}
             </p>
             <p style={{ color: "var(--text3)" }} className="text-[10px]">
-              {currency}{fmt(localTx.reduce((a, t) => a + t.amount, 0), 0)}
+              {fmt(localTx.reduce((a, t) => a + t.amount, 0), 0)} {currency}
             </p>
           </Card>
           <Card style={{ padding: 11 }}>
@@ -215,7 +215,7 @@ function BankReconPage({ sales, cashTx, safeTx, bankTx, settings, currency, onSa
                 <Row key={i} tone={m.confidence === "ضعيف" ? "var(--accentLine)" : "var(--goodLine)"}>
                   <div className="flex items-center gap-2 mb-1">
                     <span style={{ color: "var(--good)" }} className="text-xs font-bold">
-                      {currency}{fmt(m.amount, 2)}
+                      {fmt(m.amount, 2)} {currency}
                     </span>
                     <span style={{ color: "var(--text3)" }} className="text-[10px]">
                       {m.bank.date}
@@ -278,7 +278,7 @@ function BankReconPage({ sales, cashTx, safeTx, bankTx, settings, currency, onSa
                         {String(t.date).slice(0, 10)}{t.who ? ` · ${t.who}` : ""}
                       </span>
                       <span style={{ color: "var(--accent)" }} className="text-xs font-bold">
-                        {currency}{fmt(t.amount, 2)}
+                        {fmt(t.amount, 2)} {currency}
                       </span>
                     </div>
                     {t.authCode && (
@@ -321,7 +321,7 @@ function BankReconPage({ sales, cashTx, safeTx, bankTx, settings, currency, onSa
                       </span>
                       <span style={{ color: b.type === "debit" ? "var(--bad)" : "var(--goodSolid)" }}
                         className="text-xs font-bold">
-                        {currency}{fmt(b.amount, 2)}
+                        {fmt(b.amount, 2)} {currency}
                       </span>
                     </div>
                     {(b.desc || b.ref) && (

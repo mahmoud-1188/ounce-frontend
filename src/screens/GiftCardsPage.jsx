@@ -16,7 +16,7 @@ function GiftCardsPage({ customers = [], currency = "ر.س", isManager = false, 
   const [msg, setMsg] = useState(null);
   const load = () => api.modulesApi.giftCards().then(setD).catch(() => setD(false));
   useEffect(() => { load(); }, []);
-  const m = (v) => `${currency}${fmtMoney(v)}`;
+  const m = (v) => `${fmtMoney(v)} ${currency}`;
   const run = async (key, fn, ok) => {
     setBusy(key); setMsg(null);
     try { const r = await fn(); setMsg({ text: ok(r) }); load(); }

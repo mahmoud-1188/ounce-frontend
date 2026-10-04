@@ -101,7 +101,7 @@ function ScrapSubPage({ scrapEntries, totals, currency, priceData, custodyBalanc
 
         <div className="grid grid-cols-2 gap-3 mb-3">
           <Stat label="كسر بالمخزن" value={`${fmtW(totals.weightInStock)} جم`} />
-          <Stat label="إجمالي المدفوع" value={`${currency}${fmt(totals.spentTotal, 0)}`} />
+          <Stat label="إجمالي المدفوع" value={`${fmt(totals.spentTotal, 0)} ${currency}`} />
         </div>
         <button
           onClick={() => setShowSurplusReport(true)}

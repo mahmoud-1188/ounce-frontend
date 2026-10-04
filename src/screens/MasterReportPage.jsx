@@ -51,7 +51,7 @@ function MasterReportPage({
         { key: "customer", label: "العميل" },
         { key: "weight", label: "الوزن", render: (r) => `${fmtW(r.weight)} جم` },
         { key: "total", label: "الإجمالي", align: "left",
-          render: (r) => `${currency}${fmtMoney(r.total)}` },
+          render: (r) => `${fmtMoney(r.total)} ${currency}` },
         { key: "seller", label: "البائع" },
       ],
     },
@@ -64,7 +64,7 @@ function MasterReportPage({
         { key: "weight", label: "الوزن", render: (r) => `${fmtW(r.weight)} جم` },
         { key: "pieces", label: "القطع" },
         { key: "cost", label: "التكلفة", align: "left",
-          render: (r) => `${currency}${fmtMoney(r.cost)}` },
+          render: (r) => `${fmtMoney(r.cost)} ${currency}` },
       ],
     },
     {
@@ -75,18 +75,18 @@ function MasterReportPage({
         { key: "karat", label: "العيار" },
         { key: "weight", label: "الوزن", render: (r) => `${fmtW(r.weight)} جم` },
         { key: "paid", label: "المدفوع", align: "left",
-          render: (r) => `${currency}${fmtMoney(r.paid)}` },
+          render: (r) => `${fmtMoney(r.paid)} ${currency}` },
       ],
     },
     {
       title: "المصروفات", rows: report.rows.expenses,
-      count: `${currency}${fmtMoney(report.kpi.expenses)}`,
+      count: `${fmtMoney(report.kpi.expenses)} ${currency}`,
       columns: [
         { key: "ref", label: "المرجع" },
         { key: "date", label: "التاريخ", render: (r) => fmtDay(r.date) },
         { key: "desc", label: "البيان" },
         { key: "amount", label: "المبلغ", align: "left",
-          render: (r) => `${currency}${fmtMoney(r.amount)}` },
+          render: (r) => `${fmtMoney(r.amount)} ${currency}` },
       ],
     },
     {
@@ -95,7 +95,7 @@ function MasterReportPage({
         { key: "ref", label: "المرجع" },
         { key: "date", label: "التاريخ", render: (r) => fmtDay(r.date) },
         { key: "total", label: "المبلغ", align: "left",
-          render: (r) => `${currency}${fmtMoney(r.total)}` },
+          render: (r) => `${fmtMoney(r.total)} ${currency}` },
         { key: "reason", label: "السبب" },
       ],
     },
@@ -113,13 +113,13 @@ function MasterReportPage({
         : ["المؤشّر", "القيمة"],
       rows: KPI_DEFS.map((d) => {
         const v = report.kpi[d.key];
-        const s = d.unit === "money" ? `${currency}${fmtMoney(v)}`
+        const s = d.unit === "money" ? `${fmtMoney(v)} ${currency}`
           : d.unit === "weight" ? `${fmtW(v)} جم` : String(v);
         if (!compareOn) return [d.label, s];
         const c = diff[d.key];
-        const b = d.unit === "money" ? `${currency}${fmtMoney(c.before)}`
+        const b = d.unit === "money" ? `${fmtMoney(c.before)} ${currency}`
           : d.unit === "weight" ? `${fmtW(c.before)} جم` : String(c.before);
-        const df = d.unit === "money" ? `${currency}${fmtMoney(c.diff)}`
+        const df = d.unit === "money" ? `${fmtMoney(c.diff)} ${currency}`
           : d.unit === "weight" ? `${fmtW(c.diff)} جم` : String(c.diff);
         return [d.label, s, b, df, c.pct === null ? "—" : `${c.pct}٪`];
       }),
@@ -294,7 +294,7 @@ function MasterReportPage({
             <div>
               <p style={{ color: "var(--text3)", margin: 0 }} className="text-[10px]">النقد</p>
               <p style={{ color: "var(--text)", margin: 0 }} className="text-[15px] font-bold">
-                {currency}{fmtMoney(report.balanceNow.cash.total)}
+                {fmtMoney(report.balanceNow.cash.total)} {currency}
               </p>
               <p style={{ color: "var(--text3)", margin: 0 }} className="text-[9px] leading-5">
                 يومي {fmtMoney(report.balanceNow.cash.daily)} ·
@@ -332,8 +332,8 @@ function MasterReportPage({
           )}
 
           <p style={{ color: "var(--text3)" }} className="text-[10px] mt-2 leading-6">
-            ⚖ التقويم بسعر اليوم {currency}{fmtMoney(report.balanceNow.gold.valuedAt)}/جم24
-            = {currency}{fmtMoney(report.balanceNow.gold.value)} — مرجعٌ لا رصيد.
+            ⚖ التقويم بسعر اليوم {fmtMoney(report.balanceNow.gold.valuedAt)} {currency}/جم24
+            = {fmtMoney(report.balanceNow.gold.value)} {currency} — مرجعٌ لا رصيد.
             الوزن يبقى وزنًا ولا يُجمع مع النقد.
           </p>
         </Card>
@@ -362,7 +362,7 @@ function MasterReportPage({
                       {s.name}
                     </span>
                     <span style={{ color: "var(--accent)" }} className="text-[11px] font-bold">
-                      {currency}{fmtMoney(s.total)}
+                      {fmtMoney(s.total)} {currency}
                     </span>
                   </div>
                   <div style={{ height: 4, background: "var(--field)", borderRadius: 2,

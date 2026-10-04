@@ -87,7 +87,7 @@ function EInvoicePage({ currency = "ر.س", onOpenModules, onBack, flashToast })
                 <button onClick={() => setOpen(open === e.id ? null : e.id)} className="w-full text-right">
                   <div className="flex items-center justify-between">
                     <span style={{ color: "var(--text)" }} className="text-[12px] font-bold">#{e.icv} · {e.type === "381" ? "إشعار دائن" : "فاتورة"} {e.ref}</span>
-                    <span style={{ color: e.type === "381" ? "var(--bad)" : "var(--accent)" }} className="text-[12px] font-bold">{currency}{fmtMoney(e.total)}</span>
+                    <span style={{ color: e.type === "381" ? "var(--bad)" : "var(--accent)" }} className="text-[12px] font-bold">{fmtMoney(e.total)} {currency}</span>
                   </div>
                   <p style={{ color: "var(--text3)", margin: 0 }} className="text-[10px]">{new Date(e.docDate).toLocaleString("en-GB")} · ضريبة {fmtMoney(e.vat)} · {String(e.hash).slice(0, 16)}…</p>
                 </button>

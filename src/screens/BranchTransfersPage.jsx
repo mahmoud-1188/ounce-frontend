@@ -48,7 +48,7 @@ function BranchTransfersPage({ currency = "ر.س", canMove = false, isManager = 
   };
   const settle = async (t, decision) => {
     const q = decision === "write_off"
-      ? `تُقيَّد ${t.missing.length} قطعة عجزًا بتكلفتها ${currency}${fmtMoney(t.shortCost)} (عجز التحويل 5340)؟`
+      ? `تُقيَّد ${t.missing.length} قطعة عجزًا بتكلفتها ${fmtMoney(t.shortCost)} ${currency} (عجز التحويل 5340)؟`
       : `وُجدت ${t.missing.length} قطعة عندنا — تعود للرفّ؟`;
     if (!window.confirm(q)) return;
     setBusy(t.id); setMsg(null);
@@ -103,12 +103,12 @@ function BranchTransfersPage({ currency = "ر.س", canMove = false, isManager = 
                 <span className="text-[11px] font-bold" style={{ color: (ST[t.status] || ST.sent)[1] }}>{(ST[t.status] || ST.sent)[0]}</span>
               </div>
               <p className="text-[11px]" style={{ color: "var(--text2)", margin: "4px 0 0" }}>
-                {t.pieces} قطعة · {fmtW(t.totalWeight)} جم · بعيار 24: {fmtW(t.totalFine)} جم · التكلفة {currency}{fmtMoney(t.totalCost)}
+                {t.pieces} قطعة · {fmtW(t.totalWeight)} جم · بعيار 24: {fmtW(t.totalFine)} جم · التكلفة {fmtMoney(t.totalCost)} {currency}
               </p>
               <p className="text-[10px]" style={{ color: "var(--text3)", margin: "2px 0 0" }}>{t.lines.map((l) => l.code).join(" · ")}{t.note ? ` — ${t.note}` : ""}</p>
               {(t.missing || []).length > 0 && (
                 <p className="text-[11px]" style={{ color: "var(--bad)", margin: "4px 0 0" }}>
-                  ناقص {t.missing.length}: {t.missing.join(" · ")} · {currency}{fmtMoney(t.shortCost)}
+                  ناقص {t.missing.length}: {t.missing.join(" · ")} · {fmtMoney(t.shortCost)} {currency}
                   {t.shortDecision ? ` — ${t.shortDecision === "write_off" ? "قُيّد عجزًا" : "وُجد عند المرسِل"}` : ""}
                   {t.countedWeight != null ? ` · وزن العدّ ${fmtW(t.countedWeight)} جم` : ""}
                 </p>

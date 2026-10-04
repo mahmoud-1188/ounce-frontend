@@ -69,7 +69,7 @@ function SettleSupplierForm({ supplier, owed, scrapEntries, offices, currency, p
         <div className="flex items-center justify-between py-1">
           <span style={{ color: "var(--text2)" }} className="text-[11px]">أجور مستحقة</span>
           <span style={{ color: "var(--accent)" }} className="text-xs font-bold">
-            {currency}{fmtMoney(owed?.feesOwed || 0)}
+            {fmtMoney(owed?.feesOwed || 0)} {currency}
           </span>
         </div>
       </Card>
@@ -214,7 +214,7 @@ function SettleSupplierForm({ supplier, owed, scrapEntries, offices, currency, p
           <div className="flex items-center justify-between py-1">
             <span style={{ color: "var(--text2)" }} className="text-[11px]">المتبقي من الأجور</span>
             <span style={{ color: Math.abs(remainingFees) < 0.01 ? "var(--goodSolid)" : remainingFees > 0 ? "var(--accent)" : "var(--bad)" }} className="text-xs font-bold">
-              {Math.abs(remainingFees) < 0.01 ? "مسدَّدة" : `${currency}${fmtMoney(Math.abs(remainingFees))}${remainingFees < 0 ? " زائد" : ""}`}
+              {Math.abs(remainingFees) < 0.01 ? "مسدَّدة" : `${fmtMoney(Math.abs(remainingFees))} ${currency}${remainingFees < 0 ? " زائد" : ""}`}
             </span>
           </div>
         </Card>

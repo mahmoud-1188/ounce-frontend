@@ -25,7 +25,7 @@ function GoldPriceChart({ data = [], currency = "﷼", height = 200, karat = 24,
           <div className="gc-wait" style={{ width: 34, height: 34, margin: "0 auto 10px", borderRadius: "50%", border: "2px solid var(--edge)", borderTopColor: "var(--accent)" }} />
           {pts.length === 1 && (
             <p style={{ fontFamily: "'Cairo', sans-serif", color: "var(--accent)", margin: "0 0 4px" }} className="text-lg font-extrabold">
-              {currency}{fmt(pts[0])}
+              {fmt(pts[0])} {currency}
             </p>
           )}
           <p style={{ color: "var(--text2)", margin: 0 }} className="text-[11px]">

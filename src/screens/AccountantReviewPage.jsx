@@ -185,7 +185,7 @@ function AccountantReviewPage({ queue = [], reviews = [], audits = [], items = [
                       {REVIEW_VERDICTS[r.verdict]?.label || r.verdict}
                     </span>
                     <span style={{ color: "var(--text)" }} className="text-xs flex-1">{r.label} · <span style={{ color: "var(--accentText)", fontFamily: "monospace" }}>{r.targetRef}</span></span>
-                    {r.amount > 0 && <span style={{ color: "var(--text2)" }} className="text-[11px]">{currency}{fmtMoney(r.amount)}</span>}
+                    {r.amount > 0 && <span style={{ color: "var(--text2)" }} className="text-[11px]">{fmtMoney(r.amount)} {currency}</span>}
                   </div>
                   {r.note && <p style={{ color: "var(--text)" }} className="text-[11px] mt-1">{r.note}</p>}
                   <p style={{ color: "var(--text3)" }} className="text-[11px] mt-0.5">
@@ -275,7 +275,7 @@ function CompareTab({ journal = [], goldLedger = [], accounts = [], currency = "
     return { head, opex };
   }, [journal, goldLedger, accounts, from, to, prior?.from, prior?.to]);
   const cell = { padding: "5px 6px", fontSize: 11, borderBottom: "1px solid var(--line)", whiteSpace: "nowrap" };
-  const fmtV = (v, unit) => (unit === "weight" ? `${fmtW(v)} جم24` : `${currency}${fmtMoney(v)}`);
+  const fmtV = (v, unit) => (unit === "weight" ? `${fmtW(v)} جم24` : `${fmtMoney(v)} ${currency}`);
   const pctCell = (r) => (r.pct == null ? "جديد" : `${r.pct > 0 ? "▲" : r.pct < 0 ? "▼" : ""} ${Math.abs(r.pct)}٪`);
   const Table = ({ rows }) => (
     <div style={{ overflowX: "auto" }}>

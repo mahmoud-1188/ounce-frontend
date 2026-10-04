@@ -24,7 +24,7 @@ function VatReturnPage({ currency = "ر.س", onBack }) {
     setD(null); setErr(null);
     api.budgetsApi.vatReturn(from, to).then(setD).catch(() => setErr("تعذّر إعداد الإقرار"));
   }, [from, to]);
-  const m = (v) => `${currency}${fmtMoney(v)}`;
+  const m = (v) => `${fmtMoney(v)} ${currency}`;
   const Line = ({ n, l, base, vat, strong, tone }) => (
     <div className="flex items-center gap-2 py-2" style={{ borderBottom: "1px solid var(--line)" }}>
       <span className="text-[10px] font-bold w-5 text-center" style={{ color: "var(--text3)" }}>{n}</span>

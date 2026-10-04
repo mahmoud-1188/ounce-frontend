@@ -65,11 +65,11 @@ function TrustAccountsPage({
     const k = Number(mv.karat) || 21;
     if (mv.move === "buy_gold") {
       return { label: "يُخصم من رصيده",
-        value: `${currency}${fmtMoney(fine24(w, k) * price24)}` };
+        value: `${fmtMoney(fine24(w, k) * price24)} ${currency}` };
     }
     if (mv.move === "sell_gold") {
       return { label: "يُضاف لرصيده",
-        value: `${currency}${fmtMoney(fine24(w, k) * price24)}` };
+        value: `${fmtMoney(fine24(w, k) * price24)} ${currency}` };
     }
     if (needsGold && w > 0) {
       return { label: "بمعادل عيار 24", value: `${fmtW(fine24(w, k))} جم` };
@@ -112,7 +112,7 @@ function TrustAccountsPage({
             <div>
               <p style={{ color: "var(--text3)", margin: 0 }} className="text-[10px]">نقد لديك</p>
               <p style={{ color: "var(--bad)", margin: 0 }} className="text-[14px] font-bold">
-                {currency}{fmtMoney(totals.cash)}
+                {fmtMoney(totals.cash)} {currency}
               </p>
             </div>
             <div>
@@ -184,7 +184,7 @@ function TrustAccountsPage({
                         <div className="flex items-center gap-3 mt-1">
                           <span style={{ color: b.cash > 0 ? "var(--accent)" : "var(--text3)" }}
                             className="text-[11px] font-bold">
-                            {currency}{fmtMoney(b.cash)}
+                            {fmtMoney(b.cash)} {currency}
                           </span>
                           <span style={{ color: b.fine > 0 ? "var(--accent)" : "var(--text3)" }}
                             className="text-[11px] font-bold">
@@ -219,7 +219,7 @@ function TrustAccountsPage({
                                 }} className="text-[11px] font-bold">
                                   {r.weight > 0 ? `${fmtW(r.weight)} ع${r.karat}` : ""}
                                   {r.weight > 0 && r.amount > 0 ? " · " : ""}
-                                  {r.amount > 0 ? `${currency}${fmtMoney(r.amount)}` : ""}
+                                  {r.amount > 0 ? `${fmtMoney(r.amount)} ${currency}` : ""}
                                 </span>
                               </div>
                               {/* ⚠ السند لكل حركة لا للحساب كله.
@@ -270,7 +270,7 @@ function TrustAccountsPage({
                   const b = balances[h.id] || {};
                   return (
                     <option key={h.id} value={h.id}>
-                      {h.name} — {currency}{fmtMoney(b.cash || 0)} · {fmtW(b.fine || 0)} جم24
+                      {h.name} — {fmtMoney(b.cash || 0)} {currency} · {fmtW(b.fine || 0)} جم24
                     </option>
                   );
                 })}
@@ -339,7 +339,7 @@ function TrustAccountsPage({
                 </div>
                 {["buy_gold", "sell_gold"].includes(mv.move) && (
                   <p style={{ color: "var(--text3)" }} className="text-[10px] mt-1">
-                    ⚖ بسعر اليوم {currency}{fmtMoney(price24)}/جم24 — يُثبَّت في السطر
+                    ⚖ بسعر اليوم {fmtMoney(price24)} {currency}/جم24 — يُثبَّت في السطر
                     فلا يتغيّر الكشف غدًا.
                   </p>
                 )}

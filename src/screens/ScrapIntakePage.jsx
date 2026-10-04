@@ -143,14 +143,14 @@ function ScrapIntakePage({
           <div className="flex items-center justify-between">
             <span style={{ color: "var(--text2)" }} className="text-[11px]">عهدة الكسر المتاحة</span>
             <span style={{ color: enough ? "var(--goodSolid)" : "var(--bad)" }} className="text-xs font-bold">
-              {currency}{fmtMoney(custodyBalance)}
+              {fmtMoney(custodyBalance)} {currency}
             </span>
           </div>
           {grandTotal > 0 && (
             <div className="flex items-center justify-between mt-1" style={{ borderTop: "1px solid var(--line)", paddingTop: 6 }}>
               <span style={{ color: "var(--text2)" }} className="text-[11px]">إجمالي هذه الصفقة</span>
               <span style={{ color: enough ? "var(--accent)" : "var(--bad)" }} className="text-xs font-bold">
-                {currency}{fmt(grandTotal, 2)}
+                {fmt(grandTotal, 2)} {currency}
               </span>
             </div>
           )}
@@ -177,7 +177,7 @@ function ScrapIntakePage({
                   )}
                 </span>
                 <span style={{ color: "var(--text2)" }} className="text-[11px] whitespace-nowrap">
-                  {currency}{fmtMoney(b.total)}
+                  {fmtMoney(b.total)} {currency}
                 </span>
                 <button
                   onClick={() => setBasket((arr) => arr.filter((x) => x.key !== b.key))}
@@ -191,7 +191,7 @@ function ScrapIntakePage({
             <div className="flex items-center justify-between pt-2 mt-1" style={{ borderTop: "1px solid var(--line)" }}>
               <span style={{ color: "var(--text2)" }} className="text-[11px]">مجموع السلة</span>
               <span style={{ color: "var(--accent)" }} className="text-xs font-bold">
-                {currency}{fmt(basketTotal, 2)}
+                {fmt(basketTotal, 2)} {currency}
               </span>
             </div>
           </Card>
@@ -346,7 +346,7 @@ function ScrapIntakePage({
           <Card style={{ padding: 14, marginBottom: 12 }}>
             <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-1">③ التسعير</p>
             <p style={{ color: "var(--text2)" }} className="text-[11px] mb-3">
-              سعر السوق لعيار {karat}: {currency}{fmt(marketPerGram)} للجرام. الشراء عادةً بخصم يغطي
+              سعر السوق لعيار {karat}: {fmt(marketPerGram)} {currency} للجرام. الشراء عادةً بخصم يغطي
               التصفية والفاقد وهامشك.
             </p>
             <div className="grid grid-cols-2 gap-2">
@@ -396,10 +396,10 @@ function ScrapIntakePage({
             </div>
             <Card style={{ padding: 10, marginBottom: 12, background: "var(--bg)" }}>
               {[
-                ["سعر السوق للجرام", `${currency}${fmt(marketPerGram)}`, "var(--text2)"],
-                ["سعر الشراء المطبَّق", `${currency}${fmt(actualPerGram)}`, "var(--text)"],
-                ["الإجمالي المدفوع", `${currency}${fmt(total, 2)}`, "var(--accent)"],
-                ["الفرق لصالحك", `${currency}${fmt(marginVsMarket, 2)}`, marginVsMarket >= 0 ? "var(--goodSolid)" : "var(--bad)"],
+                ["سعر السوق للجرام", `${fmt(marketPerGram)} ${currency}`, "var(--text2)"],
+                ["سعر الشراء المطبَّق", `${fmt(actualPerGram)} ${currency}`, "var(--text)"],
+                ["الإجمالي المدفوع", `${fmt(total, 2)} ${currency}`, "var(--accent)"],
+                ["الفرق لصالحك", `${fmt(marginVsMarket, 2)} ${currency}`, marginVsMarket >= 0 ? "var(--goodSolid)" : "var(--bad)"],
               ].map(([l, v, c], i, arr) => (
                 <div key={i} className="flex items-center justify-between py-1"
                   style={{ borderBottom: i < arr.length - 1 ? "1px solid var(--line)" : "none" }}>
@@ -415,7 +415,7 @@ function ScrapIntakePage({
             )}
             {!enough && (
               <p style={{ color: "var(--bad)" }} className="text-[11px] mb-2">
-                عهدة الكسر {currency}{fmtMoney(custodyBalance)} لا تكفي — موّلها أولًا.
+                عهدة الكسر {fmtMoney(custodyBalance)} {currency} لا تكفي — موّلها أولًا.
               </p>
             )}
             <div className="grid grid-cols-2 gap-2">
@@ -465,7 +465,7 @@ function ScrapIntakePage({
                       {i + 1}. عيار {b.karat} · {fmtW(b.weight)} جم
                     </span>
                     <span style={{ color: "var(--text2)" }} className="text-[11px]">
-                      {currency}{fmtMoney(b.total)}
+                      {fmtMoney(b.total)} {currency}
                     </span>
                   </div>
                 ))}
@@ -475,14 +475,14 @@ function ScrapIntakePage({
                       {basket.length + 1}. عيار {karat} · {fmtW(netWeight)} جم (الحالية)
                     </span>
                     <span style={{ color: "var(--accent)" }} className="text-[11px]">
-                      {currency}{fmtMoney(total)}
+                      {fmtMoney(total)} {currency}
                     </span>
                   </div>
                 )}
                 <div className="flex items-center justify-between pt-1.5 mt-1" style={{ borderTop: "1px solid var(--line)" }}>
                   <span style={{ color: "var(--text)" }} className="text-xs font-bold">إجمالي الصفقة</span>
                   <span style={{ color: "var(--accent)" }} className="text-sm font-bold">
-                    {currency}{fmt(grandTotal, 2)}
+                    {fmt(grandTotal, 2)} {currency}
                   </span>
                 </div>
               </div>
@@ -493,8 +493,8 @@ function ScrapIntakePage({
               ["الوزن الصافي", `${fmtW(netWeight)} جم عيار ${karat}`],
               ["الذهب الصافي", `${fmtW(fineWeight)} جم عيار 24`],
               ["طريقة الفحص", KARAT_METHODS.find((m) => m.id === karatMethod)?.label || ""],
-              ["سعر الجرام", `${currency}${fmt(actualPerGram)}`],
-              ["الإجمالي المدفوع", `${currency}${fmt(total, 2)}`],
+              ["سعر الجرام", `${fmt(actualPerGram)} ${currency}`],
+              ["الإجمالي المدفوع", `${fmt(total, 2)} ${currency}`],
             ].map(([l, v], i, arr) => (
               <div key={i} className="flex items-center justify-between py-1.5"
                 style={{ borderBottom: i < arr.length - 1 ? "1px solid var(--line)" : "none" }}>
@@ -613,7 +613,7 @@ function ScrapIntakePage({
                     </span>
                   </div>
                   <p style={{ color: "var(--text3)" }} className="text-[10px] mt-0.5">
-                    {e.ref} · {currency}{fmtMoney(e.total || 0)}
+                    {e.ref} · {fmtMoney(e.total || 0)} {currency}
                     {e.karatMethod ? ` · ${KARAT_METHODS.find((m) => m.id === e.karatMethod)?.label || ""}` : ""}
                     {e.stonesMargin > 0 ? ` · فصوص ${fmtW(e.stonesMargin)} جم` : ""}
                   </p>

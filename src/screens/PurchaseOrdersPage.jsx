@@ -22,7 +22,7 @@ function PurchaseOrdersPage({ suppliers = [], currency = "ر.س", onReceived, on
   const [msg, setMsg] = useState(null);
   const load = () => api.modulesApi.purchaseOrders().then((d) => setOrders(d.orders)).catch(() => setOrders([]));
   useEffect(() => { load(); }, []);
-  const m = (v) => `${currency}${fmtMoney(v)}`;
+  const m = (v) => `${fmtMoney(v)} ${currency}`;
   const err = (e) => (e?.body?.error === "module_off" ? "الوحدة مطفأة — فعّلها من «الوحدات الاختيارية»" : e?.body?.error === "insufficient_safe_balance" ? "رصيد الخزنة لا يكفي" : "تعذّر التنفيذ");
   const create = async () => {
     setBusy(true); setMsg(null);

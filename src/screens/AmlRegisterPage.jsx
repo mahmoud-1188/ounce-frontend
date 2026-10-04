@@ -8,7 +8,7 @@ import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 function AmlRegisterPage({ currency = "ر.س", onBack }) {
   const [d, setD] = useState(null);
   useEffect(() => { api.modulesApi.amlRegister().then(setD).catch(() => setD({ on: false, rows: [] })); }, []);
-  const m = (v) => `${currency}${fmtMoney(v)}`;
+  const m = (v) => `${fmtMoney(v)} ${currency}`;
   return (
     <div className="pb-24">
       <SubPageHeader title="سجلّ مكافحة غسل الأموال" onBack={onBack} />

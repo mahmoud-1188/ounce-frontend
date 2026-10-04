@@ -60,11 +60,11 @@ ${logo}
 <div class="meta">${L("رقم", "No.")} ${esc(sale.ref)} · ${esc(new Date(sale.date).toLocaleString("en-GB"))}${sale.customerName ? ` · ${L("العميل", "Customer")}: ${esc(sale.customerName)}` : ""}</div>
 <table><thead><tr><th class="r">${L("الصنف", "Item")}</th><th>${L("العيار", "Karat")}</th><th>${L("الوزن", "Wt")}</th><th>${L("الكمّية", "Qty")}</th><th>${L("المبلغ", "Amount")}</th></tr></thead><tbody>${rows}</tbody></table>
 <div class="tot">
-  ${taxed ? `<div><span>${L("الإجمالي قبل الضريبة", "Total excl. VAT")}</span><span>${cur}${money(sale.netAmount)}</span></div>
-  <div><span>${L("ضريبة القيمة المضافة", "VAT")} ${fmt((Number(sale.taxRate) || 0) * 100, 0)}٪</span><span>${cur}${money(sale.taxAmount)}</span></div>` : ""}
-  ${Number(sale.depositApplied) > 0 ? `<div><span>${L("عربونٌ مقبوض سلفًا", "Deposit applied")}</span><span>${cur}${money(sale.depositApplied)}</span></div>` : ""}
-  ${Number(sale.giftPart) > 0 ? `<div><span>${L("مدفوعٌ ببطاقة هدية", "Paid by gift card")}</span><span>${cur}${money(sale.giftPart)}</span></div>` : ""}
-  <div class="g"><span>${L("الإجمالي", "Total")}${taxed ? ` ${L("شامل الضريبة", "incl. VAT")}` : ""}</span><span>${cur}${money(sale.total)}</span></div>
+  ${taxed ? `<div><span>${L("الإجمالي قبل الضريبة", "Total excl. VAT")}</span><span>${money(sale.netAmount)} ${cur}</span></div>
+  <div><span>${L("ضريبة القيمة المضافة", "VAT")} ${fmt((Number(sale.taxRate) || 0) * 100, 0)}٪</span><span>${money(sale.taxAmount)} ${cur}</span></div>` : ""}
+  ${Number(sale.depositApplied) > 0 ? `<div><span>${L("عربونٌ مقبوض سلفًا", "Deposit applied")}</span><span>${money(sale.depositApplied)} ${cur}</span></div>` : ""}
+  ${Number(sale.giftPart) > 0 ? `<div><span>${L("مدفوعٌ ببطاقة هدية", "Paid by gift card")}</span><span>${money(sale.giftPart)} ${cur}</span></div>` : ""}
+  <div class="g"><span>${L("الإجمالي", "Total")}${taxed ? ` ${L("شامل الضريبة", "incl. VAT")}` : ""}</span><span>${money(sale.total)} ${cur}</span></div>
   <div><span>${L("الدفع", "Payment")}</span><span>${pay}</span></div>
 </div>
 ${qr ? `<div class="qr">${qrSvg(qr, thermal ? 120 : 140)}</div>` : ""}

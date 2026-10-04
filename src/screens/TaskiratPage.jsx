@@ -30,7 +30,7 @@ function TaskiratPage({ taskirEntries, totals, suppliers, offices, officeStats, 
         <div className="grid grid-cols-3 gap-2 mb-4">
           <Stat label="عدد العمليات" value={totals.count} />
           <Stat label="إجمالي الذهب" value={`${fmtW(totals.weight)} جم`} />
-          <Stat label="إجمالي الأجور" value={`${currency}${fmt(totals.workmanship, 0)}`} />
+          <Stat label="إجمالي الأجور" value={`${fmt(totals.workmanship, 0)} ${currency}`} />
         </div>
 
         {offices.length > 0 && (
@@ -125,7 +125,7 @@ function TaskiratPage({ taskirEntries, totals, suppliers, offices, officeStats, 
                       {o.ref && <span style={{ color: "var(--text3)" }} className="text-[10px] mr-1">{o.ref}</span>}
                     </span>
                     <span style={{ color: "var(--accent)" }} className="text-xs font-bold">
-                      {st ? `${fmtW(st.weight)} جم · ${currency}${fmt(st.amount, 0)}` : "لا حركات"}
+                      {st ? `${fmtW(st.weight)} جم · ${fmt(st.amount, 0)} ${currency}` : "لا حركات"}
                     </span>
                   </div>
                   {(o.phone || o.address) && (
@@ -170,7 +170,7 @@ function TaskiratPage({ taskirEntries, totals, suppliers, offices, officeStats, 
                 </div>
                 <p style={{ color: "var(--text2)" }} className="text-xs mt-1">
                   عيار {t.karat} · {fmtW(t.weight)} جم · {t.goldSource === "purchased" ? `شراء من: ${officeName(t.officeId)}` : "من الكسر"}
-                  {t.goldCost > 0 ? ` (${currency}${fmt(t.goldCost, 0)})` : ""}
+                  {t.goldCost > 0 ? ` (${fmt(t.goldCost, 0)} ${currency})` : ""}
                 </p>
                 <p style={{ color: "var(--text3)" }} className="text-[11px] mt-0.5">
                   أجور/مصنعية: {currency}

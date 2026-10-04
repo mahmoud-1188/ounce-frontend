@@ -45,7 +45,7 @@ function SaleDraftsPage({ drafts = [], items = [], currency = "ر.س", shopName 
               {d.kind === "quote" ? "عرض سعر" : "معلّقة"} {d.ref}{d.customerName ? ` · ${d.customerName}` : ""}
             </p>
             <p style={{ color: "var(--text3)", margin: 0 }} className="text-[11px]">
-              {lines.length} سطر · {currency}{fmtMoney(d.total)} · {d.createdByName || ""} · {new Date(d.createdAt).toLocaleString("en-GB")}
+              {lines.length} سطر · {fmtMoney(d.total)} {currency} · {d.createdByName || ""} · {new Date(d.createdAt).toLocaleString("en-GB")}
               {d.validUntil ? ` · صالحٌ حتى ${d.validUntil}` : ""}
             </p>
             {gone > 0 && <p style={{ color: "var(--warn, var(--accent))", margin: 0 }} className="text-[11px]">⚠ {gone} قطعة بيعت أو خرجت منذ الحفظ — تسقط عند الاستئناف</p>}

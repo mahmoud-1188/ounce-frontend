@@ -30,7 +30,7 @@ function SaleDetailModal({ sale, currency, returns = [], items = [], lots = [], 
       <Card style={{ padding: 12, marginBottom: 12 }}>
         <div className="flex items-center justify-between mb-1">
           <span style={{ color: "var(--accent)", fontFamily: "'Cairo', sans-serif" }} className="text-lg font-extrabold">
-            {currency}{fmt(sale.total, 2)}
+            {fmt(sale.total, 2)} {currency}
           </span>
           <span className="text-[10px] px-2 py-0.5 rounded-full"
             style={{ background: "var(--panel)", color: "var(--text2)", border: "1px solid var(--line)" }}>
@@ -45,7 +45,7 @@ function SaleDetailModal({ sale, currency, returns = [], items = [], lots = [], 
         </p>
         {sale.taxAmount > 0 && (
           <p style={{ color: "var(--text3)" }} className="text-[10px] mt-0.5">
-            شامل ضريبة {currency}{fmt(sale.taxAmount, 2)}
+            شامل ضريبة {fmt(sale.taxAmount, 2)} {currency}
           </p>
         )}
       </Card>
@@ -71,7 +71,7 @@ function SaleDetailModal({ sale, currency, returns = [], items = [], lots = [], 
                   </span>
                 ) : (
                   <span style={{ color: "var(--text2)" }} className="text-[11px] whitespace-nowrap">
-                    {currency}{fmt((Number(l.unitPrice) || 0) * (Number(l.quantity) || 1), 2)}
+                    {fmt((Number(l.unitPrice) || 0) * (Number(l.quantity) || 1), 2)} {currency}
                   </span>
                 )}
               </div>
@@ -84,8 +84,8 @@ function SaleDetailModal({ sale, currency, returns = [], items = [], lots = [], 
                   {pv.purchasedAt ? ` · اشتُريت ${new Date(pv.purchasedAt).toLocaleDateString("en-GB")}` : ""}
                 </p>
                 <p style={{ color: "var(--text3)", margin: 0 }} className="text-[10px]">
-                  سعر جم24 وقت الشراء: <span style={{ color: "var(--text2)" }}>{pv.buyPrice24 > 0 ? `${currency}${fmt(pv.buyPrice24, 2)}` : "—"}</span>
-                  {" · "}وقت البيع: <span style={{ color: "var(--text2)" }}>{pv.sellPrice24 > 0 ? `${currency}${fmt(pv.sellPrice24, 2)}` : "—"}</span>
+                  سعر جم24 وقت الشراء: <span style={{ color: "var(--text2)" }}>{pv.buyPrice24 > 0 ? `${fmt(pv.buyPrice24, 2)} ${currency}` : "—"}</span>
+                  {" · "}وقت البيع: <span style={{ color: "var(--text2)" }}>{pv.sellPrice24 > 0 ? `${fmt(pv.sellPrice24, 2)} ${currency}` : "—"}</span>
                   {pv.metalMove != null && (
                     <span style={{ color: pv.metalMove >= 0 ? "var(--good)" : "var(--bad)" }}>
                       {" "}({pv.metalMove >= 0 ? "+" : ""}{fmt(pv.metalMove, 2)})

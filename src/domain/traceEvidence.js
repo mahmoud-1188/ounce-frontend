@@ -7,7 +7,7 @@ function traceEvidence(topicId, M, ctx) {
   const add = (title, items) => {
     if (items && items.length) out.push({ title, items });
   };
-  const money = (v) => `${cur}${fmt(v, 0)}`;
+  const money = (v) => `${fmt(v, 0)} ${cur}`;
 
   if (topicId === "cash") {
     // فجوات المطابقة أولًا — هي التفسير المباشر لأي نقص
