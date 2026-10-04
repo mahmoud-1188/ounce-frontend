@@ -16,7 +16,7 @@ function IfrsBridgeCard({ price24 = 0, currency = "ر.س" }) {
   const [bridge, setBridge] = useState(null);
   const [measure, setMeasure] = useState(null);
   const [err, setErr] = useState("");
-  const m = (v) => `${currency}${fmtMoney(v)}`;
+  const m = (v) => `${fmtMoney(v)} ${currency}`;
 
   useEffect(() => {
     let live = true;

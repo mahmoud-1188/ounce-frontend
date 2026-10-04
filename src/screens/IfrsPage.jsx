@@ -8,7 +8,7 @@ import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 /// المعايير الدولية (IFRS) — الامتثال · القوائم بتصنيف IAS 1 · السياسات (المرجع 5.2.0 · قراءةٌ من الدفتر)
 function IfrsPage({ journal = [], fixedAssets = [], currency = "ر.س", periodStart = null, price24 = 0, onBack }) {
   const [tab, setTab] = useState("status");
-  const m = (v) => `${currency}${fmtMoney(v)}`;
+  const m = (v) => `${fmtMoney(v)} ${currency}`;
   const nowIso = useMemo(() => new Date().toISOString(), [journal]);
   const st = useMemo(() => buildIfrsStatements({ journal, from: periodStart, to: nowIso }), [journal, periodStart, nowIso]);
   const checks = useMemo(() => ifrsChecks({ journal, statements: st, fixedAssets }), [journal, st, fixedAssets]);

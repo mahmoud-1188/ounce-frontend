@@ -88,7 +88,7 @@ function OpeningComparePage({
             <div key={i}>
               <p style={{ color: "var(--text3)", margin: 0 }} className="text-[10px]">{t}</p>
               <p style={{ color: "var(--text)", margin: 0 }} className="text-[13px] font-bold">
-                {unit === "money" ? `${currency}${fmtMoney(v)}` : `${fmtW(v)} جم`}
+                {unit === "money" ? `${fmtMoney(v)} ${currency}` : `${fmtW(v)} جم`}
               </p>
             </div>
           ))}
@@ -99,7 +99,7 @@ function OpeningComparePage({
               className="text-[13px] font-bold"
             >
               {flat ? "—" : `${up ? "↑" : "↓"} ${unit === "money"
-                ? `${currency}${fmtMoney(Math.abs(diff))}`
+                ? `${fmtMoney(Math.abs(diff))} ${currency}`
                 : `${fmtW(Math.abs(diff))}`}`}
             </p>
             {pct !== null && !flat && (
@@ -166,7 +166,7 @@ function OpeningComparePage({
               مبيعات آجلة لم تُحصَّل
             </span>
             <span style={{ color: "var(--accent)" }} className="text-[12px] font-bold">
-              {currency}{fmtMoney(cmp.dueCash)}
+              {fmtMoney(cmp.dueCash)} {currency}
             </span>
           </div>
           <p style={{ color: "var(--text3)" }} className="text-[10px] mt-1.5">

@@ -89,7 +89,7 @@ function AssetForm({ currency, onCancel, onSave }) {
       {valid && (
         <Card style={{ padding: 10, background: "var(--field)", marginBottom: 8 }}>
           <p style={{ color: "var(--text3)", margin: 0 }} className="text-[10px]">الإهلاك الشهري الأول</p>
-          <p style={{ color: "var(--accent)", margin: 0 }} className="text-[13px] font-bold">{currency}{fmtMoney(monthly)} × {years * 12} شهر</p>
+          <p style={{ color: "var(--accent)", margin: 0 }} className="text-[13px] font-bold">{fmtMoney(monthly)} {currency} × {years * 12} شهر</p>
         </Card>
       )}
       {error && <p style={{ color: "var(--bad)" }} className="text-[11px] mb-2">{error}</p>}

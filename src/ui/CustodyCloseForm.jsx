@@ -45,7 +45,7 @@ function CustodyCloseForm({ expectedCash, expectedNetwork, currency, onCancel, o
               الفرق
             </span>
             <span style={{ color: matched ? "var(--goodSolid)" : total > 0 ? "var(--accent)" : "var(--bad)" }} className="text-sm font-bold">
-              {matched ? "مطابق تمامًا" : `${total > 0 ? "زيادة" : "عجز"} ${currency}${fmtMoney(Math.abs(total))}`}
+              {matched ? "مطابق تمامًا" : `${total > 0 ? "زيادة" : "عجز"} ${fmtMoney(Math.abs(total))} ${currency}`}
             </span>
           </div>
         )}

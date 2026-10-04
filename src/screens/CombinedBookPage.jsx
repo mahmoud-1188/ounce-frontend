@@ -18,7 +18,7 @@ function CombinedBookPage({ goldPosition, journal = [], price24 = 0, currency = 
   const b = useMemo(() => buildCombinedBook({ goldPosition, journal, price24, from: from ? from.toISOString() : null, to: now.toISOString() }),
     [goldPosition, journal, price24, period]); // eslint-disable-line react-hooks/exhaustive-deps
   const g = (fine) => `${fmtW(toK(fine))} جم${KB}`;
-  const sar = (v) => `${currency}${fmtMoney(v)}`;
+  const sar = (v) => `${fmtMoney(v)} ${currency}`;
   const sign = (x) => (x > 0 ? "+" : x < 0 ? "−" : "");
   const Row = ({ l, a, bb, strong, color }) => (
     <div className="flex justify-between gap-2 py-1.5 text-[12px]" style={{ borderTop: "1px solid var(--line)", color: color || (strong ? "var(--text)" : "var(--text2)"), fontWeight: strong ? 800 : 500 }}>

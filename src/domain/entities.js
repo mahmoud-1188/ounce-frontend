@@ -31,7 +31,7 @@ const ENTITY_KINDS = {
     label: "فاتورة",
     icon: Receipt,
     title: (r) => r.ref || "—",
-    subtitle: (r, ctx) => `${(r.lines || []).length} سطرًا · ${ctx.currency}${fmtMoney(r.total)}`,
+    subtitle: (r, ctx) => `${(r.lines || []).length} سطرًا · ${fmtMoney(r.total)} ${ctx.currency}`,
     tabs: ["info", "actions"],
   },
   scrap: {

@@ -27,7 +27,7 @@ function ApprovalsPage({ approvals = [], currency, canDecide = false, settings =
   const list = tab === "pending" ? pending : done;
   const kindRules = APPROVAL_RULES.filter((r) => LIVE_KINDS.includes(r.id))
     .map((r) => ({ ...r, th: settings.approvalThresholds?.[r.id] ?? r.threshold }));
-  const P = (v) => `${currency}${fmtMoney(v || 0)}`;
+  const P = (v) => `${fmtMoney(v || 0)} ${currency}`;
   const describe = (a) => {
     const p = a.payload || {};
     if (a.kind === "expense") return `${p.name || p.category || "مصروف"} · من ${p.fundingSource || "الصندوق"}`;

@@ -272,7 +272,7 @@ function PayrollPage({ currency = "ر.س", safeBalance = {}, canManage, onBack, 
                 {[["الإجمالي", totals.gross], ["صافي الصرف", totals.net], ["التأمينات", totals.gosi], ["تكلفة المنشأة", totals.cost]].map(([l, v]) => (
                   <div key={l}>
                     <p style={{ color: "var(--text3)", margin: 0 }} className="text-[10px]">{l}</p>
-                    <p style={{ color: l === "تكلفة المنشأة" ? "var(--accent)" : "var(--text)", margin: 0 }} className="text-[14px] font-bold">{currency}{fmtMoney(v)}</p>
+                    <p style={{ color: l === "تكلفة المنشأة" ? "var(--accent)" : "var(--text)", margin: 0 }} className="text-[14px] font-bold">{fmtMoney(v)} {currency}</p>
                   </div>
                 ))}
               </div>
@@ -311,7 +311,7 @@ function PayrollPage({ currency = "ر.س", safeBalance = {}, canManage, onBack, 
                     </div>
                     <div className="flex items-baseline justify-between mt-1.5 pt-1.5" style={{ borderTop: "1px solid var(--line)" }}>
                       <span style={{ color: "var(--text3)" }} className="text-[10px]">الصافي</span>
-                      <span style={{ color: "var(--accent)" }} className="text-[14px] font-bold">{currency}{fmtMoney(s.net)}</span>
+                      <span style={{ color: "var(--accent)" }} className="text-[14px] font-bold">{fmtMoney(s.net)} {currency}</span>
                     </div>
                     {run && !s.paidAt && canManage && s.net > 0 && (
                       <div className="flex gap-1.5 mt-2">
@@ -391,15 +391,15 @@ function PayrollPage({ currency = "ر.س", safeBalance = {}, canManage, onBack, 
               <Card style={{ padding: 12 }}>
                 <div className="flex items-baseline justify-between py-1.5" style={{ borderBottom: "1px solid var(--line)" }}>
                   <span style={{ color: "var(--text3)" }} className="text-[11px]">حصة الموظفين</span>
-                  <span style={{ color: "var(--text)" }} className="text-[12px] font-bold">{currency}{fmtMoney(runLines.reduce((a, l) => a + Number(l.gosi_employee), 0))}</span>
+                  <span style={{ color: "var(--text)" }} className="text-[12px] font-bold">{fmtMoney(runLines.reduce((a, l) => a + Number(l.gosi_employee), 0))} {currency}</span>
                 </div>
                 <div className="flex items-baseline justify-between py-1.5" style={{ borderBottom: "1px solid var(--line)" }}>
                   <span style={{ color: "var(--text3)" }} className="text-[11px]">حصة المنشأة</span>
-                  <span style={{ color: "var(--text)" }} className="text-[12px] font-bold">{currency}{fmtMoney(runLines.reduce((a, l) => a + Number(l.gosi_employer), 0))}</span>
+                  <span style={{ color: "var(--text)" }} className="text-[12px] font-bold">{fmtMoney(runLines.reduce((a, l) => a + Number(l.gosi_employer), 0))} {currency}</span>
                 </div>
                 <div className="flex items-baseline justify-between py-1.5">
                   <span style={{ color: "var(--accent)" }} className="text-[11px] font-bold">المستحق للتأمينات</span>
-                  <span style={{ color: "var(--accent)" }} className="text-[15px] font-bold">{currency}{fmtMoney(Number(run.gosi_due))}</span>
+                  <span style={{ color: "var(--accent)" }} className="text-[15px] font-bold">{fmtMoney(Number(run.gosi_due))} {currency}</span>
                 </div>
                 {run.gosi_paid_at ? (
                   <p style={{ color: "var(--good)" }} className="text-[11px] mt-2">✓ سُدّدت</p>
@@ -442,7 +442,7 @@ function PayrollPage({ currency = "ر.س", safeBalance = {}, canManage, onBack, 
               <Card style={{ padding: 10, background: "var(--field)", marginBottom: 8 }}>
                 {[["تاريخ التعيين", eosEmp.hire_date ? new Date(eosEmp.hire_date).toLocaleDateString("en-GB") : "غير مسجّل"],
                   ["مدة الخدمة", `${eosPreview.years} سنة`], ["الأساس", eosPreview.basis],
-                  ["المستحق", `${currency}${fmtMoney(eosPreview.due)}`]].map(([l, v]) => (
+                  ["المستحق", `${fmtMoney(eosPreview.due)} ${currency}`]].map(([l, v]) => (
                   <div key={l} className="flex items-baseline justify-between py-1">
                     <span style={{ color: "var(--text3)" }} className="text-[10px]">{l}</span>
                     <span style={{ color: l === "المستحق" ? "var(--accent)" : "var(--text)" }} className="text-[12px] font-bold">{v}</span>

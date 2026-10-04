@@ -32,7 +32,7 @@ function DisposeForm({ asset, status, currency, onCancel, onConfirm }) {
         {[["التكلفة", status.cost], ["مجمّع الإهلاك", status.accumulated], ["القيمة الدفترية", status.bookValue]].map(([l, v]) => (
           <div key={l} className="flex items-baseline justify-between py-1">
             <span style={{ color: "var(--text3)" }} className="text-[10px]">{l}</span>
-            <span style={{ color: "var(--text)" }} className="text-[12px] font-bold">{currency}{fmtMoney(v)}</span>
+            <span style={{ color: "var(--text)" }} className="text-[12px] font-bold">{fmtMoney(v)} {currency}</span>
           </div>
         ))}
       </Card>
@@ -56,7 +56,7 @@ function DisposeForm({ asset, status, currency, onCancel, onConfirm }) {
       <Card style={{ padding: 10, marginBottom: 8, border: `1px solid ${gain >= 0 ? "var(--goodLine)" : "var(--badLine)"}` }}>
         <p style={{ color: "var(--text3)", margin: 0 }} className="text-[10px]">النتيجة</p>
         <p style={{ color: gain >= 0 ? "var(--good)" : "var(--bad)", margin: 0 }} className="text-[14px] font-bold">
-          {gain >= 0 ? "ربح " : "خسارة "}{currency}{fmtMoney(Math.abs(gain))}
+          {gain >= 0 ? "ربح " : "خسارة "}{fmtMoney(Math.abs(gain))} {currency}
         </p>
         <p style={{ color: "var(--text3)", margin: "2px 0 0" }} className="text-[10px]">المتحصّل {fmtMoney(cash)} − القيمة الدفترية {fmtMoney(status.bookValue)}</p>
       </Card>

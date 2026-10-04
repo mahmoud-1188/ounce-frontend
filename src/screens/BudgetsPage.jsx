@@ -20,7 +20,7 @@ function BudgetsPage({ currency = "ر.س", canEdit = false, onBack }) {
   const [showAll, setShowAll] = useState(false);
   const load = (p = period) => { setData(null); api.budgetsApi.get(p).then((d) => { setData(d); setDraft({}); }).catch(() => setData({ rows: [], totals: {} })); };
   useEffect(() => { load(period); }, [period]);
-  const m = (v) => `${currency}${fmtMoney(v)}`;
+  const m = (v) => `${fmtMoney(v)} ${currency}`;
   const dirty = Object.keys(draft).length > 0;
   const save = async () => {
     setBusy(true); setMsg(null);

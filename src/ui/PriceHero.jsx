@@ -135,7 +135,7 @@ function PriceHero({ chartData = [], price, prevPrice, currency, updatedAt, kara
         {/* ⚖ سعر العمل = العالمي + زيادة الإدارة — يُعرض التركيب لا الرقم وحده */}
         {markup && Number(markup.value) > 0 && Number(world24) > 0 && (
           <p style={{ color: "var(--text3)", margin: "4px 0 0" }} className="text-[11px]">
-            عالمي {currency}{fmt(world24)} + زيادة الإدارة {markupLabel(markup)} = <span style={{ color: "var(--accent)" }}>{currency}{fmt(price)}</span>
+            عالمي {fmt(world24)} {currency} + زيادة الإدارة {markupLabel(markup)} = <span style={{ color: "var(--accent)" }}>{fmt(price)} {currency}</span>
           </p>
         )}
       </div>

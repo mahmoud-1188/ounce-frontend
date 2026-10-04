@@ -56,7 +56,7 @@ function FiscalClosePage({
           </div>
           <div className="grid grid-cols-2 gap-3 mb-4">
             <Stat label="عدد الفواتير" value={c.periodSalesCount} />
-            <Stat label="المصروفات" value={`${currency}${fmt(c.periodExpensesTotal, 0)}`} />
+            <Stat label="المصروفات" value={`${fmt(c.periodExpensesTotal, 0)} ${currency}`} />
           </div>
           <p style={{ color: "var(--text2)" }} className="text-xs mb-2">
             الأرصدة عند الإقفال

@@ -125,7 +125,7 @@ function ScrapCustodyPage({
                   المدفوع فيها
                 </span>
                 <span style={{ color: "var(--bad)" }} className="text-[12px] font-bold">
-                  {currency}{fmtMoney(waiting.reduce((a, x) => a + (Number(x.total) || 0), 0))}
+                  {fmtMoney(waiting.reduce((a, x) => a + (Number(x.total) || 0), 0))} {currency}
                 </span>
               </div>
               <div className="flex items-baseline justify-between">
@@ -185,7 +185,7 @@ function ScrapCustodyPage({
                         عيار {e.karat}
                       </span>
                       <span style={{ color: "var(--text2)" }} className="text-[11px]">
-                        {currency}{fmtMoney(e.total)}
+                        {fmtMoney(e.total)} {currency}
                       </span>
                     </div>
 
@@ -255,7 +255,7 @@ function ScrapCustodyPage({
                             ? "ذهبٌ زائد عمّا حُوسب عليه العميل — يدخل مخزونك إيرادًا."
                             : "ذهبٌ ناقص عمّا دُفع ثمنه — يُحمَّل تكلفةً على الشهر."}
                           {" "}
-                          {currency}{fmtMoney(fine24(Math.abs(varc), e.karat) * (price24 || 0))}
+                          {fmtMoney(fine24(Math.abs(varc), e.karat) * (price24 || 0))} {currency}
                         </p>
                       </div>
                     )}

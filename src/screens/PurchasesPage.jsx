@@ -110,8 +110,8 @@ function PurchasesPage({ totals, lots, suppliers, scrapEntries, taskirEntries, e
         </Card>
 
         <div className="grid grid-cols-2 gap-3 mb-4">
-          <Stat label="مشتريات غير ذهبية" value={`${currency}${fmt(t.nonGold, 0)}`} accent="var(--bad)" />
-          <Stat label="إجمالي كل المشتريات" value={`${currency}${fmt(t.grandTotal, 0)}`} />
+          <Stat label="مشتريات غير ذهبية" value={`${fmt(t.nonGold, 0)} ${currency}`} accent="var(--bad)" />
+          <Stat label="إجمالي كل المشتريات" value={`${fmt(t.grandTotal, 0)} ${currency}`} />
         </div>
 
         <div className="grid grid-cols-3 gap-2 mb-4">
@@ -185,9 +185,9 @@ function PurchasesPage({ totals, lots, suppliers, scrapEntries, taskirEntries, e
                     الفرق بين وزن الدفعات المشتراة وما دخل المخزون فعلًا. يُسجَّل عند إقفال الدفعة.
                   </p>
                   <Row label="هالك — الوزن" value={`${fmtW(wW)} جم (${fmt(wF)} بعيار 24)`} accent="var(--bad)" />
-                  <Row label="هالك — القيمة" value={`${currency}${fmt(wV, 0)}`} accent="var(--bad)" />
+                  <Row label="هالك — القيمة" value={`${fmt(wV, 0)} ${currency}`} accent="var(--bad)" />
                   <Row label="فائض — الوزن" value={`${fmtW(sW)} جم (${fmt(sF)} بعيار 24)`} accent="var(--goodSolid)" />
-                  <Row label="فائض — القيمة" value={`${currency}${fmt(sV, 0)}`} accent="var(--goodSolid)" />
+                  <Row label="فائض — القيمة" value={`${fmt(sV, 0)} ${currency}`} accent="var(--goodSolid)" />
                   <Row label="الصافي" value={`${fmtW(wW - sW)} جم`} accent={wW - sW > 0 ? "var(--bad)" : "var(--goodSolid)"} />
                 </Card>
 
@@ -221,7 +221,7 @@ function PurchasesPage({ totals, lots, suppliers, scrapEntries, taskirEntries, e
                           {a.lotRef ? ` · ${a.lotRef}` : ""} · مشترى {fmt(a.purchasedWeight)} / مُدخل {fmt(a.enteredWeight)}
                         </p>
                         <p style={{ color: "var(--text2)" }} className="text-[11px] mt-0.5">
-                          {currency}{fmt(a.value, 0)} · {fmtW(a.fineWeight)} جم عيار 24 · {new Date(a.date).toLocaleDateString("en-GB")}
+                          {fmt(a.value, 0)} {currency} · {fmtW(a.fineWeight)} جم عيار 24 · {new Date(a.date).toLocaleDateString("en-GB")}
                           {a.createdBy ? ` · ${a.createdBy}` : ""}
                         </p>
                       </Card>
@@ -237,12 +237,12 @@ function PurchasesPage({ totals, lots, suppliers, scrapEntries, taskirEntries, e
               <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">
                 تفصيل تكلفة الذهب
               </p>
-              <Row label={`ذهب من الموردين (${t.supplierCount} دفعة)`} value={`${currency}${fmt(t.supplierGold, 0)}`} indent />
-              <Row label="أجور ومصنعية الموردين" value={`${currency}${fmt(t.supplierWorkmanship, 0)}`} indent />
-              <Row label={`شراء كسر (${t.scrapCount} عملية)`} value={`${currency}${fmt(t.scrapCost, 0)}`} indent />
-              <Row label="شراء ذهب خام للتسكير" value={`${currency}${fmt(t.bullionCost, 0)}`} indent />
-              <Row label="أجور التسكير" value={`${currency}${fmt(t.taskirWorkmanship, 0)}`} indent />
-              <Row label="الإجمالي" value={`${currency}${fmt(t.goldTotal, 0)}`} accent="var(--accent)" />
+              <Row label={`ذهب من الموردين (${t.supplierCount} دفعة)`} value={`${fmt(t.supplierGold, 0)} ${currency}`} indent />
+              <Row label="أجور ومصنعية الموردين" value={`${fmt(t.supplierWorkmanship, 0)} ${currency}`} indent />
+              <Row label={`شراء كسر (${t.scrapCount} عملية)`} value={`${fmt(t.scrapCost, 0)} ${currency}`} indent />
+              <Row label="شراء ذهب خام للتسكير" value={`${fmt(t.bullionCost, 0)} ${currency}`} indent />
+              <Row label="أجور التسكير" value={`${fmt(t.taskirWorkmanship, 0)} ${currency}`} indent />
+              <Row label="الإجمالي" value={`${fmt(t.goldTotal, 0)} ${currency}`} accent="var(--accent)" />
             </Card>
 
             <Card style={{ padding: 14, marginBottom: 12 }}>
@@ -290,7 +290,7 @@ function PurchasesPage({ totals, lots, suppliers, scrapEntries, taskirEntries, e
                 هذه المشتريات <b>لا تدخل</b> في تكلفة الذهب ولا تُخصم من هامشه. تُعامل كمصروف تشغيلي.
               </p>
               <Row label={`عدد العمليات`} value={t.nonGoldCount} indent />
-              <Row label="الإجمالي" value={`${currency}${fmt(t.nonGold, 0)}`} accent="var(--bad)" />
+              <Row label="الإجمالي" value={`${fmt(t.nonGold, 0)} ${currency}`} accent="var(--bad)" />
             </Card>
             {nonGoldRows.length === 0 ? (
               <EmptyState

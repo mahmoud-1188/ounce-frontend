@@ -22,7 +22,7 @@ function DualRow({ label, weight_24k, cash_amount, currency, tone, sub }) {
       <span style={{ color: `var(--${ct})` }} className="text-[11px] font-bold text-left"
         dir="ltr">
         {Math.abs(Number(cash_amount) || 0) < 0.005 ? "—"
-          : `${(cash_amount || 0) < 0 ? "−" : ""}${currency}${fmtMoney(Math.abs(cash_amount || 0))}`}
+          : `${(cash_amount || 0) < 0 ? "−" : ""}${fmtMoney(Math.abs(cash_amount || 0))} ${currency}`}
       </span>
     </div>
   );

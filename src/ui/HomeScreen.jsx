@@ -85,7 +85,7 @@ function HomeScreen({ userName = "", totals = {}, scrapTotals = {}, safeGoldBala
       <div className="flex items-baseline justify-between mb-3">
         <p style={{ color: "var(--text)", margin: 0 }} className="text-base font-bold">{greet}{userName ? `، ${userName}` : ""}</p>
         <p style={{ color: "var(--text3)", margin: 0 }} className="text-[11px]">
-          جم24 {currency}{fmtMoney(priceData.current || 0)}{priceData.markup?.value > 0 ? ` (عالمي + ${markupLabel(priceData.markup)})` : priceData.source === "hq" ? " · من الإدارة" : ""}
+          جم24 {fmtMoney(priceData.current || 0)} {currency}{priceData.markup?.value > 0 ? ` (عالمي + ${markupLabel(priceData.markup)})` : priceData.source === "hq" ? " · من الإدارة" : ""}
         </p>
       </div>
 
@@ -110,7 +110,7 @@ function HomeScreen({ userName = "", totals = {}, scrapTotals = {}, safeGoldBala
           {fmtW(to21(allFine))}<span style={{ color: "var(--text3)", fontSize: 13, marginRight: 6, letterSpacing: 0 }}>جم</span>
         </p>
         <p style={{ color: "var(--text3)", margin: "0 0 12px" }} className="text-[11px]">
-          ≈ {currency}{fmtMoney((Number(priceData.current) || 0) * allFine)} بسعر اليوم · صافي 24: {fmtW(allFine)} جم
+          ≈ {fmtMoney((Number(priceData.current) || 0) * allFine)} {currency} بسعر اليوم · صافي 24: {fmtW(allFine)} جم
         </p>
         <div className="grid grid-cols-3 gap-2">
           <Mini label="مشغول" fine={invFine} w={totals.weight || 0} />
@@ -123,7 +123,7 @@ function HomeScreen({ userName = "", totals = {}, scrapTotals = {}, safeGoldBala
       <div style={{ ...soft, padding: "14px 16px", marginBottom: 16 }} className="flex items-center justify-between">
         <div>
           <p style={{ color: "var(--text2)", margin: 0 }} className="text-xs">النقد الآن</p>
-          <p style={{ color: "var(--goodSolid)", margin: "2px 0 0", ...num }} className="text-2xl font-extrabold">{currency}{fmtMoney(cashNow)}</p>
+          <p style={{ color: "var(--goodSolid)", margin: "2px 0 0", ...num }} className="text-2xl font-extrabold">{fmtMoney(cashNow)} {currency}</p>
         </div>
         <div className="text-left" style={{ direction: "rtl" }}>
           <p style={{ color: "var(--text3)", margin: 0 }} className="text-[11px]">صندوق {fmtMoney(cashBalance.cash || 0)}</p>

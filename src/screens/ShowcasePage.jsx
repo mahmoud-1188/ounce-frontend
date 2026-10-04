@@ -33,7 +33,7 @@ function ShowcasePage({ items = [], categories = [], price24 = 0, settings = {},
           ))}
           <input style={{ ...inputStyle, marginBottom: 0, flex: 1 }} value={q} onChange={(e) => setQ(e.target.value)} placeholder="بحث" />
         </div>
-        <p style={{ color: "var(--text3)" }} className="text-[11px] mb-2">{list.length} قطعة · سعر جم24 اليوم {currency}{fmtMoney(price24)} · الأسعار إرشادية</p>
+        <p style={{ color: "var(--text3)" }} className="text-[11px] mb-2">{list.length} قطعة · سعر جم24 اليوم {fmtMoney(price24)} {currency} · الأسعار إرشادية</p>
         <div className="grid grid-cols-2 gap-2">
           {list.slice(0, 200).map((it) => (
             <button key={it.id} onClick={() => setBig(big === it.id ? null : it.id)} className="text-right" style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 16, overflow: "hidden" }}>
@@ -43,7 +43,7 @@ function ShowcasePage({ items = [], categories = [], price24 = 0, settings = {},
               <div style={{ padding: "8px 10px" }}>
                 <p style={{ color: "var(--text)", margin: 0 }} className="text-xs font-bold truncate">{it.description || it.name || catLabel(catOf(it))}</p>
                 <p style={{ color: "var(--text3)", margin: 0 }} className="text-[11px]">عيار {it.karat} · {fmtW(it.weight)} جم</p>
-                <p style={{ color: "var(--accent)", margin: "2px 0 0", fontFamily: "'Cairo', sans-serif" }} className="text-sm font-extrabold">{currency}{fmtMoney(price(it))}</p>
+                <p style={{ color: "var(--accent)", margin: "2px 0 0", fontFamily: "'Cairo', sans-serif" }} className="text-sm font-extrabold">{fmtMoney(price(it))} {currency}</p>
               </div>
             </button>
           ))}
@@ -54,7 +54,7 @@ function ShowcasePage({ items = [], categories = [], price24 = 0, settings = {},
               {(it.photoDataUrl || it.photoUrl) && <img src={(it.photoDataUrl || it.photoUrl)} alt="" style={{ width: "100%", maxHeight: 320, objectFit: "contain", borderRadius: 14, background: "var(--field)" }} />}
               <p style={{ color: "var(--text)" }} className="text-base font-bold mt-2">{it.description || it.name || catLabel(catOf(it))}</p>
               <p style={{ color: "var(--text2)" }} className="text-xs">عيار {it.karat} · {fmtW(it.weight)} جم{it.stonesWeight ? ` · فصوص ${fmtW(it.stonesWeight)} جم` : ""} · متاح {(it.units || []).filter((u) => !u.sold && !u.issued).length}</p>
-              <p style={{ color: "var(--accent)", fontFamily: "'Cairo', sans-serif" }} className="text-2xl font-extrabold">{currency}{fmtMoney(price(it))}</p>
+              <p style={{ color: "var(--accent)", fontFamily: "'Cairo', sans-serif" }} className="text-2xl font-extrabold">{fmtMoney(price(it))} {currency}</p>
               {onSell && <button onClick={() => onSell(it.id)} className="w-full mt-2 py-3 rounded-xl text-sm font-bold" style={{ background: "linear-gradient(135deg, var(--gradFrom), var(--gradTo))", color: "var(--bg)" }}>بيع هذه القطعة</button>}
             </div>
           </div>

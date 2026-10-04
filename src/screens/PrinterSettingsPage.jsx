@@ -533,7 +533,7 @@ function PrinterSettingsPage({ config, onSave, sampleItem, currency, price24, on
             </span>
             {cfg.showPrice && (
               <span style={{ color: "var(--panel)", fontSize: 9, fontWeight: 700 }}>
-                {currency}{fmt(samplePrice, 0)}
+                {fmt(samplePrice, 0)} {currency}
               </span>
             )}
             <div style={{ display: "flex", gap: 1, marginTop: 2 }}>

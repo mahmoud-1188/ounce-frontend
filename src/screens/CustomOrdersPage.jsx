@@ -18,7 +18,7 @@ function CustomOrdersPage({ customers = [], currency = "ر.س", canCancel = fals
   const [msg, setMsg] = useState(null);
   const load = () => api.modulesApi.customOrders().then((d) => setOrders(d.orders)).catch(() => setOrders([]));
   useEffect(() => { load(); }, []);
-  const m = (v) => `${currency}${fmtMoney(v)}`;
+  const m = (v) => `${fmtMoney(v)} ${currency}`;
   const num = (v) => String(v).replace(/[^\d.]/g, "");
   const err = (e) => (e?.body?.error === "module_off" ? "الوحدة مطفأة — فعّلها من «الوحدات الاختيارية»" : "تعذّر التنفيذ");
   const create = async () => {

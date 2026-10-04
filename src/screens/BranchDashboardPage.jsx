@@ -55,13 +55,13 @@ function BranchDashboardPage({ totals, sales = [], returns = [], lots = [], expe
       {sub && <p style={{ color: "var(--text2)", margin: 0 }} className="text-[11px]">{sub}</p>}
     </button>
   );
-  const P = (v) => `${currency}${fmtMoney(v)}`;
+  const P = (v) => `${fmtMoney(v)} ${currency}`;
   return (
     <div>
       <SubPageHeader title="لوحة التحكم" onBack={onBack} />
       <div className="px-4 pt-2">
         <p style={{ color: "var(--text3)" }} className="text-[11px] mb-2">
-          {branchName || "المحل"} · سعر جم24 اليوم {currency}{fmtMoney(priceData.current || 0)} · {openDay ? `يوم مفتوح ${openDay.ref}` : "لا يوم عمل مفتوح"}
+          {branchName || "المحل"} · سعر جم24 اليوم {fmtMoney(priceData.current || 0)} {currency} · {openDay ? `يوم مفتوح ${openDay.ref}` : "لا يوم عمل مفتوح"}
         </p>
         <div className="grid grid-cols-4 gap-1.5 mb-3">
           {[["today", "اليوم"], ["week", "الأسبوع"], ["month", "الشهر"], ["year", "السنة"]].map(([id, l]) => (

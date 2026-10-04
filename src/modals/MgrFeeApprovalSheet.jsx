@@ -37,16 +37,16 @@ function MgrFeeApprovalSheet({ breakdown, rate, currency = "ر.س", dayRef, onAp
                     <span style={{ color: "var(--text3)" }} className="text-[10px]">{r.invoices} فاتورة</span>
                   </div>
                   <div className="grid grid-cols-2 gap-x-3 mt-1" style={{ fontSize: 10, color: "var(--text3)" }}>
-                    <span>مبيعات {currency}{fmtMoney(r.sales)}</span>
+                    <span>مبيعات {fmtMoney(r.sales)} {currency}</span>
                     {r.returns > 0 && <span style={{ color: "var(--bad)" }}>مرتجع −{fmtMoney(r.returns)}</span>}
                   </div>
                   <div className="flex items-baseline justify-between mt-1.5 pt-1.5"
                     style={{ borderTop: "1px solid var(--line)" }}>
                     <span style={{ color: "var(--text2)" }} className="text-[11px]">
-                      الصافي {currency}{fmtMoney(r.net)}
+                      الصافي {fmtMoney(r.net)} {currency}
                     </span>
                     <span style={{ color: "var(--accent)" }} className="text-[12px] font-bold">
-                      العمولة {currency}{fmtMoney(r.fee)}
+                      العمولة {fmtMoney(r.fee)} {currency}
                     </span>
                   </div>
                 </Card>
@@ -61,7 +61,7 @@ function MgrFeeApprovalSheet({ breakdown, rate, currency = "ر.س", dayRef, onAp
                 <div key={l} className="flex items-baseline justify-between py-1">
                   <span style={{ color: "var(--text3)" }} className="text-[11px]">{l}</span>
                   <span style={{ color: `var(--${tone})` }} className="text-[12px] font-bold">
-                    {currency}{fmtMoney(v)}
+                    {fmtMoney(v)} {currency}
                   </span>
                 </div>
               ))}
@@ -92,7 +92,7 @@ function MgrFeeApprovalSheet({ breakdown, rate, currency = "ر.س", dayRef, onAp
           className="w-full mt-3 py-3 rounded-xl text-[13px] font-bold"
           style={{ background: choice ? "linear-gradient(135deg,var(--gradFrom),var(--gradTo))" : "var(--field)",
                    color: choice ? "var(--panel)" : "var(--text3)" }}>
-          {choice === "with" ? `أكّد الاعتماد مع خصم ${currency}${fmtMoney(totalFee)}`
+          {choice === "with" ? `أكّد الاعتماد مع خصم ${fmtMoney(totalFee)} ${currency}`
             : choice === "without" ? "أكّد الاعتماد بلا عمولة"
               : "اختر أولًا"}
         </button>

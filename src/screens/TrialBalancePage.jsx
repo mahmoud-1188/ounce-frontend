@@ -121,7 +121,7 @@ function TrialBalancePage({
               </p>
               {price24 > 0 && (
                 <p style={{ color: "var(--text3)" }} className="text-[10px] mt-1">
-                  قيمته بسعر اليوم {currency}{fmt(weightTimesPrice(weightTB.netFine, price24), 0)} — للعلم لا للجمع
+                  قيمته بسعر اليوم {fmt(weightTimesPrice(weightTB.netFine, price24), 0)} {currency} — للعلم لا للجمع
                 </p>
               )}
             </Card>
@@ -146,7 +146,7 @@ function TrialBalancePage({
                   </span>
                 </div>
                 <p style={{ color: "var(--text2)" }} className="text-[11px]">
-                  مدين {currency}{fmtMoney(jTB.totals.debit)} · دائن {currency}{fmtMoney(jTB.totals.credit)}
+                  مدين {fmtMoney(jTB.totals.debit)} {currency} · دائن {fmtMoney(jTB.totals.credit)} {currency}
                 </p>
                 <p style={{ color: "var(--text3)" }} className="text-[10px]">
                   {jTB.entries} قيدًا · منها {jTB.reversals} عكسيًا
@@ -300,16 +300,16 @@ function TrialBalancePage({
                 </span>
                 {!cashTB.balanced && (
                   <span style={{ color: "var(--bad)" }} className="text-xs font-bold">
-                    فرق {currency}{fmt(Math.abs(cashTB.diff), 2)}
+                    فرق {fmt(Math.abs(cashTB.diff), 2)} {currency}
                   </span>
                 )}
               </div>
               <p style={{ color: "var(--text3)" }} className="text-[10px] mt-1">
-                وارد {currency}{fmt(cashTB.totals.credit, 2)} · منصرف {currency}{fmt(cashTB.totals.debit, 2)}
-                {" "}· الصافي {currency}{fmt(cashTB.net, 2)}
+                وارد {fmt(cashTB.totals.credit, 2)} {currency} · منصرف {fmt(cashTB.totals.debit, 2)} {currency}
+                {" "}· الصافي {fmt(cashTB.net, 2)} {currency}
               </p>
               <p style={{ color: "var(--text3)" }} className="text-[10px]">
-                رصيد الصناديق {currency}{fmt(cashTB.poolNet, 2)}
+                رصيد الصناديق {fmt(cashTB.poolNet, 2)} {currency}
               </p>
               <p style={{ color: "var(--text2)" }} className="text-[11px] mt-1">
                 {cashTB.balanced

@@ -39,8 +39,8 @@ function SafeAuditPage({ audits, safeBalance, currency, canManage, onSave, onBac
             المسجَّل حاليًا
           </p>
           {[
-            ["نقدي", `${currency}${fmt(safeBalance.cash, 0)}`],
-            ["شبكة", `${currency}${fmt(safeBalance.network, 0)}`],
+            ["نقدي", `${fmt(safeBalance.cash, 0)} ${currency}`],
+            ["شبكة", `${fmt(safeBalance.network, 0)} ${currency}`],
             ["ذهب بعيار 24", `${fmtW(safeBalance.fineWeight)} جم`],
           ].map(([l, v], i) => (
             <div key={i} className="flex items-center justify-between py-1.5" style={{ borderBottom: "1px solid var(--line)" }}>
@@ -90,7 +90,7 @@ function SafeAuditPage({ audits, safeBalance, currency, canManage, onSave, onBac
                       style={{ color: Math.abs(totalVar) < 0.01 ? "var(--goodSolid)" : totalVar > 0 ? "var(--accent)" : "var(--bad)" }}
                       className="text-sm font-bold"
                     >
-                      {Math.abs(totalVar) < 0.01 ? "مطابق" : `${totalVar > 0 ? "زيادة" : "عجز"} ${currency}${fmt(Math.abs(totalVar), 0)}`}
+                      {Math.abs(totalVar) < 0.01 ? "مطابق" : `${totalVar > 0 ? "زيادة" : "عجز"} ${fmt(Math.abs(totalVar), 0)} ${currency}`}
                     </span>
                   </div>
                 </Card>
@@ -143,7 +143,7 @@ function SafeAuditPage({ audits, safeBalance, currency, canManage, onSave, onBac
                       </span>
                     </span>
                     <span style={{ color: Math.abs(v) < 0.01 && goldVar.length === 0 ? "var(--goodSolid)" : "var(--bad)" }} className="text-xs font-bold">
-                      {Math.abs(v) < 0.01 && goldVar.length === 0 ? "مطابق" : `${v > 0 ? "زيادة" : "عجز"} ${currency}${fmt(Math.abs(v), 0)}`}
+                      {Math.abs(v) < 0.01 && goldVar.length === 0 ? "مطابق" : `${v > 0 ? "زيادة" : "عجز"} ${fmt(Math.abs(v), 0)} ${currency}`}
                     </span>
                   </div>
                   {goldVar.map((g, i) => (

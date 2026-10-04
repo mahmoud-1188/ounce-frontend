@@ -27,7 +27,7 @@ function DocumentsArchive({ docs = [], currency = "ر.س", branchName = "", onOp
         <input type="date" style={{ ...inputStyle, marginBottom: 0, fontSize: 10 }} value={from} onChange={(e) => setFrom(e.target.value)} />
         <input type="date" style={{ ...inputStyle, marginBottom: 0, fontSize: 10 }} value={to} onChange={(e) => setTo(e.target.value)} />
       </div>
-      <p style={{ color: "var(--text3)" }} className="text-[11px] mb-2">{list.length} مستند · {currency}{fmtMoney(total)}</p>
+      <p style={{ color: "var(--text3)" }} className="text-[11px] mb-2">{list.length} مستند · {fmtMoney(total)} {currency}</p>
       <div className="flex flex-col gap-1.5" style={compact ? { maxHeight: 420, overflowY: "auto" } : {}}>
         {list.slice(0, 300).map((d) => (
           <Card key={d.id} style={{ padding: 10 }}>
@@ -35,7 +35,7 @@ function DocumentsArchive({ docs = [], currency = "ر.س", branchName = "", onOp
               <span className="text-[11px] px-2 py-0.5 rounded-full" style={{ background: "var(--panel)", color: "var(--accent)", border: "1px solid var(--line)" }}>{DOC_KINDS[d.kind] || d.kind}</span>
               <span style={{ color: "var(--accentText)", fontFamily: "monospace" }} className="text-[11px]">{d.ref}</span>
               <span className="flex-1" />
-              <span style={{ color: "var(--text)" }} className="text-xs font-bold">{currency}{fmtMoney(d.amount)}</span>
+              <span style={{ color: "var(--text)" }} className="text-xs font-bold">{fmtMoney(d.amount)} {currency}</span>
             </div>
             <p style={{ color: "var(--text2)" }} className="text-[11px] mt-1">{d.party}{d.note ? ` · ${d.note}` : ""} · {new Date(d.date).toLocaleDateString("en-GB")}</p>
             <div className="flex gap-1.5 mt-1.5">

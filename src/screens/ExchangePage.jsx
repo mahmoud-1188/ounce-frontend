@@ -25,7 +25,7 @@ function ExchangePage({
   const [msg, setMsg] = useState("");
 
   const def = exchangeKind(kind);
-  const money = (v) => `${currency}${fmtMoney(v || 0)}`;
+  const money = (v) => `${fmtMoney(v || 0)} ${currency}`;
 
   const ex = useMemo(() => (dir === "out" ? buildExchange({
     kind, from, to, sales, returns, expenses, receipts, cashTx, safeTx,

@@ -214,7 +214,7 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
             <p style={{ color: "var(--text2)" }} className="text-xs mb-2">دفعة افتتاحية {selectedLot.ref} · عيار {selectedLot.karat}</p>
             <div className="flex items-center justify-between py-1">
               <span style={{ color: "var(--text2)" }} className="text-[11px]">{selectedLot.costRef === "market" ? "تقييم الجرام — بالسعر العالمي" : "تكلفة الجرام — تكلفة شراء"}</span>
-              <span style={{ color: "var(--text)" }} className="text-xs font-bold">{currency}{fmt(Number(selectedLot.costPerGram) || 0, 2)}</span>
+              <span style={{ color: "var(--text)" }} className="text-xs font-bold">{fmt(Number(selectedLot.costPerGram) || 0, 2)} {currency}</span>
             </div>
             <div className="flex items-center justify-between py-1">
               <span style={{ color: "var(--text2)" }} className="text-[11px]">أُدخل فيها</span>

@@ -67,9 +67,9 @@ function ItemEditPage({ items, currency, price24, onChangeCategory, onBack }) {
               ["العيار", item.karat],
               ["الوزن", `${fmtW(item.weight)} جم`],
               ["الفصوص", `${fmtW(item.stonesWeight || 0)} جم`],
-              ["تكلفة الجرام", `${currency}${fmt(item.costPerGram || 0)}`],
-              ["حصة الأجور", `${currency}${fmt(item.lotWorkmanshipShare || 0)}`],
-              ["القيمة بسعر اليوم", `${currency}${fmt((Number(item.weight) || 0) * (PURITY[item.karat] || item.karat / 24) * (price24 || 0), 0)}`],
+              ["تكلفة الجرام", `${fmt(item.costPerGram || 0)} ${currency}`],
+              ["حصة الأجور", `${fmt(item.lotWorkmanshipShare || 0)} ${currency}`],
+              ["القيمة بسعر اليوم", `${fmt((Number(item.weight) || 0) * (PURITY[item.karat] || item.karat / 24) * (price24 || 0), 0)} ${currency}`],
             ].map(([l, v], i, arr) => (
               <div
                 key={i}

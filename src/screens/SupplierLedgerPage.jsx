@@ -171,7 +171,7 @@ ${blocks}
               <Card style={{ padding: 12 }}>
                 <p style={{ color: "var(--text2)" }} className="text-[11px]">أجور مستحقة</p>
                 <p style={{ color: "var(--text)", fontFamily: "'Cairo', sans-serif" }} className="text-lg font-extrabold">
-                  {currency}{fmt(totals.fees, 0)}
+                  {fmt(totals.fees, 0)} {currency}
                 </p>
                 <p style={{ color: "var(--text3)" }} className="text-[10px]">بالعملة · حساب 2120</p>
               </Card>
@@ -204,7 +204,7 @@ ${blocks}
                             ذهب {fmtW(x.now.gold)} جم24
                           </span>
                           <span style={{ color: x.now.fees > 0.01 ? "var(--text)" : "var(--accentLine)" }} className="text-[11px]">
-                            أجور {currency}{fmt(x.now.fees, 0)}
+                            أجور {fmt(x.now.fees, 0)} {currency}
                           </span>
                         </div>
                         {x.move.lots > 0 && (
@@ -328,7 +328,7 @@ ${blocks}
                         <td style={{ ...cell, color: "var(--text)" }}>
                           <span style={{ color: "var(--accentText)", fontFamily: "monospace" }}>{d.ref}</span> {d.kind}
                           {d.karat ? ` · ع${d.karat} ${fmtW(d.weight)} جم` : ""}
-                          {d.cash ? ` · ${currency}${fmt(d.cash, 0)}` : ""}
+                          {d.cash ? ` · ${fmt(d.cash, 0)} ${currency}` : ""}
                         </td>
                         <td style={{ ...cell, textAlign: "center", color: d.gold > 0 ? "var(--bad)" : d.gold < 0 ? "var(--goodSolid)" : "var(--text3)" }}>
                           {d.gold > 0 ? `+${fmtW(d.gold)}` : d.gold < 0 ? `−${fmtW(-d.gold)}` : "—"}
@@ -355,7 +355,7 @@ ${blocks}
             )}
             <p style={{ color: "var(--text3)" }} className="text-[11px] mb-3">
               ⚖ + يزيد ما عليك للمورد · − سداد. ذهبٌ بالجرام 24 وأجورٌ بالعملة — لا يُجمعان.
-              {A.move.cashPaid > 0 ? ` · نقدٌ دُفع في الفترة ${currency}${fmtMoney(A.move.cashPaid)}` : ""}
+              {A.move.cashPaid > 0 ? ` · نقدٌ دُفع في الفترة ${fmtMoney(A.move.cashPaid)} ${currency}` : ""}
             </p>
             {(() => {
               const L = ledgerOf(A.sup.id);
@@ -364,7 +364,7 @@ ${blocks}
               return off ? (
                 <Card style={{ padding: 10, marginBottom: 12, border: "1px solid var(--badLine)" }}>
                   <p style={{ color: "var(--bad)" }} className="text-[11px]">
-                    ⚠ دفتر الموردين على الخادم: ذهب {fmtW(L.gold)} جم24 · أجور {currency}{fmt(L.fees, 2)} — يختلف عن الكشف. راجع الحركات.
+                    ⚠ دفتر الموردين على الخادم: ذهب {fmtW(L.gold)} جم24 · أجور {fmt(L.fees, 2)} {currency} — يختلف عن الكشف. راجع الحركات.
                   </p>
                 </Card>
               ) : null;

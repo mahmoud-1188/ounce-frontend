@@ -86,7 +86,7 @@ function DayControl({
       label: "كسر معلّق لم تتم تسويته",
       ok: suspended.length === 0,
       detail: suspended.length
-        ? `${suspended.length} قطعة · ${fmtW(suspW)} جم · ${currency}${fmtMoney(suspPaid)}`
+        ? `${suspended.length} قطعة · ${fmtW(suspW)} جم · ${fmtMoney(suspPaid)} ${currency}`
         : "لا شيء معلّق",
       block: false,
       goTo: "scrapCustody",
@@ -110,7 +110,7 @@ function DayControl({
       label: "عهدة الكسر مُقفلة",
       ok: custodyTotal <= 0.01,
       detail: custodyTotal > 0.01
-        ? `${currency}${fmtMoney(custodyTotal)} لم تُورَّد`
+        ? `${fmtMoney(custodyTotal)} ${currency} لم تُورَّد`
         : "مُقفلة",
       block: false,
       goTo: "scrapCustody",
@@ -261,11 +261,11 @@ function DayControl({
               </span>
               <span style={{ color: enough ? "var(--accent)" : "var(--bad)" }}
                 className="text-sm font-bold">
-                {currency}{fmtMoney(need)}
+                {fmtMoney(need)} {currency}
               </span>
             </div>
             <p style={{ color: "var(--text3)" }} className="text-[10px] mt-0.5">
-              المتاح {currency}{fmtMoney(safeBalance?.cash || 0)}
+              المتاح {fmtMoney(safeBalance?.cash || 0)} {currency}
             </p>
             {!enough && (
               <p style={{ color: "var(--bad)" }} className="text-[10px] mt-1 font-bold">

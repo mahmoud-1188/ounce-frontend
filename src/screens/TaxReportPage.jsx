@@ -13,12 +13,12 @@ function TaxReportPage({ taxTotals, currency, onBack }) {
       <SubPageHeader title="تقرير الضرائب" onBack={onBack} />
       <div className="px-4 pt-3">
         <div className="grid grid-cols-2 gap-3 mb-4">
-          <Stat label="ضريبة اليوم" value={`${currency}${fmt(taxTotals.todayTax, 0)}`} />
-          <Stat label="ضريبة الشهر" value={`${currency}${fmt(taxTotals.monthTax, 0)}`} />
+          <Stat label="ضريبة اليوم" value={`${fmt(taxTotals.todayTax, 0)} ${currency}`} />
+          <Stat label="ضريبة الشهر" value={`${fmt(taxTotals.monthTax, 0)} ${currency}`} />
         </div>
         <div className="grid grid-cols-2 gap-3 mb-4">
-          <Stat label="مبيعات اليوم بضريبة" value={`${currency}${fmt(taxTotals.todayTaxable, 0)}`} />
-          <Stat label="مبيعات اليوم بدون ضريبة" value={`${currency}${fmt(taxTotals.todayExempt, 0)}`} />
+          <Stat label="مبيعات اليوم بضريبة" value={`${fmt(taxTotals.todayTaxable, 0)} ${currency}`} />
+          <Stat label="مبيعات اليوم بدون ضريبة" value={`${fmt(taxTotals.todayExempt, 0)} ${currency}`} />
         </div>
         <p style={{ color: "var(--text2)" }} className="text-xs mb-2">
           تفصيل يومي

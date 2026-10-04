@@ -85,7 +85,7 @@ function ReservationsPage({ reservations, customers, activeItems, currency, canM
           <Card style={{ padding: 14, marginBottom: 12, border: "1px solid var(--accentLine)" }}>
             <p style={{ color: "var(--text2)" }} className="text-xs mb-1">عرابين محتجزة</p>
             <p style={{ fontFamily: "'Cairo', sans-serif", color: "var(--accent)" }} className="text-2xl font-extrabold">
-              {currency}{fmt(held, 0)}
+              {fmt(held, 0)} {currency}
             </p>
             <p style={{ color: "var(--text3)" }} className="text-[11px] mt-1">{open.length} حجز قائم — التزام حتى التسليم أو الإلغاء</p>
             {attention > 0 && (
@@ -155,7 +155,7 @@ function ReservationsPage({ reservations, customers, activeItems, currency, canM
               )}
               {preview.length > 0 && (
                 <div className="mb-3 text-[11px]" style={{ color: "var(--text2)" }}>
-                  {preview.map((x) => <p key={x.n}>دفعة {x.n} · {x.due} · {currency}{fmtMoney(x.amount)}</p>)}
+                  {preview.map((x) => <p key={x.n}>دفعة {x.n} · {x.due} · {fmtMoney(x.amount)} {currency}</p>)}
                 </div>
               )}
               <Field label="استلام العربون">
@@ -174,7 +174,7 @@ function ReservationsPage({ reservations, customers, activeItems, currency, canM
               </Field>
               {Number(total) > 0 && Number(deposit) > 0 && (
                 <p style={{ color: "var(--text3)" }} className="text-[11px] mb-3">
-                  المتبقي عند التسليم: {currency}{fmt(Number(total) - Number(deposit), 0)}
+                  المتبقي عند التسليم: {fmt(Number(total) - Number(deposit), 0)} {currency}
                 </p>
               )}
               <div className="grid grid-cols-2 gap-2">
@@ -221,10 +221,10 @@ function ReservationsPage({ reservations, customers, activeItems, currency, canM
                   </span>
                 </div>
                 <p style={{ color: "var(--text2)" }} className="text-[11px] mt-0.5">
-                  {r.description || "—"} · السعر {currency}{fmt(r.total, 0)} · عربون {currency}{fmt(r.deposit, 0)}
+                  {r.description || "—"} · السعر {fmt(r.total, 0)} {currency} · عربون {fmt(r.deposit, 0)} {currency}
                 </p>
                 <p style={{ color: "var(--text3)" }} className="text-[10px] mt-0.5">
-                  المتبقي {currency}{fmt(r.remaining, 0)} · {new Date(r.date).toLocaleDateString("en-GB")}
+                  المتبقي {fmt(r.remaining, 0)} {currency} · {new Date(r.date).toLocaleDateString("en-GB")}
                   {r.createdBy ? ` · ${r.createdBy}` : ""}
                 </p>
                 {(() => {
@@ -239,8 +239,8 @@ function ReservationsPage({ reservations, customers, activeItems, currency, canM
                       )}
                       {st && (
                         <p style={{ color: st.overdueCount ? "var(--bad)" : "var(--text2)" }} className="text-[11px] mt-0.5">
-                          {st.overdueCount ? `متأخّر ${st.overdueCount} قسط — ${currency}${fmtMoney(st.overdue)} · ` : ""}
-                          {st.next ? `القسط التالي ${st.next.due} · ${currency}${fmtMoney(st.next.rest)}` : "سُدّدت الأقساط"}
+                          {st.overdueCount ? `متأخّر ${st.overdueCount} قسط — ${fmtMoney(st.overdue)} ${currency} · ` : ""}
+                          {st.next ? `القسط التالي ${st.next.due} · ${fmtMoney(st.next.rest)} ${currency}` : "سُدّدت الأقساط"}
                         </p>
                       )}
                     </>

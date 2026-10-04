@@ -50,11 +50,11 @@ function BankFeeSettlementForm({ journal = [], adjustments = [], networkBalance 
           <Field label="الشهر"><input type="month" style={inputStyle} value={period} onChange={(e) => setPeriod(e.target.value)} /></Field>
           <Field label={`العمولة الفعلية من كشف البنك (${currency})`}><NumericInput value={actual} onChange={setActual} placeholder="0.00" /></Field>
         </div>
-        <div className="flex items-center justify-between py-1"><span style={{ color: "var(--text2)" }} className="text-[11px]">المسجَّل في الدفتر (6500) للشهر{server ? "" : " — تقدير"}</span><span style={{ color: "var(--text)" }} className="text-xs font-bold">{currency}{fmtMoney(recorded)}</span></div>
+        <div className="flex items-center justify-between py-1"><span style={{ color: "var(--text2)" }} className="text-[11px]">المسجَّل في الدفتر (6500) للشهر{server ? "" : " — تقدير"}</span><span style={{ color: "var(--text)" }} className="text-xs font-bold">{fmtMoney(recorded)} {currency}</span></div>
         {actual !== "" && (
           <div className="flex items-center justify-between py-1" style={{ borderTop: "1px solid var(--line)" }}>
             <span style={{ color: "var(--text)" }} className="text-xs font-bold">{diff > 0 ? "يُخصم من رصيد الشبكة" : diff < 0 ? "يُردّ إلى رصيد الشبكة" : "مطابق"}</span>
-            <span style={{ color: diff > 0 ? "var(--bad)" : diff < 0 ? "var(--good)" : "var(--text2)" }} className="text-sm font-extrabold">{currency}{fmtMoney(Math.abs(diff))}</span>
+            <span style={{ color: diff > 0 ? "var(--bad)" : diff < 0 ? "var(--good)" : "var(--text2)" }} className="text-sm font-extrabold">{fmtMoney(Math.abs(diff))} {currency}</span>
           </div>
         )}
         {networkBalance != null && diff > 0 && diff > networkBalance + 0.005 && <p style={{ color: "var(--bad)" }} className="text-[11px]">⚠ رصيد الشبكة {fmtMoney(networkBalance)} لا يكفي</p>}

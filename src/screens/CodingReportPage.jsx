@@ -37,7 +37,7 @@ function CodingReportPage({ items = [], lots = [], categories = [], suppliers = 
     () => buildCodingReport({ items, lots, categories, suppliers, users, from, to, groupBy }),
     [items, lots, categories, suppliers, users, from, to, groupBy]
   );
-  const money = (v) => `${currency}${fmtMoney(v || 0)}`;
+  const money = (v) => `${fmtMoney(v || 0)} ${currency}`;
 
   const quick = (d) => {
     const n = new Date();

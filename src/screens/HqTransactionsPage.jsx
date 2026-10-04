@@ -112,7 +112,7 @@ function HqTransactionsPage({ currency = "ر.س", onBack, flashToast, onCashRece
               <p style={{ color: "var(--text3)" }} className="text-[11px] mt-1 leading-6">
                 {t.weight ? `${fmtW(t.weight)} جم عيار ${t.karat}` : ""}
                 {t.pieces ? ` · ${t.pieces} قطعة` : ""}
-                {t.amount ? `${t.weight ? " · " : ""}${currency}${fmtMoney(t.amount)}` : ""}
+                {t.amount ? `${t.weight ? " · " : ""}${fmtMoney(t.amount)} ${currency}` : ""}
               </p>
               {t.note && (
                 <p style={{ color: "var(--text3)" }} className="text-[11px] mt-0.5">{t.note}</p>

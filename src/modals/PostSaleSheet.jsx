@@ -9,13 +9,13 @@ function saleWhatsAppText(sale, { currency = "ر.س", storeName = "" } = {}) {
   if (!sale) return "";
   const lines = (sale.lines || []).map((l) => `• ${l.itemName || "قطعة"} ع${l.karatSnapshot || ""} — ${fmtW(l.weightSnapshot || 0)} جم`);
   const paid = sale.paymentMethod === "credit"
-    ? `المدفوع ${currency}${fmtMoney(sale.downPayment || 0)} · الباقي على الحساب ${currency}${fmtMoney(sumMoney([sale.total, -(sale.downPayment || 0)]))}`
+    ? `المدفوع ${fmtMoney(sale.downPayment || 0)} ${currency} · الباقي على الحساب ${fmtMoney(sumMoney([sale.total, -(sale.downPayment || 0)]))} ${currency}`
     : "";
   return [
     `شكرًا لتسوّقك${storeName ? ` من ${storeName}` : ""}`,
     `فاتورة ${sale.ref} · ${new Date(sale.date || Date.now()).toLocaleDateString("en-GB")}`,
     ...lines,
-    `الإجمالي ${currency}${fmtMoney(sale.total)}${Number(sale.taxAmount) > 0 ? ` (شامل الضريبة ${fmtMoney(sale.taxAmount)})` : ""}`,
+    `الإجمالي ${fmtMoney(sale.total)} ${currency}${Number(sale.taxAmount) > 0 ? ` (شامل الضريبة ${fmtMoney(sale.taxAmount)})` : ""}`,
     paid,
   ].filter(Boolean).join("\n");
 }
@@ -27,7 +27,7 @@ function PostSaleSheet({ sale, customer = null, currency = "ر.س", storeName = 
   return (
     <ModalShell title={`تمّ البيع — ${sale.ref}`} onClose={onClose}>
       <div data-post-sale>
-        <p style={{ color: "var(--good)", fontFamily: "'Cairo', sans-serif" }} className="text-2xl font-extrabold text-center mb-1">{currency}{fmtMoney(sale.total)}</p>
+        <p style={{ color: "var(--good)", fontFamily: "'Cairo', sans-serif" }} className="text-2xl font-extrabold text-center mb-1">{fmtMoney(sale.total)} {currency}</p>
         <p style={{ color: "var(--text3)" }} className="text-[11px] text-center mb-4">
           {(sale.lines || []).length} قطعة{customer ? ` · ${customer.name}` : ""}
           {sale.paymentMethod === "credit" && sale.downPayment ? ` · مدفوع ${fmtMoney(sale.downPayment)} والباقي على حسابه` : ""}

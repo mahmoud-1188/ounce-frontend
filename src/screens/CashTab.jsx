@@ -233,7 +233,7 @@ function CashTab({
                           </span>
                         </div>
                         <span style={{ color: Math.abs(v) < 0.0001 ? "var(--goodSolid)" : v > 0 ? "var(--accent)" : "var(--bad)" }} className="text-xs font-bold">
-                          {Math.abs(v) < 0.0001 ? "مطابق" : `${v > 0 ? "زيادة" : "عجز"} ${currency}${fmt(Math.abs(v), 0)}`}
+                          {Math.abs(v) < 0.0001 ? "مطابق" : `${v > 0 ? "زيادة" : "عجز"} ${fmt(Math.abs(v), 0)} ${currency}`}
                         </span>
                       </div>
                     );

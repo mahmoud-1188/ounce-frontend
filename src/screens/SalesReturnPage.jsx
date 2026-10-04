@@ -262,7 +262,7 @@ function SalesReturnPage({
                     <div className="flex items-center gap-2">
                       <span style={{ color: "var(--accentSoft)", fontFamily: "monospace" }} className="text-[11px]">{x.ref}</span>
                       <span style={{ color: "var(--text)" }} className="text-xs flex-1 truncate">{x.customerName || "عميل نقدي"}</span>
-                      <span style={{ color: "var(--text2)" }} className="text-[11px]">{currency}{fmtMoney(x.total)}</span>
+                      <span style={{ color: "var(--text2)" }} className="text-[11px]">{fmtMoney(x.total)} {currency}</span>
                     </div>
                     <p style={{ color: "var(--text3)", margin: 0 }} className="text-[11px]">
                       {new Date(x.date).toLocaleDateString("en-GB")} · {(x.lines || []).length} سطر
@@ -305,13 +305,13 @@ function SalesReturnPage({
                 </span>
               </div>
               <p style={{ color: "var(--text3)" }} className="text-[10px]">
-                {(sale.lines || []).length} سطرًا · {currency}{fmtMoney(sale.total)}
+                {(sale.lines || []).length} سطرًا · {fmtMoney(sale.total)} {currency}
                 {sale.paymentMethod === "credit" ? " · آجلة" : ""}
               </p>
               {Number(sale.price24Snapshot) > 0 && (
                 <p style={{ color: "var(--text3)" }} className="text-[11px] mt-0.5">
-                  سعر جم24 يوم البيع {currency}{fmt(sale.price24Snapshot, 2)}
-                  {price24 > 0 ? ` · اليوم ${currency}${fmt(price24, 2)}` : ""}
+                  سعر جم24 يوم البيع {fmt(sale.price24Snapshot, 2)} {currency}
+                  {price24 > 0 ? ` · اليوم ${fmt(price24, 2)} ${currency}` : ""}
                   {" — والردّ بأسعار الفاتورة"}
                 </p>
               )}
@@ -366,7 +366,7 @@ function SalesReturnPage({
                           )}
                         </span>
                         <span style={{ color: "var(--accent)" }} className="text-[11px]">
-                          {currency}{fmtMoney((Number(l.unitPrice) || 0) * (Number(l.quantity) || 1))}
+                          {fmtMoney((Number(l.unitPrice) || 0) * (Number(l.quantity) || 1))} {currency}
                         </span>
                       </div>
                       <p style={{ color: "var(--text3)" }} className="text-[10px] mt-0.5">
@@ -480,7 +480,7 @@ function SalesReturnPage({
                     ].map(([l, v], i) => (
                       <div key={i} className="flex items-center justify-between">
                         <span style={{ color: "var(--text2)" }} className="text-[11px]">{l}</span>
-                        <span style={{ color: "var(--text)" }} className="text-xs">{currency}{fmtMoney(v)}</span>
+                        <span style={{ color: "var(--text)" }} className="text-xs">{fmtMoney(v)} {currency}</span>
                       </div>
                     ))}
                     <div className="flex items-center justify-between mt-1 pt-1" style={{ borderTop: "1px solid var(--line)" }}>
@@ -488,7 +488,7 @@ function SalesReturnPage({
                         {exchangeAmounts.diff > 0 ? "يدفع العميل" : exchangeAmounts.diff < 0 ? "يُردّ للعميل" : "متعادل"}
                       </span>
                       <span style={{ color: exchangeAmounts.diff < 0 ? "var(--bad)" : "var(--accent)" }} className="text-base font-extrabold">
-                        {currency}{fmtMoney(Math.abs(exchangeAmounts.diff))}
+                        {fmtMoney(Math.abs(exchangeAmounts.diff))} {currency}
                       </span>
                     </div>
                     <p style={{ color: "var(--text3)" }} className="text-[11px] mt-1">
@@ -591,7 +591,7 @@ function SalesReturnPage({
                     <div key={i} className="flex items-center justify-between">
                       <span style={{ color: "var(--text2)" }} className="text-[11px]">{l}</span>
                       <span style={{ color: "var(--text)" }} className="text-xs">
-                        {currency}{fmtMoney(v)}
+                        {fmtMoney(v)} {currency}
                       </span>
                     </div>
                   ))}
@@ -601,11 +601,11 @@ function SalesReturnPage({
                       يُردّ للعميل
                     </span>
                     <span style={{ color: "var(--accent)" }} className="text-base font-extrabold">
-                      {currency}{fmtMoney(amounts.gross)}
+                      {fmtMoney(amounts.gross)} {currency}
                     </span>
                   </div>
                   <p style={{ color: "var(--text3)" }} className="text-[10px] mt-1">
-                    ⚖ ويعود {fmtW(amounts.fine)} جم24 للمخزون · التكلفة {currency}{fmtMoney(amounts.cost)}
+                    ⚖ ويعود {fmtW(amounts.fine)} جم24 للمخزون · التكلفة {fmtMoney(amounts.cost)} {currency}
                   </p>
                 </Card>
 

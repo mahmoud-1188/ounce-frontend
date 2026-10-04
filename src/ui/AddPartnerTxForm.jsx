@@ -62,7 +62,7 @@ function AddPartnerTxForm({ onCancel, onSubmit, currency, price24 }) {
       </Field>
       {raw > 0 && (
         <p style={{ color: "var(--text3)" }} className="text-[11px] mb-3">
-          يعادل {unit === "gram" ? `${currency}${fmtMoney(equivalent)}` : `${fmtW(equivalent)} جم`} بسعر اليوم
+          يعادل {unit === "gram" ? `${fmtMoney(equivalent)} ${currency}` : `${fmtW(equivalent)} جم`} بسعر اليوم
         </p>
       )}
       {unit === "gram" ? (

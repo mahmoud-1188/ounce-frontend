@@ -1963,7 +1963,7 @@ export default function GoldInventoryApp() {
         else setCashTx((prev) => [entryTx, ...prev]);
       }
 
-      flashToast(`تم الإرجاع — ${priceData.currency}${fmt(rec.refund, 0)}`);
+      flashToast(`تم الإرجاع — ${fmt(rec.refund, 0)} ${priceData.currency}`);
       return rec;
     } catch (err) {
       flashToast(apiErrorMessage(err, "تعذّر تنفيذ الإرجاع"));
@@ -3664,7 +3664,7 @@ export default function GoldInventoryApp() {
       ]);
     }
     if (row.amount > 0) {
-      lines.push(["نقد", `${C}${fmtMoney(row.amount)}`, "—", "—"]);
+      lines.push(["نقد", `${fmtMoney(row.amount)} ${C}`, "—", "—"]);
     }
     const ok = exportTablesPdf({
       title: `سند ${row.moveLabel}`,
@@ -3682,7 +3682,7 @@ export default function GoldInventoryApp() {
           title: "الرصيد بعد الحركة",
           head: ["البند", "الرصيد"],
           rows: [
-            ["نقد", `${C}${fmtMoney(bal?.cash || 0)}`],
+            ["نقد", `${fmtMoney(bal?.cash || 0)} ${C}`],
             ["ذهب بمعادل 24", `${fmtW(bal?.fine || 0)} جم`],
             ...Object.entries(bal?.byKarat || {})
               .filter(([, w]) => Math.abs(w) > 0.0005)
@@ -3696,7 +3696,7 @@ export default function GoldInventoryApp() {
             ["المرجع", row.ref || "—"],
             ["التاريخ", new Date(row.date).toLocaleString("en-GB")],
             ["النوع", isIn ? "استلام من العميل" : "تسليم للعميل"],
-            ["سعر الجرام 24", `${C}${fmtMoney(row.price24 || 0)}`],
+            ["سعر الجرام 24", `${fmtMoney(row.price24 || 0)} ${C}`],
             ["حرّره", row.createdBy || "—"],
             ["ملاحظة", row.note || "—"],
           ],
@@ -3725,10 +3725,10 @@ export default function GoldInventoryApp() {
       `التاريخ: ${new Date(row.date).toLocaleString("en-GB")}`,
       "",
       row.weight > 0 ? `الذهب: ${fmtW(row.weight)} جم عيار ${row.karat}` : null,
-      row.amount > 0 ? `المبلغ: ${C}${fmtMoney(row.amount)}` : null,
+      row.amount > 0 ? `المبلغ: ${fmtMoney(row.amount)} ${C}` : null,
       "",
       "*الرصيد بعد الحركة*",
-      `نقد: ${C}${fmtMoney(bal?.cash || 0)}`,
+      `نقد: ${fmtMoney(bal?.cash || 0)} ${C}`,
       `ذهب: ${fmtW(bal?.fine || 0)} جم بمعادل 24`,
     ].filter(Boolean);
     const text = encodeURIComponent(parts.join("\n"));
@@ -3805,7 +3805,7 @@ export default function GoldInventoryApp() {
 
       // ⚠ لا سحب فوق الرصيد: البنك لا يُقرض من حسابٍ فارغ، وأنت كذلك.
       if (def.id === "withdraw_cash" && amt > bal.cash + 0.005) {
-        flashToast(`رصيده ${priceData.currency}${fmtMoney(bal.cash)} — لا يكفي`);
+        flashToast(`رصيده ${fmtMoney(bal.cash)} ${priceData.currency} — لا يكفي`);
         return null;
       }
       if (def.id === "withdraw_gold" && fine24(w, k) > bal.fine + 0.0005) {
@@ -3836,7 +3836,7 @@ export default function GoldInventoryApp() {
       if (def.id === "buy_gold") {
         const cost = fromHalalas(Math.round(fine24(w, k) * price * 100));
         if (cost > bal.cash + 0.005) {
-          flashToast(`رصيده ${priceData.currency}${fmtMoney(bal.cash)} — لا يكفي لـ${fmtW(w)} جم`);
+          flashToast(`رصيده ${fmtMoney(bal.cash)} ${priceData.currency} — لا يكفي لـ${fmtW(w)} جم`);
           return null;
         }
         row.amount = cost; row.cashDir = "out";
@@ -3898,8 +3898,8 @@ export default function GoldInventoryApp() {
         { label: "الوزن", value: `${fmtW(r.weight)} جم` },
         { label: "بعيار 24", value: `${fmtW(fine24(r.weight, r.karat))} جم` },
         { label: "الوحدات", value: `${units.filter((u) => !u.sold && !u.issued).length} من ${units.length}` },
-        { label: "التكلفة/جم", value: `${C}${fmtMoney(r.costPerGram || 0)}` },
-        { label: "قيمة اليوم", value: `${C}${fmtMoney(fine24(r.weight, r.karat) * (priceData.current || 0))}`,
+        { label: "التكلفة/جم", value: `${fmtMoney(r.costPerGram || 0)} ${C}` },
+        { label: "قيمة اليوم", value: `${fmtMoney(fine24(r.weight, r.karat) * (priceData.current || 0))} ${C}`,
           tone: "accent" },
       ];
     }
@@ -3926,9 +3926,9 @@ export default function GoldInventoryApp() {
         { label: "التاريخ", value: new Date(r.date).toLocaleString("en-GB") },
         { label: "العميل", value: r.customerName || "نقدي" },
         { label: "الأسطر", value: (r.lines || []).length },
-        { label: "الصافي", value: `${C}${fmtMoney((r.total || 0) - (r.taxAmount || 0))}` },
-        { label: "الضريبة", value: `${C}${fmtMoney(r.taxAmount || 0)}` },
-        { label: "الإجمالي", value: `${C}${fmtMoney(r.total)}`, tone: "accent" },
+        { label: "الصافي", value: `${fmtMoney((r.total || 0) - (r.taxAmount || 0))} ${C}` },
+        { label: "الضريبة", value: `${fmtMoney(r.taxAmount || 0)} ${C}` },
+        { label: "الإجمالي", value: `${fmtMoney(r.total)} ${C}`, tone: "accent" },
         { label: "الدفع", value: METHOD_LABELS?.[r.paymentMethod] || r.paymentMethod || "—" },
         { label: "البائع", value: r.sellerName || r.createdBy || "—" },
       ];
@@ -3940,7 +3940,7 @@ export default function GoldInventoryApp() {
         { label: "القائم", value: `${fmtW(r.grossWeight || r.weight)} جم` },
         { label: "المعتمد", value: `${fmtW(r.weight)} جم` },
         { label: "المرحلة", value: SCRAP_STAGES[stageOf(r)]?.label || "—" },
-        { label: "القيمة", value: `${C}${fmtMoney(r.total || 0)}` },
+        { label: "القيمة", value: `${fmtMoney(r.total || 0)} ${C}` },
       ];
     }
     return [];
