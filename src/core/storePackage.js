@@ -2,7 +2,7 @@
 const ACCOUNTING_PAGES = [
   "journal", "generalLedger", "trialBalance", "fullStatements", "financials", "ifrs", "combinedBook",
   "anyStatement", "queryBuilder", "docCycle", "accountantReview", "aiAccountant",
-  "supplierLedger", "officeLedger", "bankRecon",
+  "supplierLedger", "officeLedger", "bankRecon", "fixedAssets", "budgets",
 ];
 
 export { ACCOUNTING_PAGES };
