@@ -8318,6 +8318,8 @@ export default function GoldInventoryApp() {
             onSetPrinted={handleSetPrinted}
             onCreateSupplierLot={handleQuickCreateLot}
             codingModel={appSettings.codingModel || "both"}
+            printerCfg={printerCfg}
+            onSavePrinter={handleSavePrinter}
             onSendLotToHq={async (lot) => {
               if (!window.confirm(`إرسال الدفعة ${lot.ref || ""} للإدارة لتكوّدها؟ تبقى ملكك حتى تعود قطعًا.`)) return;
               try {
@@ -8347,6 +8349,10 @@ export default function GoldInventoryApp() {
             activeItems={activeItems}
             onSetPrinted={handleSetPrinted}
             onReplaceCode={handleReplaceUnitCode}
+            printerCfg={printerCfg}
+            onSavePrinter={handleSavePrinter}
+            currency={priceData.currency}
+            price24={priceData.current}
             onBack={() => setMorePage(null)}
           />
         )}

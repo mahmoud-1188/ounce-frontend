@@ -7,12 +7,15 @@ import { EmptyState } from "../ui/EmptyState.jsx";
 import { Hallmark } from "../ui/Hallmark.jsx";
 import { PseudoBarcode } from "../ui/PseudoBarcode.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
+import { isLabelPrinter, printLabelsToDevice } from "../domain/labelPrint.js";
 
-function PrintingPage({ activeItems, onSetPrinted, onReplaceCode, onBack }) {
+function PrintingPage({ activeItems, onSetPrinted, onReplaceCode, onBack, printerCfg = null, currency = "ر.س", price24 = 0, onSavePrinter = null }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all"); // 'all' | 'unprinted'
   const [selected, setSelected] = useState(new Set());
   const [printQueue, setPrintQueue] = useState(null); // codes actually sent to the printer
+  // طابعة الملصقات (بلوتوث/USB): حالة الإرسال — وطابعة النظام تبقى بنافذة المتصفح
+  const [labelStatus, setLabelStatus] = useState(null);
 
   const q = query.trim().toLowerCase();
   const visibleItems = activeItems
@@ -60,9 +63,24 @@ function PrintingPage({ activeItems, onSetPrinted, onReplaceCode, onBack }) {
       if (!byItem[it.id]) byItem[it.id] = [];
       byItem[it.id].push(code);
     });
+    const queue = printQueue;
+    setPrintQueue(null);
+    if (isLabelPrinter(printerCfg)) {
+      // ⚠ على طابعة الملصقات: يُعلَّم «مطبوعًا» ما أُرسل فعلًا فقط
+      const units = queue.map((code) => ({ code, item: printMap[code] })).filter((u) => u.item);
+      setLabelStatus({ text: `جارٍ الإرسال للطابعة… 0 من ${units.length}` });
+      printLabelsToDevice(units, {
+        cfg: printerCfg, currency, price24,
+        onRemember: (serial) => onSavePrinter?.({ ...printerCfg, usbSerial: serial }),
+        onProgress: (n, total) => setLabelStatus({ text: `جارٍ الإرسال للطابعة… ${n} من ${total}` }),
+      }).then((n) => {
+        Object.entries(byItem).forEach(([itemId, codes]) => onSetPrinted(itemId, codes, true));
+        setLabelStatus({ ok: true, text: `أُرسل ${n} ملصق للطابعة` });
+      }).catch((e) => setLabelStatus({ bad: true, text: `تعذّرت الطباعة: ${e?.message || e}` }));
+      return;
+    }
     Object.entries(byItem).forEach(([itemId, codes]) => onSetPrinted(itemId, codes, true));
     window.print();
-    setPrintQueue(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [printQueue]);
 
@@ -93,6 +111,16 @@ function PrintingPage({ activeItems, onSetPrinted, onReplaceCode, onBack }) {
         الطباعة الأولى تتم تلقائيًا عند التكويد. هذه الصفحة لإعادة طباعة رقاقة تالفة أو مفقودة أو لاستبدال كودها.
       </p>
       <div className="px-4 pt-3">
+        <p style={{ color: "var(--text3)" }} className="text-[11px] mb-2" data-printer-target>
+          {isLabelPrinter(printerCfg)
+            ? `الطباعة على طابعة الملصقات (${printerCfg.transport === "usb" ? "USB" : printerCfg.deviceName || "بلوتوث"})`
+            : "الطباعة عبر نافذة المتصفح (طابعة النظام) — لطابعة الملصقات اخترها من «إعدادات الطابعة»"}
+        </p>
+        {labelStatus && (
+          <p style={{ color: labelStatus.bad ? "var(--bad)" : labelStatus.ok ? "var(--good)" : "var(--accent)" }} className="text-[11px] mb-2" data-label-status>
+            {labelStatus.text}
+          </p>
+        )}
         <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-xl" style={{ background: "var(--panel)", border: "1px solid var(--line)" }}>
           <Search size={16} color="var(--text3)" />
           <input

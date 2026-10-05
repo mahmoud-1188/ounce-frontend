@@ -11,6 +11,7 @@ import { LabelLayoutEditor } from "../ui/LabelLayoutEditor.jsx";
 import { MmInput } from "../ui/MmInput.jsx";
 import { NumericInput } from "../ui/NumericInput.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
+import { rememberBluetoothDevice } from "../domain/labelPrint.js";
 
 function PrinterSettingsPage({ config, onSave, sampleItem, currency, price24, onBack }) {
   const [cfg, setCfg] = useState({ ...DEFAULT_PRINTER, ...(config || {}) });
@@ -32,6 +33,7 @@ function PrinterSettingsPage({ config, onSave, sampleItem, currency, price24, on
         const match = known.find((d) => d.id === cfg.deviceId);
         if (match && !cancelled) {
           deviceRef.current = match;
+          rememberBluetoothDevice(match);
           setStatus(`مقترنة: ${match.name || cfg.deviceName || "طابعة"}`);
         }
       } catch (e) {
@@ -52,6 +54,7 @@ function PrinterSettingsPage({ config, onSave, sampleItem, currency, price24, on
         optionalServices: PRINTER_SERVICES,
       });
       deviceRef.current = device;
+      rememberBluetoothDevice(device);
       const next = { ...cfg, mode: "bluetooth", deviceId: device.id, deviceName: device.name || "طابعة بلوتوث" };
       setCfg(next);
       onSave(next);
@@ -67,6 +70,7 @@ function PrinterSettingsPage({ config, onSave, sampleItem, currency, price24, on
 
   const forget = () => {
     deviceRef.current = null;
+    rememberBluetoothDevice(null);
     const next = { ...cfg, mode: "system", deviceId: null, deviceName: null };
     setCfg(next);
     onSave(next);
