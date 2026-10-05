@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { ROLES, STATEMENT_ENTITIES } from "../core/constants.js";
+import { EXPENSE_CATEGORIES, ROLES, STATEMENT_ENTITIES } from "../core/constants.js";
 import { fmtMoney, fmtW } from "../core/money.js";
 import { buildEntityStatement } from "../domain/buildEntityStatement.js";
 import { exportLedgerXlsx, exportTablesPdf, inputStyle } from "../domain/helpers.js";

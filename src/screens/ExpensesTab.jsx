@@ -217,14 +217,14 @@ function ExpensesTab({ expenseNames = [], users = [], onAddExpenseName, onDelete
                 sections: [{
                   title: "بنود المصروفات",
                   headers: ["البند", "التاريخ", `المبلغ (${currency})`, "الحساب", "بواسطة"],
-                  rows: (list || []).map((e) => [
+                  rows: (filtered || []).map((e) => [
                     e.name || accountLabel(e.category),
                     String(e.date || "").slice(0, 10),
                     fmtMoney(e.amount),
                     CATEGORY_TO_ACCOUNT[e.category] || "6000",
                     e.createdBy || "",
                   ]).concat([["المجموع", "",
-                    fmtMoney((list || []).reduce((a, e) => a + (Number(e.amount) || 0), 0)), "", ""]]),
+                    fmtMoney((filtered || []).reduce((a, e) => a + (Number(e.amount) || 0), 0)), "", ""]]),
                 }],
               })
             }

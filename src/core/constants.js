@@ -1188,15 +1188,6 @@ const PRICE_SOURCES = [
       return perOunce / 31.1034768;
     },
   },
-  {
-    id: "frankfurter",
-    label: "frankfurter.app",
-    url: "https://api.frankfurter.app/latest?from=XAU&to=SAR",
-    parse: (j) => {
-      const perOunce = Number(j?.rates?.SAR);
-      if (!Number.isFinite(perOunce) || perOunce <= 0) return null;
-      return perOunce / 31.1034768;
-    },
   },
   {
     id: "coingecko",

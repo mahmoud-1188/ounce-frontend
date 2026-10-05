@@ -5,7 +5,7 @@ import { AUTO_WORKDAY, APP_MODES, CATEGORY_STATE, DEFAULT_APP_MODE, DEFAULT_CATE
 import { DEFAULT_COMMISSION } from "../core/erp.js";
 import { AUDIT_KEY, AUDIT_LOG_KEY, BANK_TX_KEY, BRANCH_IDENTITY_KEY, BRANCH_LINK_KEY, BUSINESS_DAYS_KEY, CASH_KEY, CATEGORIES_KEY, COMMISSIONS_KEY, CUSTOMERS_KEY, CUSTOM_GROUPS_KEY, DAILY_CUSTODY_KEY, ENTRY_SESSIONS_KEY, EXPENSES_KEY, EXPENSE_NAMES_KEY, EXT_INVOICES_KEY, FISCAL_CLOSURES_KEY, GOLD_LEDGER_KEY, HQ_PERMISSIONS_KEY, INTEGRATION_KEY, ITEMS_KEY, JOURNAL_KEY, LOTS_KEY, MENU_ORDER_KEY, NAV_LAYOUT_KEY, OPENING_BALANCE_KEY, SAVED_QUERIES_KEY, PARTNERS_KEY, PARTNER_TX_KEY, PRICE_KEY, PRINTER_KEY, RECEIPTS_KEY, REPAIRS_KEY, RESERVATIONS_KEY, RETURNS_KEY, RFID_KEY, SAFE_AUDITS_KEY, SAFE_GOLD_KEY, SAFE_KEY, SALES_KEY, SCRAP_CUSTODY_KEY, SCRAP_KEY, SCRAP_REQUESTS_KEY, SCRAP_SURPLUS_KEY, SETTINGS_KEY, SHORTCUTS_KEY, STOCKTAKE_LOCK_KEY, STORE_KEY, STORE_ORDERS_KEY, SUPPLIERS_KEY, TASKIR_KEY, TASKIR_OFFICES_KEY, TASKIR_OFFICE_TX_KEY, TRUST_ACCOUNTS_KEY, TRUST_GOLD_KEY, TRUST_LEDGER_KEY, USERS_KEY, WEIGHT_ADJ_KEY } from "../core/keys.js";
 import { PURITY, fine24, fmt, fmtMoney, fmtW, fromHalalas, halalas, pricePerGram, roundMoney2, roundW, sumMoney, weightTimesPrice } from "../core/money.js";
-import { CARD_NETWORKS } from "../core/money-rules.js";
+import { CARD_NETWORKS, METHOD_LABELS } from "../core/money-rules.js";
 import { DEFAULT_NAV_LAYOUT, MAIN_TAB_IDS, NAV_REGISTRY, TAB_KIND_IDS } from "../core/navigation.js";
 import { installStorageGuard, layoutIds, loadAllStores, normalizeOpeningBalance, normalizeRoleLayout, validateStore } from "../core/stores.js";
 import * as api from "../core/api.js";
@@ -2203,7 +2203,7 @@ export default function GoldInventoryApp() {
     // يختفي من التقارير، والكسر يدخل الصندوق بلا مصدر.
     //
     // والنقد يتحرّك بالفرق وحده — لا مرتين.
-    const tLines = draft.tradeLines || [];
+    const tLines = d.tradeLines || [];
     if (tLines.length) {
       const now2 = new Date().toISOString();
       const scrapDocs = tLines.map((l, i) => {
