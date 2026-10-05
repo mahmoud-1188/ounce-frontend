@@ -5,11 +5,13 @@ import { Card } from "./Card.jsx";
 import { Field } from "./Field.jsx";
 import { LabelTag } from "./LabelTag.jsx";
 import { SubPageHeader } from "./SubPageHeader.jsx";
+import { isLabelPrinter, printLabelsToDevice } from "../domain/labelPrint.js";
 
-function PrintAfterEntry({ newItems, supplierLabel, onSetPrinted, onDone, onExit }) {
+function PrintAfterEntry({ newItems, supplierLabel, onSetPrinted, onDone, onExit, printerCfg = null, currency = "ر.س", price24 = 0, onSavePrinter = null }) {
   const [mode, setMode] = useState("all");
   const [selected, setSelected] = useState(() => new Set());
   const [printedCodes, setPrintedCodes] = useState(() => new Set());
+  const [labelStatus, setLabelStatus] = useState(null);
 
   // كل وحدة سطر مستقل: الرقاقة تُلصق على القطعة الواحدة لا على الصنف.
   const allUnits = newItems.flatMap((it) =>
@@ -26,8 +28,26 @@ function PrintAfterEntry({ newItems, supplierLabel, onSetPrinted, onDone, onExit
     setSelected(next);
   };
 
+  const markPrinted = (units) => {
+    const byItem = {};
+    units.forEach((u) => (byItem[u.itemId] ??= []).push(u.code));
+    Object.entries(byItem).forEach(([itemId, codes]) => onSetPrinted(itemId, codes, true));
+    setPrintedCodes((prev) => new Set([...prev, ...units.map((u) => u.code)]));
+  };
+
   const doPrint = (units) => {
     if (!units.length) return;
+    // طابعة الملصقات المضبوطة (بلوتوث/USB): تُرسل مباشرةً، ويُعلَّم «مطبوعًا» ما أُرسل فعلًا فقط
+    if (isLabelPrinter(printerCfg)) {
+      setLabelStatus({ text: `جارٍ الإرسال للطابعة… 0 من ${units.length}` });
+      printLabelsToDevice(units, {
+        cfg: printerCfg, currency, price24,
+        onRemember: (serial) => onSavePrinter?.({ ...printerCfg, usbSerial: serial }),
+        onProgress: (n, total) => setLabelStatus({ text: `جارٍ الإرسال للطابعة… ${n} من ${total}` }),
+      }).then((n) => { markPrinted(units); setLabelStatus({ ok: true, text: `أُرسل ${n} ملصق للطابعة` }); })
+        .catch((e) => setLabelStatus({ bad: true, text: `تعذّرت الطباعة: ${e?.message || e}` }));
+      return;
+    }
     // تُجمَّع الأكواد حسب الصنف ثم تُرسل دفعة واحدة لكل صنف. الإرسال كودًا
     // كودًا كان سيقرأ الحالة نفسها مرارًا فيطمس التحديث السابق.
     const byItem = {};
@@ -57,6 +77,17 @@ function PrintAfterEntry({ newItems, supplierLabel, onSetPrinted, onDone, onExit
             {remaining === 0 ? "طُبعت كل الرقاقات" : `بقي ${remaining} رقاقة بلا طباعة`}
           </p>
         </Card>
+
+        <p style={{ color: "var(--text3)" }} className="text-[11px] mb-2" data-printer-target>
+          {isLabelPrinter(printerCfg)
+            ? `الطباعة على طابعة الملصقات (${printerCfg.transport === "usb" ? "USB" : printerCfg.deviceName || "بلوتوث"})`
+            : "الطباعة عبر نافذة المتصفح (طابعة النظام) — لطابعة الملصقات اخترها من «إعدادات الطابعة»"}
+        </p>
+        {labelStatus && (
+          <p style={{ color: labelStatus.bad ? "var(--bad)" : labelStatus.ok ? "var(--good)" : "var(--accent)" }} className="text-[11px] mb-2" data-label-status>
+            {labelStatus.text}
+          </p>
+        )}
 
         <Field label="طريقة الطباعة">
           <div className="grid grid-cols-3 gap-2">

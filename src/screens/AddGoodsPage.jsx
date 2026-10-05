@@ -17,7 +17,7 @@ import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 
 function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions = [], onSetPrinted, onCreateSupplierLot, onDeleteItem, onBack, flashToast,
   openingMode = false, onCreateOpeningLot = null, currency = "ر.س", price24 = 0, modules = {},
-  codingModel = "both", onSendLotToHq = null, onRecallLot = null }) {
+  codingModel = "both", onSendLotToHq = null, onRecallLot = null, printerCfg = null, onSavePrinter = null }) {
   const gemOn = !!modules?.gemstones?.on, watchOn = !!modules?.watches?.on;
   const defWarranty = Number(modules?.watches?.cfg?.warrantyMonths) || 24;
   const [detailItem, setDetailItem] = useState(null);
@@ -125,6 +125,10 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
         newItems={justEntered}
         supplierLabel={selectedLot ? lotLabel(selectedLot) : ""}
         onSetPrinted={onSetPrinted}
+        printerCfg={printerCfg}
+        onSavePrinter={onSavePrinter}
+        currency={currency}
+        price24={price24}
         onDone={() => setJustEntered(null)}
         onExit={() => {
           setJustEntered(null);
