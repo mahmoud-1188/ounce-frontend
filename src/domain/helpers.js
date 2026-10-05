@@ -3,7 +3,7 @@ import * as XLSX from "xlsx";
 import { Search } from "lucide-react";
 import { AI_APP_GUIDE, ARABIC_INDIC, EASTERN_INDIC, TRACE_TOPICS } from "../core/assistant.js";
 import { CATEGORY_TO_ACCOUNT, CHART_OF_ACCOUNTS, JOURNALS } from "../core/chart.js";
-import { DOC_KINDS, EPC_EPOCH, ACCOUNT_TREE, AI_APP_MANUAL, ALL_ACCOUNT_NODES, APP_MODES, ATTACH_PREFIX, B32, BREAKPOINTS, C128, CASH_ACCOUNT_OF, CATEGORY_STATE, DEFAULT_CATEGORIES, EXCHANGE_KINDS, EXPENSE_ACCOUNT_OF, EXPENSE_CATEGORIES, MGR_FEE_DEFAULT, MIGRATION_FLAG, NHR, NHR_POWER_MAX_DBM, OUNCE_SECRET, PRICE_SANE, PRICE_SOURCES, QUERY_FIELDS, QUERY_OPS, QR_EXP, QR_VER, RECOVERY_ALPHABET, RECOVERY_WINDOW_MIN, RFID_DEFAULTS, RFID_SECTIONS } from "../core/constants.js";
+import { DEFAULT_PRINTER, DOC_KINDS, EPC_EPOCH, ACCOUNT_TREE, AI_APP_MANUAL, ALL_ACCOUNT_NODES, APP_MODES, ATTACH_PREFIX, B32, BREAKPOINTS, C128, CASH_ACCOUNT_OF, CATEGORY_STATE, DEFAULT_CATEGORIES, EXCHANGE_KINDS, EXPENSE_ACCOUNT_OF, EXPENSE_CATEGORIES, MGR_FEE_DEFAULT, MIGRATION_FLAG, NHR, NHR_POWER_MAX_DBM, OUNCE_SECRET, PRICE_SANE, PRICE_SOURCES, QUERY_FIELDS, QUERY_OPS, QR_EXP, QR_VER, RECOVERY_ALPHABET, RECOVERY_WINDOW_MIN, RFID_DEFAULTS, RFID_SECTIONS } from "../core/constants.js";
 import { GRAMS_PER_OUNCE, PURITY, WEIGHT_UNITS, fine24, fmt, fmtMoney, fmtW, fromHalalas, halalas, pricePerGram, roundW, weightTimesPrice } from "../core/money.js";
 import { BANK_COLUMN_HINTS, DEFAULT_CARD_FEES, DEFAULT_MARGINS, USD_TO_SAR_PEG } from "../core/money-rules.js";
 import { NAV_BUNDLES, NAV_MAX_PER_ROW } from "../core/navigation.js";
@@ -12,6 +12,7 @@ import { aiApi, goldPriceApi } from "../core/api.js";
 import { accountByCode } from "./accountByCode.js";
 import { journalBalanced } from "./journalBalanced.js";
 import { key } from "./key.js";
+import { hashPin } from "./hashPin.js";
 import { buildPlateEpc } from "./buildPlateEpc.js";
 
 const r2 = (v) => Math.round((Number(v) || 0) * 100) / 100;

@@ -230,7 +230,7 @@ function DailyJournalPage({
     // عمولات الشبكة: سطر لكل بطاقة
     Object.entries(netFees).forEach(([card, v]) => {
       const label = CARD_NETWORKS.find((n) => n.id === card)?.label || "بطاقة أخرى";
-      const pct = v.base > 0 ? (v.amount / v.base) * 100 : cardFeeOf(appSettings, card);
+      const pct = v.base > 0 ? (v.amount / v.base) * 100 : cardFeeOf(settings, card);
       push(`عمولة ${label} (${fmt(pct, 2)}٪)`, {
         cashOut: v.amount, category: "network_fees", account: "6500", isFee: true,
       });
