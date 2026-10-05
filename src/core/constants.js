@@ -1188,7 +1188,6 @@ const PRICE_SOURCES = [
       return perOunce / 31.1034768;
     },
   },
-  },
   {
     id: "coingecko",
     label: "coingecko",

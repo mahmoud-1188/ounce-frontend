@@ -68,7 +68,6 @@ const API_ERROR_MESSAGES = {
   not_your_request: "ليس طلبك",
   already_posted: "لهذه الفاتورة قيدٌ سلفًا",
   needs_manual_entry: "فاتورةٌ فيها عربون أو بطاقة أو بدل — قيدها يُكتب يدويًا",
-  manager_only: "للمدير وحده",
   approval_requires_hq: "هذا الطلب تعتمده الإدارة — بانتظار قرارها",
   rejection_reason_required: "اكتب سبب الرفض",
   reviewer_role_required: "الحكم بيد المحاسب أو المدير",
