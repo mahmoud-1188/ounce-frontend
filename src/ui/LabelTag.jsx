@@ -3,7 +3,7 @@ import { fmtW } from "../core/money.js";
 import { categoryLabel } from "../domain/helpers.js";
 import { PseudoBarcode } from "./PseudoBarcode.jsx";
 
-function LabelTag({ item, code }) {
+function LabelTag({ item, code, symbology = "barcode" }) {
   return (
     <div
       style={{
@@ -30,7 +30,7 @@ function LabelTag({ item, code }) {
           </div>
         </div>
       </div>
-      <PseudoBarcode code={code} />
+      <PseudoBarcode code={code} symbology={symbology} />
       <div style={{ fontWeight: 700, fontSize: "11px", letterSpacing: "0.5px" }}>{code}</div>
     </div>
   );

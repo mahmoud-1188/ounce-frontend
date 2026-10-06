@@ -2718,6 +2718,8 @@ function qrRS(data, ecLen) {
     for (let j = 0; j < poly.length; j++) { next[j] ^= qrMul(poly[j], QR_EXP.e[i]); next[j + 1] ^= poly[j]; }
     poly = next;
   }
+  // المولّد بُني من الدرجة الدنيا — والقسمة أدناه تقرؤه من العليا
+  poly.reverse();
   const res = new Array(ecLen).fill(0);
   for (const d of data) {
     const f = d ^ res[0];
@@ -2730,7 +2732,8 @@ function qrRS(data, ecLen) {
 function qrMatrix(text) {
   const bytes = Array.from(new TextEncoder().encode(String(text || "")));
   let ver = 1;
-  while (ver < 4 && bytes.length > QR_VER[ver][1]) ver += 1;
+  // ترويسة البايت (4 بت للوضع + 8 للطول) تأخذ كلمتين من السعة
+  while (ver < 4 && bytes.length + 2 > QR_VER[ver][1]) ver += 1;
   const [size, cap, ecLen] = QR_VER[ver];
   // البتات: وضع 0100، الطول 8 بت، البيانات، ثم 0000 والحشو
   const bits = [];
@@ -2796,7 +2799,8 @@ function qrMatrix(text) {
     const b = Number(FMT[i]);
     if (i < 6) put(8, i, b); else if (i < 8) put(8, i + 1, b);
     else if (i === 8) put(7, 8, b); else put(14 - i, 8, b);
-    if (i < 8) put(size - 1 - i, 8, b); else put(8, size - 15 + i, b);
+    // النسخة الثانية: سبع بتات عمودية تحت الوحدة الداكنة، وثمانٍ أفقية — لا تطمس الوحدة الداكنة
+    if (i < 7) put(size - 1 - i, 8, b); else put(8, size - 15 + i, b);
   }
   return m.map((row) => row.map((v) => (v === null ? 0 : v)));
 }

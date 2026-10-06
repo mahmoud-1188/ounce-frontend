@@ -227,7 +227,7 @@ function PrintAfterEntry({ newItems, supplierLabel, onSetPrinted, onDone, onExit
       <div className="print-area">
         <div style={{ display: "flex", flexWrap: "wrap", gap: "3mm", padding: "5mm", direction: "rtl" }}>
           {toPrint.map((u) => (
-            <LabelTag key={u.code} item={u.item} code={u.code} />
+            <LabelTag key={u.code} item={u.item} code={u.code} symbology={printerCfg?.symbology || "barcode"} />
           ))}
         </div>
       </div>

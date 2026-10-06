@@ -307,7 +307,7 @@ function PrintingPage({ activeItems, onSetPrinted, onReplaceCode, onBack, printe
                     </div>
                   </div>
                 </div>
-                <PseudoBarcode code={code} />
+                <PseudoBarcode code={code} symbology={printerCfg?.symbology || "barcode"} />
                 <div style={{ fontWeight: 700, fontSize: "11px", letterSpacing: "0.5px" }}>{code}</div>
               </div>
             );
