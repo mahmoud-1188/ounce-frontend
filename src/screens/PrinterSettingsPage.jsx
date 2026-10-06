@@ -20,6 +20,8 @@ function PrinterSettingsPage({ config, onSave, sampleItem, currency, price24, on
   const [error, setError] = useState("");
   const deviceRef = useRef(null);
   const set = (k, v) => setCfg((p) => ({ ...p, [k]: v }));
+  // ما يغيّر الطباعة نفسها يُحفظ فورًا — كان مفتاح الرقاقة يضيع إن خرج المستخدم قبل «حفظ»
+  const setNow = (k, v) => setCfg((p) => { const n = { ...p, [k]: v }; onSave(n); return n; });
   const supported = btSupported();
 
   // محاولة استعادة الاقتران السابق بلا مربّع اختيار
@@ -119,6 +121,17 @@ function PrinterSettingsPage({ config, onSave, sampleItem, currency, price24, on
   const step3 = async () => { setError(""); setBusy("3"); try {
     await sendRaw(`SIZE ${cfg.labelWidthMm || 50} mm, ${cfg.labelHeightMm || 30} mm\r\nGAP ${cfg.gapMm ?? 2} mm, 0 mm\r\nCLS\r\nTEXT 30,30,"3",0,1,1,"AWNSAH TEST"\r\nBARCODE 30,80,"128",60,1,0,2,2,"R7K2M9PQ"\r\nPRINT 1,1\r\n`, "TSPL نصّ");
     setStatus("③ إن طُبع نصٌّ وباركود فـTSPL يعمل — الخلل في الصورة أو RFID"); } catch (e) { setError(String(e?.message || e)); log(`✗ ${e?.message || e}`); } finally { setBusy(""); } };
+
+  /// ⑤ الرقاقة وحدها: أمر الكتابة كما سيُرسل + سطر نصٍّ — يعزل «الطابعة لا تفهم أمر RFID» عن الصورة
+  const stepRfid = async () => {
+    setError(""); setBusy("rfid");
+    try {
+      const line = String(cfg.rfidCommand || 'RFID WRITE,H,0,96,EPC,"{HEX}"').replace("{HEX}", buildPlateEpc({ code: "R7K2M9PQ", storeId: cfg.storeId || 0 })).replace("{CODE}", "R7K2M9PQ");
+      log(`أمر الرقاقة: ${line}`);
+      await sendRaw(`SIZE ${cfg.labelWidthMm || 50} mm, ${cfg.labelHeightMm || 30} mm\r\nGAP ${cfg.gapMm ?? 2} mm, 0 mm\r\nCLS\r\n${line}\r\nTEXT 30,30,"3",0,1,1,"RFID R7K2M9PQ"\r\nPRINT 1,1\r\n`, "RFID وحده");
+      setStatus("⑤ اقرأ الرقاقة بالقارئ: إن ظهر R7K2M9PQ فالكتابة تعمل — وإن طُبع النص بلا كتابة فالطابعة لا تفهم صيغة الأمر، جرّب الصيغة الأخرى");
+    } catch (e) { setError(String(e?.message || e)); log(`✗ ${e?.message || e}`); } finally { setBusy(""); }
+  };
 
   /// يجعل الطابعة تقيس الورق بنفسها وتحفظ المقاس.
   const calibrate = async () => {
@@ -311,6 +324,10 @@ function PrinterSettingsPage({ config, onSave, sampleItem, currency, price24, on
                   {busy === "3" ? "…" : "③ نصٌّ وباركود بلا صورة"}
                 </button>
               </div>
+              <button onClick={stepRfid} disabled={!!busy || !cfg.rfid} className="w-full py-2 rounded-xl text-[11px] font-bold mb-2"
+                style={{ background: "var(--field)", color: cfg.rfid ? "var(--text2)" : "var(--text3)", border: "1px solid var(--line)" }}>
+                {busy === "rfid" ? "…" : cfg.rfid ? "⑤ اكتب رقاقةً تجريبية فقط (R7K2M9PQ)" : "⑤ فعّل «الكتابة في الرقاقة» أدناه لتجربتها"}
+              </button>
               <p style={{ color: "var(--text3)", margin: "0 0 6px" }} className="text-[10px]">
                 ④ «طباعة تجريبية» في الأسفل = الملصق كاملًا بالصورة وRFID.
               </p>
@@ -332,16 +349,25 @@ function PrinterSettingsPage({ config, onSave, sampleItem, currency, price24, on
             {/* ── RFID ── */}
             <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">رقاقة RFID</p>
             <Card style={{ padding: 14, marginBottom: 12 }}>
-              <button onClick={() => set("rfid", !cfg.rfid)} className="w-full py-2 rounded-xl text-[11px] font-bold mb-2"
+              <button onClick={() => setNow("rfid", !cfg.rfid)} className="w-full py-2 rounded-xl text-[11px] font-bold mb-2"
                 style={{ background: cfg.rfid ? "var(--accentBg)" : "var(--field)",
                   color: cfg.rfid ? "var(--accent)" : "var(--text2)", border: "1px solid var(--line)" }}>
                 {cfg.rfid ? "✓ يُكتب الرمز في الرقاقة مع كل ملصق" : "الكتابة في الرقاقة معطّلة"}
               </button>
               {cfg.rfid && (
                 <>
+                  <Field label="صيغة أمر الكتابة">
+                    <div className="grid grid-cols-2 gap-1.5 mb-1.5">
+                      {[["TSC كاملة", 'RFID WRITE,H,0,96,EPC,"{HEX}"'], ["مختصرة", 'RFID WRITE,EPC,"{HEX}"']].map(([l, v]) => (
+                        <button key={l} onClick={() => setNow("rfidCommand", v)} className="py-2 rounded-xl text-[11px] font-bold"
+                          style={{ background: cfg.rfidCommand === v ? "var(--accentBg)" : "var(--field)",
+                            color: cfg.rfidCommand === v ? "var(--accent)" : "var(--text2)", border: "1px solid var(--line)" }}>{l}</button>
+                      ))}
+                    </div>
+                  </Field>
                   <Field label="أمر الكتابة — {HEX} يُستبدل بالرمز (12 بايت)">
                     <input style={{ ...inputStyle, fontFamily: "monospace", direction: "ltr" }} value={cfg.rfidCommand || ""}
-                      onChange={(e) => set("rfidCommand", e.target.value)} />
+                      onChange={(e) => set("rfidCommand", e.target.value)} onBlur={() => onSave(cfg)} />
                   </Field>
                   <p style={{ color: "var(--text3)", margin: 0 }} className="text-[10px] leading-6">
                     ⚠ الأمر يختلف بين الشركات. الافتراضي صيغة TSC. راجع دليل SDK طابعتك —
@@ -349,7 +375,7 @@ function PrinterSettingsPage({ config, onSave, sampleItem, currency, price24, on
                     <br />مثال لرمز <b>R7K2M9PQ</b>: <span style={{ fontFamily: "monospace", direction: "ltr", display: "inline-block" }}>{buildPlateEpc({ code: "R7K2M9PQ", storeId: cfg.storeId || 0 })}</span>
                   </p>
                   <Field label="رقم المحل على الرقاقة (0–65535)">
-                    <NumericInput value={String(cfg.storeId || "")} onChange={(v) => set("storeId", Math.max(0, Math.min(65535, Math.round(Number(v) || 0))))} placeholder="0" />
+                    <NumericInput value={String(cfg.storeId || "")} onChange={(v) => setNow("storeId", Math.max(0, Math.min(65535, Math.round(Number(v) || 0))))} placeholder="0" />
                   </Field>
                   <p style={{ color: "var(--text3)", margin: 0 }} className="text-[10px] leading-6">
                     الرقاقة تحمل الرمز ورقم المحل وتاريخ الكتابة — فرقاقةُ فرعٍ آخر تُقرأ «ليست لنا» لا «مفقودة».
