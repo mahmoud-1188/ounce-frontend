@@ -3275,6 +3275,25 @@ function tsplJobBytes({ canvas, cfg, copies = 1, code = "", epcHex = null }) {
   return all;
 }
 
+/// الملصق كاملًا بلغة ZPL — لطابعاتٍ تكتب الرقاقة بأمر ZPL وحده (Urovo D813R: أوامر TSPL للرقاقة تُتجاهل).
+///   الصورة ^GFA بالست عشري (البت 1 = أسود، عكس TSPL)، والرقاقة ^RS8 + ^RFW,H قبلها.
+function zplJobBytes({ canvas, cfg, copies = 1, code = "", epcHex = null }) {
+  const bmp = canvasToTsplBitmap(canvas);
+  const hexDigits = "0123456789ABCDEF";
+  let data = "";
+  for (let i = 0; i < bmp.bytes.length; i++) {
+    const b = bmp.bytes[i] ^ 0xff;                      // TSPL: 1 أبيض ← ZPL: 1 أسود
+    data += hexDigits[b >> 4] + hexDigits[b & 15];
+  }
+  const total = bmp.bytes.length;
+  const hex = epcHex || (cfg.rfid && code ? buildPlateEpc({ code, storeId: cfg.storeId || 0 }) : null);
+  const rfid = cfg.rfid && hex ? `^RS8^RFW,H^FD${hex}^FS` : "";
+  const qty = rfid ? 1 : Math.max(1, Number(copies) || 1);
+  const job = `^XA^PW${canvas.width}^LL${canvas.height}^LH0,0${cfg.zplInvert ? "^POI" : "^PON"}^PR${Math.min(6, Math.max(1, Number(cfg.speed) || 3))}`
+    + `${rfid}^FO0,0^GFA,${total},${total},${bmp.widthBytes},${data}^FS^PQ${qty}^XZ\r\n`;
+  return new TextEncoder().encode(job);
+}
+
 /// يُرسل بايتات لطابعة عبر BLE بقطعٍ صغيرة.
 ///
 /// ⚠ BLE يقبل نحو 512 بايت في الكتابة — والملصق 12 كيلو. إرسالٌ دفعةً
@@ -3349,7 +3368,7 @@ async function sendRawToPrinter(bytes, cfg, deviceRef, onRemember) {
 /// ⚠ الشعار شعارُ المحل الذي اختاره المستخدم من الاستوديو — لا شعار
 /// التطبيق. بلا شعارٍ مخصّص لا يُطبع شيء.
 async function printLabelToDevice({ item, code, cfg, currency, price24, deviceRef, onRemember, epcHex = null }) {
-  const lang = "tspl";
+  const lang = cfg.rfid && cfg.rfidMode === "zpl" ? "zpl" : "tspl";
   let bytes;
   {
     let logoImg = null;
@@ -3359,7 +3378,10 @@ async function printLabelToDevice({ item, code, cfg, currency, price24, deviceRe
     // ⚠ الخطوط العربية تُحمَّل قبل الرسم — وإلا رُسم النص بخطٍّ بديل قبيح
     try { await document.fonts?.ready; } catch (e) { /* لا تحكّم */ }
     const canvas = renderLabelCanvas({ item, code, cfg, currency, price24, logoImg });
-    bytes = tsplJobBytes({ canvas, cfg, copies: cfg.copies || 1, code, epcHex });
+    // كتابة الرقاقة بأمر ZPL (إعداد «صيغة الرقاقة: ZPL»): الملصق كلّه يُرسل بـZPL
+    bytes = cfg.rfid && cfg.rfidMode === "zpl"
+      ? zplJobBytes({ canvas, cfg, copies: cfg.copies || 1, code, epcHex })
+      : tsplJobBytes({ canvas, cfg, copies: cfg.copies || 1, code, epcHex });
   }
   const r = await sendRawToPrinter(bytes, cfg, deviceRef, onRemember);
   return { lang, ...r };
@@ -3719,4 +3741,4 @@ function diffPermissions(before, after, registry = []) {
   };
 }
 
-export { accountRoot, goldClassOf, applyHqMarkup, markupLabel, comparePeriods, deviceLabel, diffPermissions, documentIndex, documentPdfSections, epcHexToCode, monthRange, networkFeesRecorded, nextSessionId, prefersReducedMotion, printDocumentPdf, priorPeriodOf, readPlateEpc, reportPeriod, reviewFingerprint, reviewKey, reviewSummary, rfidSessionCsv, rfidSessionJson, rfidSessionText, shareOrDownload, signStatement, useCountUp, accountForCategory, accountGroup, accountLabel, accountPath, aiAllowedFor, aiAllowedForRole, aiScope, askReportAi, attachmentByteSize, b32Decode, b32Encode, balancesAt, bleWriteChunked, branchDataKey, branchSnapshotKey, btSupported, bundleById, bundledPages, canvasToTsplBitmap, cardFeeOf, cashAccountFor, cashTrialBalance, categoryById, categoryLabel, childrenOf, cleanToken, codeCounter, codeToEpcHex, compressImage, contentWidth, createNhrFileAssembler, dayEnd, dayStart, detectColumns, detectTraceTopic, describeQuery, diffDatasets, drawCode128, drawQr, emptyRow, exchangeKind, expenseAccountFor, exportLedgerXlsx, exportTablesPdf, fetchAiAuditNarrative, fetchAiBusinessInsights, fetchAiChatReply, fetchAiReportSpec, fetchGoldPriceSAR, fetchLiveGram24, fineAt, fmtWeight, fineToKarat, fromGram, fundingSourceLabel, generateRecoveryCode, generateUnitCode, goldDestLabel, goldProfit, guessScreens, hiddenNumbersScan, inPeriod, inputStyle, isBundle, isGoldCogs, isLiveScrap, isPartial, isUnder, issueBranchCode, issueLicense, itemLabel, journalOf, journalTrialBalance, loadAttachment, lotAllocatedPieces, lotAllocatedWeight, lotReconcile, marginFor, mgrFeeBreakdown, mgrFeeEnabled, mgrFeeOn, mgrFeeRate, migrateLegacyKeys, modeAllowsAction, modeAllowsPage, modeAllowsTab, nameExists, navPerRow, nhrClassify, nhrCommand, nhrCommands, nhrCrc32, nhrHex, nhrIsLiveFrame, nhrParseBatchFile, nhrParseJson, nhrParseLiveFrame, normHeader, normalizeArabicQuery, normalizeFundingSource, normalizeName, normalizeRecovery, onlineBlockReason, openAttachment, openWhatsApp, ounceHash, periodRange, prettyPhone, prettyToken, priceBreakdown, printLabelToDevice, printedCount, qrEccBytes, qrGaloisTables, qrMatrix, qrMul, qrRS, r2, r3, readFileAsDataUrl, readKeyOrNull, remainingQty, renderLabelCanvas, reportFactsText, reportFindings, resolveCompare, resolveRange, rfidSettingsFor, runAuditChecks, runQuery, saleLineProvenance, saleModeOf, saleProfitOf, saleProfitSplit, saveAttachment, scrapPrice24, sellPrice24, sendRawToPrinter, setRuntimeCategories, splitCsvLine, statementDigest, streamBase, toCsv, toGram, toIntlPhone, toLatinDigits, trustBalance, tsplCalibrateBytes, tsplJobBytes, unitById, unitCostBasis, unitCurrentValue, usbPrint, useDebounced, useNhrReader, useViewport, useVoice, useWedgeScanner, vendorChallenge, vendorResponse, weekStart, weightTrialBalance };
+export { accountRoot, goldClassOf, applyHqMarkup, markupLabel, comparePeriods, deviceLabel, diffPermissions, documentIndex, documentPdfSections, epcHexToCode, monthRange, networkFeesRecorded, nextSessionId, prefersReducedMotion, printDocumentPdf, priorPeriodOf, readPlateEpc, reportPeriod, reviewFingerprint, reviewKey, reviewSummary, rfidSessionCsv, rfidSessionJson, rfidSessionText, shareOrDownload, signStatement, useCountUp, accountForCategory, accountGroup, accountLabel, accountPath, aiAllowedFor, aiAllowedForRole, aiScope, askReportAi, attachmentByteSize, b32Decode, b32Encode, balancesAt, bleWriteChunked, branchDataKey, branchSnapshotKey, btSupported, bundleById, bundledPages, canvasToTsplBitmap, cardFeeOf, cashAccountFor, cashTrialBalance, categoryById, categoryLabel, childrenOf, cleanToken, codeCounter, codeToEpcHex, compressImage, contentWidth, createNhrFileAssembler, dayEnd, dayStart, detectColumns, detectTraceTopic, describeQuery, diffDatasets, drawCode128, drawQr, emptyRow, exchangeKind, expenseAccountFor, exportLedgerXlsx, exportTablesPdf, fetchAiAuditNarrative, fetchAiBusinessInsights, fetchAiChatReply, fetchAiReportSpec, fetchGoldPriceSAR, fetchLiveGram24, fineAt, fmtWeight, fineToKarat, fromGram, fundingSourceLabel, generateRecoveryCode, generateUnitCode, goldDestLabel, goldProfit, guessScreens, hiddenNumbersScan, inPeriod, inputStyle, isBundle, isGoldCogs, isLiveScrap, isPartial, isUnder, issueBranchCode, issueLicense, itemLabel, journalOf, journalTrialBalance, loadAttachment, lotAllocatedPieces, lotAllocatedWeight, lotReconcile, marginFor, mgrFeeBreakdown, mgrFeeEnabled, mgrFeeOn, mgrFeeRate, migrateLegacyKeys, modeAllowsAction, modeAllowsPage, modeAllowsTab, nameExists, navPerRow, nhrClassify, nhrCommand, nhrCommands, nhrCrc32, nhrHex, nhrIsLiveFrame, nhrParseBatchFile, nhrParseJson, nhrParseLiveFrame, normHeader, normalizeArabicQuery, normalizeFundingSource, normalizeName, normalizeRecovery, onlineBlockReason, openAttachment, openWhatsApp, ounceHash, periodRange, prettyPhone, prettyToken, priceBreakdown, printLabelToDevice, printedCount, qrEccBytes, qrGaloisTables, qrMatrix, qrMul, qrRS, r2, r3, readFileAsDataUrl, readKeyOrNull, remainingQty, renderLabelCanvas, reportFactsText, reportFindings, resolveCompare, resolveRange, rfidSettingsFor, runAuditChecks, runQuery, saleLineProvenance, saleModeOf, saleProfitOf, saleProfitSplit, saveAttachment, scrapPrice24, sellPrice24, sendRawToPrinter, setRuntimeCategories, splitCsvLine, statementDigest, streamBase, toCsv, toGram, toIntlPhone, toLatinDigits, trustBalance, tsplCalibrateBytes, tsplJobBytes, zplJobBytes, unitById, unitCostBasis, unitCurrentValue, usbPrint, useDebounced, useNhrReader, useViewport, useVoice, useWedgeScanner, vendorChallenge, vendorResponse, weekStart, weightTrialBalance };
