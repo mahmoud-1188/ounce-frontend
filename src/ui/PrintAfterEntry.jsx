@@ -7,7 +7,7 @@ import { LabelTag } from "./LabelTag.jsx";
 import { SubPageHeader } from "./SubPageHeader.jsx";
 import { isLabelPrinter, printLabelsToDevice } from "../domain/labelPrint.js";
 
-function PrintAfterEntry({ newItems, supplierLabel, onSetPrinted, onDone, onExit, printerCfg = null, currency = "ر.س", price24 = 0, onSavePrinter = null }) {
+function PrintAfterEntry({ newItems, supplierLabel, onSetPrinted, onDone, onExit, printerCfg = null, currency = "ر.س", price24 = 0, onSavePrinter = null, onBindEpc = null }) {
   const [mode, setMode] = useState("all");
   const [selected, setSelected] = useState(() => new Set());
   const [printedCodes, setPrintedCodes] = useState(() => new Set());
@@ -41,7 +41,7 @@ function PrintAfterEntry({ newItems, supplierLabel, onSetPrinted, onDone, onExit
     if (isLabelPrinter(printerCfg)) {
       setLabelStatus({ text: `جارٍ الإرسال للطابعة… 0 من ${units.length}` });
       printLabelsToDevice(units, {
-        cfg: printerCfg, currency, price24,
+        cfg: printerCfg, currency, price24, onBindEpc,
         onRemember: (serial) => onSavePrinter?.({ ...printerCfg, usbSerial: serial }),
         onProgress: (n, total) => setLabelStatus({ text: `جارٍ الإرسال للطابعة… ${n} من ${total}` }),
       }).then((n) => { markPrinted(units); setLabelStatus({ ok: true, text: `أُرسل ${n} ملصق للطابعة` }); })

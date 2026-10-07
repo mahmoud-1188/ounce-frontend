@@ -3297,6 +3297,20 @@ export default function GoldInventoryApp() {
     }
   };
 
+  // ربطٌ صامت أثناء طباعة الملصقات (رقم الرقاقة يُحفظ على القطعة قبل كتابتها) — بلا رسالةٍ لكل قطعة
+  const bindEpcForPrint = async (unitId, epc) => {
+    try {
+      const res = await api.rfid.bind(unitId, epc);
+      setItems((prev) => prev.map((it) => ({
+        ...it,
+        units: (it.units || []).map((u) => (u.id === unitId ? { ...u, epc: res.unit.epc, epcBoundAt: res.unit.epc_bound_at } : u)),
+      })));
+      return true;
+    } catch (err) {
+      throw new Error(apiErrorMessage(err, "تعذّر حفظ رقم الرقاقة"));
+    }
+  };
+
   const handleUnbindEpc = async (unitId) => {
     try {
       const res = await api.rfid.unbind(unitId);
@@ -8320,6 +8334,7 @@ export default function GoldInventoryApp() {
             codingModel={appSettings.codingModel || "both"}
             printerCfg={printerCfg}
             onSavePrinter={handleSavePrinter}
+            onBindEpc={bindEpcForPrint}
             onSendLotToHq={async (lot) => {
               if (!window.confirm(`إرسال الدفعة ${lot.ref || ""} للإدارة لتكوّدها؟ تبقى ملكك حتى تعود قطعًا.`)) return;
               try {
@@ -8351,6 +8366,7 @@ export default function GoldInventoryApp() {
             onReplaceCode={handleReplaceUnitCode}
             printerCfg={printerCfg}
             onSavePrinter={handleSavePrinter}
+            onBindEpc={bindEpcForPrint}
             currency={priceData.currency}
             price24={priceData.current}
             onBack={() => setMorePage(null)}

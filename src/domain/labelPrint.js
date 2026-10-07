@@ -20,15 +20,40 @@ async function ensureBluetooth(cfg) {
   return btRef;
 }
 
+/// لوحة التعريف (الرمز + رقم المحل + التاريخ) تتّسع لرمزٍ من 8 خانات [A-Z2-9] فقط —
+/// والرموز الأطول (ITM-000002) كانت تُقصّ إلى «ITM-0000» فتتطابق رقائق القطع كلّها ولا تُفكّ.
+const fitsPlate = (code) => /^[A-Z2-9]{4,8}$/.test(String(code || "").toUpperCase());
+
+/// رقم الرقاقة للقطعة: المحفوظ عليها إن وُجد، وإلا (لرمزٍ لا يتّسع للوحة) أوّل 96 بت من معرّفها الفريد
+function unitEpcFor(unit, code) {
+  if (unit?.epc) return { epc: String(unit.epc).toUpperCase(), bind: false };
+  if (fitsPlate(code)) return { epc: null, bind: false };
+  const hex = String(unit?.id || "").replace(/[^0-9a-f]/gi, "").toUpperCase();
+  if (hex.length < 24) throw new Error(`لا معرّف للقطعة ${code} — حدّث الصفحة ثم أعد`);
+  return { epc: hex.slice(0, 24), bind: true };
+}
+
 /**
  * يطبع ملصقات القطع على طابعة الملصقات المضبوطة، ملصقًا ملصقًا.
  * units: [{ item, code }] — يُرجع عدد ما أُرسل، أو يرمي خطأً بالعربية عند أوّل فشل (وما قبله طُبع).
  */
-async function printLabelsToDevice(units, { cfg, currency, price24, onRemember, onProgress }) {
+async function printLabelsToDevice(units, { cfg, currency, price24, onRemember, onProgress, onBindEpc }) {
   const ref = cfg.transport === "usb" ? { current: null } : await ensureBluetooth(cfg);
   let sent = 0;
   for (const u of units) {
-    await printLabelToDevice({ item: u.item, code: u.code, cfg, currency, price24, deviceRef: ref, onRemember });
+    let epcHex = null;
+    if (cfg.rfid) {
+      const unit = u.unit || (u.item?.units || []).find((x) => x.code === u.code);
+      const r = unitEpcFor(unit, u.code);
+      // ⚠ يُحفظ رقم الرقاقة على القطعة قبل الكتابة — وإلا قُرئت رقاقةٌ لا يعرفها التطبيق
+      if (r.bind) {
+        if (!onBindEpc) throw new Error("لا يمكن حفظ رقم الرقاقة على القطعة");
+        const ok = await onBindEpc(unit.id, r.epc);
+        if (!ok) throw new Error(`تعذّر حفظ رقم الرقاقة للقطعة ${u.code}`);
+      }
+      epcHex = r.epc;
+    }
+    await printLabelToDevice({ item: u.item, code: u.code, cfg, currency, price24, deviceRef: ref, onRemember, epcHex });
     sent += 1;
     onProgress?.(sent, units.length);
   }
@@ -38,4 +63,4 @@ async function printLabelsToDevice(units, { cfg, currency, price24, onRemember, 
 /// «إعدادات الطابعة» تسجّل الجهاز عند الاقتران — فتطبع الشاشات الأخرى عليه بلا اختيارٍ جديد
 const rememberBluetoothDevice = (device) => { btRef.current = device || null; };
 
-export { isLabelPrinter, printLabelsToDevice, rememberBluetoothDevice };
+export { fitsPlate, isLabelPrinter, printLabelsToDevice, rememberBluetoothDevice, unitEpcFor };

@@ -133,6 +133,33 @@ function PrinterSettingsPage({ config, onSave, sampleItem, currency, price24, on
     } catch (e) { setError(String(e?.message || e)); log(`✗ ${e?.message || e}`); } finally { setBusy(""); }
   };
 
+  /// ⑥ أربع صيغٍ لأمر الكتابة على أربع ملصقات — كلّ ملصقٍ برمزٍ يدلّ على صيغته (FMTA…FMTD).
+  ///   الطابعات تتجاهل الأمر الذي لا تفهمه بصمت؛ فالرقاقة التي تُقرأ برمزها تكشف الصيغة الصحيحة.
+  const RFID_FORMATS = [
+    { id: "A", label: "TSC كاملة", cmd: 'RFID WRITE,H,0,96,EPC,"{HEX}"' },
+    { id: "B", label: "TSC من الكتلة 2", cmd: 'RFID WRITE,H,2,96,EPC,"{HEX}"' },
+    { id: "C", label: "مختصرة", cmd: 'RFID WRITE,EPC,"{HEX}"' },
+    { id: "D", label: "ZPL", zpl: true },
+  ];
+  const stepFormats = async () => {
+    setError(""); setBusy("fmt");
+    try {
+      for (const f of RFID_FORMATS) {
+        const code = `FMT${f.id}`;
+        const hex = buildPlateEpc({ code, storeId: cfg.storeId || 0 });
+        if (f.zpl) {
+          await sendRaw(`^XA^RS8^RFW,H^FD${hex}^FS^FO40,40^A0N,40,40^FD${code} ZPL^FS^PQ1^XZ\r\n`, `${code} (ZPL)`);
+        } else {
+          const line = f.cmd.replace("{HEX}", hex);
+          log(`${code}: ${line}`);
+          await sendRaw(`SIZE ${cfg.labelWidthMm || 50} mm, ${cfg.labelHeightMm || 30} mm\r\nGAP ${cfg.gapMm ?? 2} mm, 0 mm\r\nCLS\r\n${line}\r\nTEXT 30,30,"3",0,1,1,"${code}"\r\nPRINT 1,1\r\n`, code);
+        }
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+      setStatus("⑥ طُبعت 4 ملصقات (FMTA…FMTD). اقرأ رقاقة كلٍّ منها: الصحيحة تبدأ بـ 464D54 ثم 41/42/43/44 — واختر صيغتها أدناه");
+    } catch (e) { setError(String(e?.message || e)); log(`✗ ${e?.message || e}`); } finally { setBusy(""); }
+  };
+
   /// يجعل الطابعة تقيس الورق بنفسها وتحفظ المقاس.
   const calibrate = async () => {
     setError(""); setBusy("cal");
@@ -328,6 +355,10 @@ function PrinterSettingsPage({ config, onSave, sampleItem, currency, price24, on
                 style={{ background: "var(--field)", color: cfg.rfid ? "var(--text2)" : "var(--text3)", border: "1px solid var(--line)" }}>
                 {busy === "rfid" ? "…" : cfg.rfid ? "⑤ اكتب رقاقةً تجريبية فقط (R7K2M9PQ)" : "⑤ فعّل «الكتابة في الرقاقة» أدناه لتجربتها"}
               </button>
+              <button onClick={stepFormats} disabled={!!busy} className="w-full py-2 rounded-xl text-[11px] font-bold mb-2"
+                style={{ background: "var(--accentBg)", color: "var(--accent)", border: "1px solid var(--accentLine)" }}>
+                {busy === "fmt" ? "… جارٍ طباعة 4 ملصقات" : "⑥ جرّب 4 صيغ للرقاقة — FMTA · FMTB · FMTC · FMTD"}
+              </button>
               <p style={{ color: "var(--text3)", margin: "0 0 6px" }} className="text-[10px]">
                 ④ «طباعة تجريبية» في الأسفل = الملصق كاملًا بالصورة وRFID.
               </p>
@@ -357,8 +388,8 @@ function PrinterSettingsPage({ config, onSave, sampleItem, currency, price24, on
               {cfg.rfid && (
                 <>
                   <Field label="صيغة أمر الكتابة">
-                    <div className="grid grid-cols-2 gap-1.5 mb-1.5">
-                      {[["TSC كاملة", 'RFID WRITE,H,0,96,EPC,"{HEX}"'], ["مختصرة", 'RFID WRITE,EPC,"{HEX}"']].map(([l, v]) => (
+                    <div className="grid grid-cols-3 gap-1.5 mb-1.5">
+                      {[["A · TSC كاملة", 'RFID WRITE,H,0,96,EPC,"{HEX}"'], ["B · من الكتلة 2", 'RFID WRITE,H,2,96,EPC,"{HEX}"'], ["C · مختصرة", 'RFID WRITE,EPC,"{HEX}"']].map(([l, v]) => (
                         <button key={l} onClick={() => setNow("rfidCommand", v)} className="py-2 rounded-xl text-[11px] font-bold"
                           style={{ background: cfg.rfidCommand === v ? "var(--accentBg)" : "var(--field)",
                             color: cfg.rfidCommand === v ? "var(--accent)" : "var(--text2)", border: "1px solid var(--line)" }}>{l}</button>
