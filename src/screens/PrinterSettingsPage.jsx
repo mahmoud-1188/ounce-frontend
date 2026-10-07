@@ -126,6 +126,12 @@ function PrinterSettingsPage({ config, onSave, sampleItem, currency, price24, on
   const stepRfid = async () => {
     setError(""); setBusy("rfid");
     try {
+      if (cfg.rfidMode === "zpl") {
+        const hex = buildPlateEpc({ code: "R7K2M9PQ", storeId: cfg.storeId || 0 });
+        await sendRaw(`^XA^RS8^RFW,H^FD${hex}^FS^FO40,40^A0N,40,40^FDRFID R7K2M9PQ^FS^PQ1^XZ\r\n`, "RFID وحده (ZPL)");
+        setStatus("⑤ اقرأ الرقاقة بالقارئ: إن بدأ رقمها بـ 52374B32 فالكتابة تعمل");
+        return;
+      }
       const line = String(cfg.rfidCommand || 'RFID WRITE,H,0,96,EPC,"{HEX}"').replace("{HEX}", buildPlateEpc({ code: "R7K2M9PQ", storeId: cfg.storeId || 0 })).replace("{CODE}", "R7K2M9PQ");
       log(`أمر الرقاقة: ${line}`);
       await sendRaw(`SIZE ${cfg.labelWidthMm || 50} mm, ${cfg.labelHeightMm || 30} mm\r\nGAP ${cfg.gapMm ?? 2} mm, 0 mm\r\nCLS\r\n${line}\r\nTEXT 30,30,"3",0,1,1,"RFID R7K2M9PQ"\r\nPRINT 1,1\r\n`, "RFID وحده");
@@ -201,7 +207,7 @@ function PrinterSettingsPage({ config, onSave, sampleItem, currency, price24, on
           code: "TEST-001", cfg, currency, price24, deviceRef,
           onRemember: (serial) => set("usbSerial", serial),
         });
-        setStatus(`أُرسل ${Math.round(r.bytes / 1024)} ك بلغة ${r.lang === "tspl" ? "TSPL (ملصقات)" : "ESC/POS"} عبر ${r.transport === "usb" ? "USB" : "بلوتوث"}`);
+        setStatus(`أُرسل ${Math.round(r.bytes / 1024)} ك بلغة ${r.lang === "zpl" ? "ZPL (مع الرقاقة)" : r.lang === "tspl" ? "TSPL (ملصقات)" : "ESC/POS"} عبر ${r.transport === "usb" ? "USB" : "بلوتوث"}`);
       } else {
         window.print();
         setStatus("أُرسل لطابعة النظام");
@@ -388,13 +394,28 @@ function PrinterSettingsPage({ config, onSave, sampleItem, currency, price24, on
               {cfg.rfid && (
                 <>
                   <Field label="صيغة أمر الكتابة">
-                    <div className="grid grid-cols-3 gap-1.5 mb-1.5">
-                      {[["A · TSC كاملة", 'RFID WRITE,H,0,96,EPC,"{HEX}"'], ["B · من الكتلة 2", 'RFID WRITE,H,2,96,EPC,"{HEX}"'], ["C · مختصرة", 'RFID WRITE,EPC,"{HEX}"']].map(([l, v]) => (
-                        <button key={l} onClick={() => setNow("rfidCommand", v)} className="py-2 rounded-xl text-[11px] font-bold"
-                          style={{ background: cfg.rfidCommand === v ? "var(--accentBg)" : "var(--field)",
-                            color: cfg.rfidCommand === v ? "var(--accent)" : "var(--text2)", border: "1px solid var(--line)" }}>{l}</button>
-                      ))}
+                    <div className="grid grid-cols-2 gap-1.5 mb-1.5">
+                      {[["A · TSC كاملة", 'RFID WRITE,H,0,96,EPC,"{HEX}"'], ["B · من الكتلة 2", 'RFID WRITE,H,2,96,EPC,"{HEX}"'], ["C · مختصرة", 'RFID WRITE,EPC,"{HEX}"'], ["D · ZPL", "zpl"]].map(([l, v]) => {
+                        const on = v === "zpl" ? cfg.rfidMode === "zpl" : cfg.rfidMode !== "zpl" && cfg.rfidCommand === v;
+                        return (
+                          <button key={l} className="py-2 rounded-xl text-[11px] font-bold"
+                            onClick={() => setCfg((p) => { const n = v === "zpl" ? { ...p, rfidMode: "zpl" } : { ...p, rfidMode: "tspl", rfidCommand: v }; onSave(n); return n; })}
+                            style={{ background: on ? "var(--accentBg)" : "var(--field)",
+                              color: on ? "var(--accent)" : "var(--text2)", border: "1px solid var(--line)" }}>{l}</button>
+                        );
+                      })}
                     </div>
+                    {cfg.rfidMode === "zpl" && (
+                      <>
+                        <p style={{ color: "var(--text3)", margin: "0 0 6px" }} className="text-[10px] leading-6">
+                          الملصق كاملًا يُرسل بلغة ZPL مع أمر الرقاقة <span style={{ fontFamily: "monospace", direction: "ltr", display: "inline-block" }}>^RFW,H</span> — لطابعاتٍ مثل Urovo D813R تتجاهل أمر الرقاقة بلغة TSPL.
+                        </p>
+                        <button onClick={() => setNow("zplInvert", !cfg.zplInvert)} className="w-full py-2 rounded-xl text-[11px] font-bold"
+                          style={{ background: cfg.zplInvert ? "var(--accentBg)" : "var(--field)", color: cfg.zplInvert ? "var(--accent)" : "var(--text2)", border: "1px solid var(--line)" }}>
+                          {cfg.zplInvert ? "✓ الملصق مقلوب 180°" : "اقلب الملصق 180° (إن خرج معكوسًا)"}
+                        </button>
+                      </>
+                    )}
                   </Field>
                   <Field label="أمر الكتابة — {HEX} يُستبدل بالرمز (12 بايت)">
                     <input style={{ ...inputStyle, fontFamily: "monospace", direction: "ltr" }} value={cfg.rfidCommand || ""}
