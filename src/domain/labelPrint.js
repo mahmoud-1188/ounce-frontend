@@ -1,4 +1,4 @@
-import { printLabelToDevice } from "./helpers.js";
+import { codeToEpcHex, printLabelToDevice } from "./helpers.js";
 import { PRINTER_SERVICES } from "../core/constants.js";
 
 /// طابعة الملصقات المضبوطة (بلوتوث أو USB) — غير ذلك «طابعة النظام» عبر نافذة المتصفح
@@ -28,6 +28,8 @@ const fitsPlate = (code) => /^[A-Z2-9]{4,8}$/.test(String(code || "").toUpperCas
 function unitEpcFor(unit, code) {
   if (unit?.epc) return { epc: String(unit.epc).toUpperCase(), bind: false };
   if (fitsPlate(code)) return { epc: null, bind: false };
+  // رمزٌ حتى 12 حرفًا يُكتب نصًّا كما هو — والقارئ يطابقه بالرمز مباشرةً بلا حفظٍ على الخادم
+  if (/^[\x20-\x7E]{1,12}$/.test(String(code || ""))) return { epc: codeToEpcHex(code), bind: false };
   const hex = String(unit?.id || "").replace(/[^0-9a-f]/gi, "").toUpperCase();
   if (hex.length < 24) throw new Error(`لا معرّف للقطعة ${code} — حدّث الصفحة ثم أعد`);
   return { epc: hex.slice(0, 24), bind: true };

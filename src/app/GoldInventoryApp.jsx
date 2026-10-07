@@ -3307,7 +3307,9 @@ export default function GoldInventoryApp() {
       })));
       return true;
     } catch (err) {
-      throw new Error(apiErrorMessage(err, "تعذّر حفظ رقم الرقاقة"));
+      // السبب الفعلي (الحالة ورمز الخطأ) يظهر للتشخيص
+      const why = err?.status ? ` (${err.status}${err.body?.error ? ` ${err.body.error}` : ""})` : ` (${err?.message || "لا اتصال"})`;
+      throw new Error(apiErrorMessage(err, "تعذّر حفظ رقم الرقاقة") + why);
     }
   };
 
