@@ -3244,10 +3244,13 @@ function tsplCalibrateBytes({ widthMm, heightMm, gapMm }) {
 /// ⚠ الكتابة في الرقاقة قبل PRINT: الطابعة تُشفّر الرقاقة ثم تطبع فوقها —
 /// ونسختان بالرمز نفسه تعنيان رقاقتين بالرمز نفسه، لذلك تُطبع الـRFID
 /// نسخةً واحدةً دائمًا.
-function tsplJobBytes({ canvas, cfg, copies = 1, code = "" }) {
+function tsplJobBytes({ canvas, cfg, copies = 1, code = "", epcHex = null }) {
   const enc = new TextEncoder();
   const bmp = canvasToTsplBitmap(canvas);
-  const rfidLine = cfg.rfid && code
+  // epcHex: رقم الرقاقة المحفوظ على القطعة (للرموز الأطول من لوحة التعريف) — يُكتب كما هو
+  const rfidLine = cfg.rfid && epcHex
+    ? String(cfg.rfidCommand || 'RFID WRITE,EPC,"{HEX}"').replace("{HEX}", epcHex).replace("{CODE}", code)
+    : cfg.rfid && code
     // ⚠ الرقاقة لوحةُ تعريف (المرجع): 8 بايت رمز + 2 رقم المحل + 2 تاريخ الكتابة.
     //   رقاقةٌ من محلٍّ آخر تُعرف أنها ليست لنا بدل «مجهولة»، والتاريخ يكشف
     //   رقاقةً أُعيد استعمالها. والقديمة (رمزٌ وحده) تبقى تُطابَق.
@@ -3345,7 +3348,7 @@ async function sendRawToPrinter(bytes, cfg, deviceRef, onRemember) {
 ///
 /// ⚠ الشعار شعارُ المحل الذي اختاره المستخدم من الاستوديو — لا شعار
 /// التطبيق. بلا شعارٍ مخصّص لا يُطبع شيء.
-async function printLabelToDevice({ item, code, cfg, currency, price24, deviceRef, onRemember }) {
+async function printLabelToDevice({ item, code, cfg, currency, price24, deviceRef, onRemember, epcHex = null }) {
   const lang = "tspl";
   let bytes;
   {
@@ -3356,7 +3359,7 @@ async function printLabelToDevice({ item, code, cfg, currency, price24, deviceRe
     // ⚠ الخطوط العربية تُحمَّل قبل الرسم — وإلا رُسم النص بخطٍّ بديل قبيح
     try { await document.fonts?.ready; } catch (e) { /* لا تحكّم */ }
     const canvas = renderLabelCanvas({ item, code, cfg, currency, price24, logoImg });
-    bytes = tsplJobBytes({ canvas, cfg, copies: cfg.copies || 1, code });
+    bytes = tsplJobBytes({ canvas, cfg, copies: cfg.copies || 1, code, epcHex });
   }
   const r = await sendRawToPrinter(bytes, cfg, deviceRef, onRemember);
   return { lang, ...r };

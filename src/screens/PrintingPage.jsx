@@ -9,7 +9,7 @@ import { PseudoBarcode } from "../ui/PseudoBarcode.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 import { isLabelPrinter, printLabelsToDevice } from "../domain/labelPrint.js";
 
-function PrintingPage({ activeItems, onSetPrinted, onReplaceCode, onBack, printerCfg = null, currency = "ر.س", price24 = 0, onSavePrinter = null }) {
+function PrintingPage({ activeItems, onSetPrinted, onReplaceCode, onBack, printerCfg = null, currency = "ر.س", price24 = 0, onSavePrinter = null, onBindEpc = null }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all"); // 'all' | 'unprinted'
   const [selected, setSelected] = useState(new Set());
@@ -70,7 +70,7 @@ function PrintingPage({ activeItems, onSetPrinted, onReplaceCode, onBack, printe
       const units = queue.map((code) => ({ code, item: printMap[code] })).filter((u) => u.item);
       setLabelStatus({ text: `جارٍ الإرسال للطابعة… 0 من ${units.length}` });
       printLabelsToDevice(units, {
-        cfg: printerCfg, currency, price24,
+        cfg: printerCfg, currency, price24, onBindEpc,
         onRemember: (serial) => onSavePrinter?.({ ...printerCfg, usbSerial: serial }),
         onProgress: (n, total) => setLabelStatus({ text: `جارٍ الإرسال للطابعة… ${n} من ${total}` }),
       }).then((n) => {
