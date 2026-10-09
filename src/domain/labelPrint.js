@@ -58,6 +58,8 @@ async function printLabelsToDevice(units, { cfg, currency, price24, onRemember, 
     await printLabelToDevice({ item: u.item, code: u.code, cfg, currency, price24, deviceRef: ref, onRemember, epcHex });
     sent += 1;
     onProgress?.(sent, units.length);
+    // ⚠ مهلة بين ملصقات الرقاقة: الطابعة مشغولة بالكتابة، وما يصلها أثناءها يضيع
+    if (cfg.rfid && sent < units.length) await new Promise((r) => setTimeout(r, 2500));
   }
   return sent;
 }

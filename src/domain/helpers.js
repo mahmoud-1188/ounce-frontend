@@ -3290,7 +3290,8 @@ function zplJobBytes({ canvas, cfg, copies = 1, code = "", epcHex = null }) {
   // ^RS8,,,1,N: محاولة واحدة لكل ملصق بلا إعادة — وإلا كرّرت الطابعة الطباعة على ملصقات جديدة
   const rfid = cfg.rfid && hex ? `^RS8,,,1,N^RFW,H^FD${hex}^FS` : "";
   const qty = rfid ? 1 : Math.max(1, Number(copies) || 1);
-  const job = `^XA^PW${canvas.width}^LL${canvas.height}^LH0,0${cfg.zplInvert ? "^POI" : "^PON"}^PR${Math.min(6, Math.max(1, Number(cfg.speed) || 3))}`
+  // ⚠ بلا ^LL: الطابعة تقيس طول الملصق بنفسها — طولٌ أكبر من الحقيقي يجعلها تكمل على ملصقٍ ثانٍ
+  const job = `^XA^PW${canvas.width}^LH0,0${cfg.zplInvert ? "^POI" : "^PON"}^PR${Math.min(6, Math.max(1, Number(cfg.speed) || 3))}`
     + `${rfid}^FO0,0^GFA,${total},${total},${bmp.widthBytes},${data}^FS^PQ${qty}^XZ\r\n`;
   return new TextEncoder().encode(job);
 }
