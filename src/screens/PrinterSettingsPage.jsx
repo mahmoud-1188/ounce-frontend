@@ -128,7 +128,7 @@ function PrinterSettingsPage({ config, onSave, sampleItem, currency, price24, on
     try {
       if (cfg.rfidMode === "zpl") {
         const hex = buildPlateEpc({ code: "R7K2M9PQ", storeId: cfg.storeId || 0 });
-        await sendRaw(`^XA^RS8^RFW,H^FD${hex}^FS^FO40,40^A0N,40,40^FDRFID R7K2M9PQ^FS^PQ1^XZ\r\n`, "RFID وحده (ZPL)");
+        await sendRaw(`^XA^RS8,,,1,N^RFW,H^FD${hex}^FS^FO40,40^A0N,40,40^FDRFID R7K2M9PQ^FS^PQ1^XZ\r\n`, "RFID وحده (ZPL)");
         setStatus("⑤ اقرأ الرقاقة بالقارئ: إن بدأ رقمها بـ 52374B32 فالكتابة تعمل");
         return;
       }
@@ -154,7 +154,7 @@ function PrinterSettingsPage({ config, onSave, sampleItem, currency, price24, on
         const code = `FMT${f.id}`;
         const hex = buildPlateEpc({ code, storeId: cfg.storeId || 0 });
         if (f.zpl) {
-          await sendRaw(`^XA^RS8^RFW,H^FD${hex}^FS^FO40,40^A0N,40,40^FD${code} ZPL^FS^PQ1^XZ\r\n`, `${code} (ZPL)`);
+          await sendRaw(`^XA^RS8,,,1,N^RFW,H^FD${hex}^FS^FO40,40^A0N,40,40^FD${code} ZPL^FS^PQ1^XZ\r\n`, `${code} (ZPL)`);
         } else {
           const line = f.cmd.replace("{HEX}", hex);
           log(`${code}: ${line}`);
