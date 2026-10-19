@@ -803,6 +803,15 @@ function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSa
           <p style={{ color: "var(--text3)" }} className="text-[11px] mt-2">الفواتير والتقارير الرسمية تبقى بالعربية.</p>
         </Card>
 
+        {/* ── علامات «؟» على الأزرار ── */}
+        <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">شرح الأزرار</p>
+        <Card style={{ padding: 14, marginBottom: 16 }}>
+          <label className="flex items-center justify-between gap-2 text-[12px]" style={{ color: "var(--text)" }}>
+            <span>علامة «؟» على كل زرّ<span style={{ color: "var(--text3)" }} className="block text-[11px]">اضغط «؟» أو اضغط الزرّ مطوّلًا لترى ماذا يفعل — دون أن يُنفَّذ</span></span>
+            <input type="checkbox" data-help-badges-toggle checked={settings.helpBadges !== false} onChange={(e) => onSave({ ...settings, helpBadges: e.target.checked })} style={{ accentColor: "var(--accent)", width: 18, height: 18 }} />
+          </label>
+        </Card>
+
         {/* ── طباعة الفواتير (مطفأة افتراضًا في الفرع) ── */}
         <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">طباعة الفواتير</p>
         <Card style={{ padding: 14, marginBottom: 16 }}>

@@ -467,6 +467,8 @@ import { NavBtn } from "../ui/NavBtn.js";
 import { PriceLoginScreen } from "../ui/PriceLoginScreen.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 import { Toast } from "../ui/Toast.jsx";
+import { ButtonHelpSheet } from "../ui/ButtonHelpSheet.jsx";
+import { installButtonHelp } from "../domain/buttonHelp.js";
 
 export default function GoldInventoryApp() {
   // ⚠ شاشة الهبوط بحسب الدور.
@@ -537,6 +539,17 @@ export default function GoldInventoryApp() {
   const [bankTx, setBankTx] = useState([]);
   const [journal, setJournal] = useState([]);
   const [roleTamper, setRoleTamper] = useState(null);
+  // شرح الأزرار «؟»: المستمع يُركَّب مرّةً ويقرأ الشاشة الحالية من المرجع الحيّ لحظة الضغط
+  const [helpTopic, setHelpTopic] = useState(null);
+  const buttonHelpRef = useRef({});
+  buttonHelpRef.current = { screen: morePage || tab, open: (t) => setHelpTopic(t) };
+  useEffect(() => installButtonHelp(() => buttonHelpRef.current), []);
+  useEffect(() => {
+    const root = document.documentElement;
+    if (currentUser) root.dataset.helpBadges = appSettings.helpBadges === false ? "off" : "on";
+    else delete root.dataset.helpBadges;
+    return () => { delete root.dataset.helpBadges; };
+  }, [currentUser, appSettings.helpBadges]);
   const [auditLog, setAuditLog] = useState([]);
   const [fixedAssets, setFixedAssets] = useState([]);
   const [depreciations, setDepreciations] = useState([]);
@@ -10151,6 +10164,8 @@ export default function GoldInventoryApp() {
       )}
 
       <Toast message={toast} actions={toastActs} onClose={closeToast} />
+      <ButtonHelpSheet topic={helpTopic} onClose={() => setHelpTopic(null)}
+        onBadges={role === "manager" ? () => { setHelpTopic(null); handleUpdateSettings({ ...appSettings, helpBadges: false }); } : null} />
     </div>
   );
 }
