@@ -804,6 +804,8 @@ export const setupApi = {
   state: () => apiFetch("/setup/state"),
   saveOpening: (balance, noOldStock = false) => apiFetch("/setup/opening-balance", { method: "POST", body: { balance, noOldStock } }),
   goLive: (body = {}) => apiFetch("/setup/go-live", { method: "POST", body }),
+  // بيعٌ بلا سعر قبل التشغيل: القطع تخرج بلا فاتورةٍ ولا قيد
+  exitUnits: (codes, note = "") => apiFetch("/setup/exit-units", { method: "POST", body: { codes, note } }),
 };
 
 // قوالب المصروفات الثابتة (migration 074)

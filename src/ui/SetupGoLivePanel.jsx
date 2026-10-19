@@ -4,7 +4,7 @@ import { Card } from "./Card.jsx";
 
 /// فترة التجهيز: ثلاث خطوات بالترتيب ثم «بدء التشغيل» — في الفرع المرتبط تعتمده الإدارة
 /// setup: { ledgerState, codedPieces, noOldStock, openingSaved, linked, request }
-function SetupGoLivePanel({ setup, canStart = false, onOpenCoding, onOpenOpening, onGoLive }) {
+function SetupGoLivePanel({ setup, canStart = false, onOpenCoding, onOpenOpening, onGoLive, onExit = null }) {
   const [busy, setBusy] = useState(false);
   if (!setup || setup.ledgerState !== "setup") return null;
   const coded = setup.codedPieces > 0 || setup.noOldStock;
@@ -38,6 +38,13 @@ function SetupGoLivePanel({ setup, canStart = false, onOpenCoding, onOpenOpening
           className="w-full mt-2 py-2.5 rounded-xl text-xs font-bold"
           style={{ background: ready && !pending ? "linear-gradient(135deg,var(--gradFrom),var(--gradTo))" : "var(--panel)", color: ready && !pending ? "var(--panel)" : "var(--text3)", border: "1px solid var(--line)" }}>
           {busy ? "…" : pending ? "الطلب عند الإدارة" : approved || !setup.linked ? "ابدأ التشغيل" : "اطلب بدء التشغيل من الإدارة"}
+        </button>
+      )}
+      {onExit && (
+        <button type="button" data-setup-exit-open onClick={onExit} className="w-full mt-2 py-2 rounded-xl text-xs font-bold"
+          data-help="في فترة التجهيز: يُخرج قطعًا بيعت من البضاعة القديمة من المخزون بلا فاتورةٍ ولا قيد — ولا تدخل الرصيد الافتتاحي"
+          style={{ background: "var(--panel)", color: "var(--accent)", border: "1px solid var(--accentLine)" }}>
+          بيعٌ بلا سعر — إخراج قطعٍ من النظام{setup.exited?.pieces ? ` (${setup.exited.pieces})` : ""}
         </button>
       )}
       {pending && <p data-golive-pending style={{ color: "var(--accentText)", margin: "6px 0 0" }} className="text-[11px]">يصل الإدارة في ورادها — وحين تعتمده يبدأ التشغيل بضغطة.</p>}

@@ -387,6 +387,7 @@ import { ItemEditPage } from "../screens/ItemEditPage.jsx";
 import { NavCustomizePage } from "../screens/NavCustomizePage.jsx";
 import { OpeningBalancePage } from "../screens/OpeningBalancePage.jsx";
 import { SetupGoLivePanel } from "../ui/SetupGoLivePanel.jsx";
+import { SetupExitSheet } from "../ui/SetupExitSheet.jsx";
 import { setGoldEqContext } from "../ui/GoldEq.jsx";
 import { NetWeightCard } from "../ui/NetWeightCard.jsx";
 import { netWeightPosition } from "../domain/netWeight.js";
@@ -1864,6 +1865,20 @@ export default function GoldInventoryApp() {
       else if (res?.live) { flashToast("✓ بدأ التشغيل — الحسابات تعمل الآن", { actions: [{ label: "افتح يوم العمل", go: () => openPage("workday") }] }); loadBootstrap(currentUser).catch(() => {}); }
     } catch (err) { flashToast(apiErrorMessage(err, "تعذّر بدء التشغيل")); }
     refreshSetup();
+  };
+  const SETUP_EXIT_ERRORS = { unit_not_found: "ليست في المخزون", unit_not_available: "خرجت سلفًا", not_opening_stock: "ليست من البضاعة القديمة المكوَّدة في التجهيز", already_live: "بدأ التشغيل — استعمل شاشة البيع" };
+  const handleSetupExit = async (codes, note) => {
+    try {
+      const r = await api.setupApi.exitUnits(codes, note);
+      flashToast(`أُخرجت ${r.count} قطعة · ${fmtW(r.weight)} جم — بيعٌ بلا سعر (${r.ref})`);
+      loadBootstrap(currentUser).catch(() => {});
+      refreshSetup();
+      return true;
+    } catch (err) {
+      const code = err?.body?.error;
+      flashToast(SETUP_EXIT_ERRORS[code] ? `${err.body.code ? `${err.body.code}: ` : ""}${SETUP_EXIT_ERRORS[code]} — لم يُخرج شيء` : apiErrorMessage(err, "تعذّر الإخراج"));
+      return false;
+    }
   };
   const executeApproval = async (ap) => {
     const p = { ...(ap.payload || {}), approvalId: ap.id };
@@ -8330,6 +8345,7 @@ export default function GoldInventoryApp() {
         {morePage === null && tab === "home" && setupInfo?.ledgerState === "setup" && (
           <SetupGoLivePanel setup={setupInfo} canStart={role === "manager"}
             onOpenCoding={() => openPage("addGoods")} onOpenOpening={() => openPage("openingBalance")}
+            onExit={() => { setQuickSaleItemId(null); setQuickSaleCustomerId(null); setShowNewSale(true); }}
             onGoLive={() => handleGoLive(setupInfo.request?.status === "approved" ? setupInfo.request.id : null)} />
         )}
         {morePage === null && tab === "home" && (
@@ -10028,7 +10044,10 @@ export default function GoldInventoryApp() {
           onClose={() => setPostSale(null)}
         />
       )}
-      {showNewSale && (
+      {showNewSale && setupInfo?.ledgerState === "setup" && (
+        <SetupExitSheet items={items} exited={setupInfo.exited} onExit={handleSetupExit} onClose={() => setShowNewSale(false)} />
+      )}
+      {showNewSale && setupInfo?.ledgerState !== "setup" && (
         <NewSaleModal
             sellerCommission={commissions?.[currentUser?.id] ? {
               rule: commissions[currentUser.id],
