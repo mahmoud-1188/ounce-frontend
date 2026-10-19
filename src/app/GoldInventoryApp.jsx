@@ -1613,19 +1613,19 @@ export default function GoldInventoryApp() {
   };
 
   // ⚠ العميل على الخادم (migration 055) — كان يُضاف في المتصفح وحده فلا تعرفه الفاتورة الآجلة ولا الحجز
-  const handleAddCustomer = async (name, phone, note, idNumber = "") => {
+  const handleAddCustomer = async (name, phone, note, idNumber = "", extra = {}) => {
     if (nameExists(customers, name)) {
       flashToast("يوجد عميل بهذا الاسم");
       return null;
     }
     try {
-      const r = await api.modulesApi.addCustomer({ name, phone, note, idNumber });
+      const r = await api.modulesApi.addCustomer({ name, phone, note, idNumber, ...(extra.vatNumber ? { vatNumber: extra.vatNumber, address: extra.address || "" } : {}) });
       const c = { ...r.customer, createdBy: currentUser?.name || "" };
       setCustomers((prev) => [c, ...prev]);
       flashToast(`تمت إضافة العميل ${c.ref}`);
       return c;
     } catch (err) {
-      flashToast(err?.body?.error === "invalid_id_number" ? "رقم الهوية غير صالح" : apiErrorMessage(err, "تعذّر إضافة العميل"));
+      flashToast(err?.body?.error === "invalid_id_number" ? "رقم الهوية غير صالح" : err?.body?.error === "invalid_vat_number" ? "الرقم الضريبي 15 رقمًا يبدأ وينتهي بـ3" : apiErrorMessage(err, "تعذّر إضافة العميل"));
       return null;
     }
   };
@@ -4181,7 +4181,9 @@ export default function GoldInventoryApp() {
     const info = { ...(branchProvision?.profile || {}), name: branchIdentity?.name || "" };
     const withAttrs = { ...sl, lines: (sl.lines || []).map((l) => { const it = items.find((x) => x.id === l.itemId); return { ...l, itemName: it ? `${categoryLabel(l.category)} ع${l.karatSnapshot}` : undefined, gem: it?.gem || null, watch: it?.watch || null }; }) };
     const einvoice = appSettings.serverModules?.zatca?.on ? api.einvoiceApi.of("sales", withAttrs.id).then((r) => r.einvoice) : null;
-    if (!printSaleInvoice(withAttrs, { info, currency: priceData.currency || "ر.س", modules: appSettings.serverModules || {}, einvoice })) flashToast("اسمح بالنوافذ المنبثقة للطباعة");
+    // الصيغة الرسمية: عميلٌ له رقمٌ ضريبي يأخذ فاتورةً ضريبية كاملة (بيانات المشتري وضريبة كل سطر والمبلغ كتابةً)
+    const buyer = appSettings?.officialPrint ? customers.find((c) => c.id === sl.customerId && c.vatNumber) || null : null;
+    if (!printSaleInvoice(withAttrs, { info, currency: priceData.currency || "ر.س", modules: appSettings.serverModules || {}, einvoice, buyer })) flashToast("اسمح بالنوافذ المنبثقة للطباعة");
   };
   const runEntityAction = (actionId, r, kind) => {
     const a = entityActionsFor(kind, r).find((x) => x.id === actionId);
@@ -9727,7 +9729,9 @@ export default function GoldInventoryApp() {
             <div className="px-4 pt-3 pb-6">
               <DocumentsArchive
                 docs={documentIndex({ sales, returns: returns.map((r) => ({ ...r, saleRef: r.saleRef || sales.find((x) => x.id === r.saleId)?.ref || "" })), lots, taskirEntries, taskirOfficeTx, scrapEntries, receipts, expenses, payrollRuns, suppliers, customers, taskirOffices })}
-                currency={priceData.currency} branchName={branchIdentity?.name || ""} onBlocked={flashToast} />
+                currency={priceData.currency} branchName={branchIdentity?.name || ""} onBlocked={flashToast}
+                official={!!appSettings?.officialPrint} info={{ ...(branchProvision?.profile || {}), name: branchIdentity?.name || "" }}
+                salesById={new Map(sales.map((x) => [x.id, x]))} />
             </div>
           </div>
         )}

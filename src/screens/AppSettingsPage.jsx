@@ -819,6 +819,10 @@ function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSa
             <span>اطبع فاتورة البيع للعميل<span style={{ color: "var(--text3)" }} className="block text-[11px]">مطفأة افتراضًا — الفاتورة تُرسل بواتساب أو تُعرض</span></span>
             <input type="checkbox" data-invoice-print checked={!!settings.invoicePrintOn} onChange={(e) => onSave({ ...settings, invoicePrintOn: e.target.checked })} style={{ accentColor: "var(--accent)", width: 18, height: 18 }} />
           </label>
+          <label className="flex items-center justify-between gap-2 text-[12px] mt-3" style={{ color: "var(--text)" }}>
+            <span>الصيغة الرسمية للمحاسبين والجهات الرسمية<span style={{ color: "var(--text3)" }} className="block text-[11px]">سندات قبض وصرف بالمبلغ كتابةً وثلاثة توقيعات (أصل وصورة)، وإشعار دائن للمرتجع، وفاتورة ضريبية كاملة لعميلٍ له رقم ضريبي</span></span>
+            <input type="checkbox" data-official-print-toggle checked={!!settings.officialPrint} onChange={(e) => onSave({ ...settings, officialPrint: e.target.checked })} style={{ accentColor: "var(--accent)", width: 18, height: 18 }} />
+          </label>
         </Card>
 
         {/* ── عيار الاحتساب والمكافئ الذهبي ── */}

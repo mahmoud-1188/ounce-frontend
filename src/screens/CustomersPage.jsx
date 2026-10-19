@@ -32,6 +32,8 @@ function CustomersPage({ customers, sales, returns = [], repairs = [], trustGold
   const [phone, setPhone] = useState("");
   const [note, setNote] = useState("");
   const [idNumber, setIdNumber] = useState("");
+  const [vatNumber, setVatNumber] = useState("");
+  const [address, setAddress] = useState("");
   const [detailId, setDetailId] = useState(null);
   const [search, setSearch] = useState("");
   const [showCollect, setShowCollect] = useState(false);
@@ -297,6 +299,14 @@ function CustomersPage({ customers, sales, returns = [], repairs = [], trustGold
               <Field label="رقم الهوية أو الإقامة (اختياري — يلزم للدفع النقدي الكبير)">
                 <input style={inputStyle} value={idNumber} onChange={(e) => setIdNumber(toLatinDigits(e.target.value).toUpperCase())} />
               </Field>
+              <Field label="الرقم الضريبي للمنشأة (اختياري — للفاتورة الضريبية الكاملة)">
+                <input style={inputStyle} data-customer-vat value={vatNumber} onChange={(e) => setVatNumber(toLatinDigits(e.target.value).replace(/\D/g, "").slice(0, 15))} inputMode="numeric" placeholder="3xxxxxxxxxxxxx3" />
+              </Field>
+              {vatNumber && (
+                <Field label="عنوان المنشأة">
+                  <input style={inputStyle} value={address} onChange={(e) => setAddress(e.target.value)} />
+                </Field>
+              )}
               <Field label="ملاحظات (اختياري)">
                 <input style={inputStyle} value={note} onChange={(e) => setNote(e.target.value)} />
               </Field>
@@ -309,7 +319,7 @@ function CustomersPage({ customers, sales, returns = [], repairs = [], trustGold
                 </button>
                 <button
                   disabled={!valid}
-                  onClick={() => { onAdd(name.trim(), phone.trim(), note.trim(), idNumber.trim()); setName(""); setPhone(""); setNote(""); setIdNumber(""); setShowAdd(false); }}
+                  onClick={() => { onAdd(name.trim(), phone.trim(), note.trim(), idNumber.trim(), { vatNumber: vatNumber.trim(), address: address.trim() }); setName(""); setPhone(""); setNote(""); setIdNumber(""); setVatNumber(""); setAddress(""); setShowAdd(false); }}
                   className="py-2 rounded-xl text-xs font-bold"
                   style={{ background: valid ? "linear-gradient(135deg,var(--gradFrom),var(--gradTo))" : "var(--accentBg)", color: valid ? "var(--panel)" : "var(--text3)" }}
                 >

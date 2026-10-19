@@ -206,7 +206,7 @@ function normalizeSafeAudits(rows) {
 
 function normalizeCustomers(rows) {
   return rows.map((c) => ({ id: c.id, ref: c.ref, name: c.name, phone: c.phone, idNumber: c.id_number || "", note: c.note || "", createdBy: c.created_by, createdAt: c.created_at,
-    creditLimit: c.credit_limit != null ? Number(c.credit_limit) : null }));
+    creditLimit: c.credit_limit != null ? Number(c.credit_limit) : null, vatNumber: c.vat_number || "", address: c.address || "" }));
 }
 
 function normalizeSuppliers(rows) {
