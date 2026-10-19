@@ -86,6 +86,9 @@ const API_ERROR_MESSAGES = {
   store_suspended: "اشتراك المحل موقوف — تواصل مع مزوّد البرنامج",
   store_expired: "انتهى اشتراك المحل — تواصل مع مزوّد البرنامج لتجديده",
   insufficient_stock: "الكمية غير متوفرة",
+  unit_not_available: "القطعة الممسوحة لم تعد متاحة — بِيعت أو أُخرجت",
+  invalid_line_part: "القطع المختارة للمرتجع غير صالحة — أُرجعت سلفًا أو أكثر مما بقي",
+  unit_codes_mismatch: "عدد القطع لا يطابق ما مُسح — امسح القطع من جديد",
   // أجزاء الأطقم وبقاياها (migration 066)
   item_is_set_remnant: "بقايا طقم — تُكوَّد قطعًا قبل بيعها",
   part_weight_not_less_than_set: "الجزء أقلّ من الطقم — بيع الطقم كلّه من فاتورة جديدة",
@@ -1628,6 +1631,7 @@ export default function GoldInventoryApp() {
     try {
       const res = await api.returnsApi.createFull(req.saleId, {
         lineIndexes: req.lineIndexes,
+        lineParts: req.lineParts || undefined,
         reasonId: req.reasonId,
         refundTarget: req.refundTarget,
         note: req.note || null,
@@ -1717,6 +1721,7 @@ export default function GoldInventoryApp() {
     try {
       const res = await api.returnsApi.exchange(req.saleId, {
         lineIndexes: req.lineIndexes,
+        lineParts: req.lineParts || undefined,
         reasonId: req.reasonId,
         settle: req.settle,
         note: req.note || null,

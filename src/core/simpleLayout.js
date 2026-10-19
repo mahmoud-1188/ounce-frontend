@@ -8,7 +8,7 @@ import { BarChart3, ClipboardCheck, Flame, Receipt, Users, Wallet, Warehouse } f
 const SIMPLE_BRANCH = {
   big: [
     { key: "sale", title: "البيع", hint: "فاتورة · بالوزن · مرتجع · حجوزات", icon: Receipt, tone: "sales",
-      items: [{ act: "sell", label: "فاتورة بيع جديدة", need: "sales" }, ["sales", "البيع بالوزن والمرتجع"], "salesHistory", "salesReturn", "reservations", "customOrders", "giftCards"] },
+      items: [{ act: "sell", label: "بيع", need: "sales" }, ["sales", "البيع بالوزن والمرتجع"], "salesHistory", "salesReturn", "reservations", "customOrders", "giftCards"] },
     { key: "scrap", title: "الكسر", hint: "استلام · عهدة · شراء · موردون", icon: Flame, tone: "purchasing",
       items: [{ act: "scrap", label: "كل خيارات الكسر", need: ["scrapIntake", "scrapCustody", "scrap"] }, "scrapIntake", "scrapCustody", "scrap", "purchases", "purchaseOrders", "suppliers", "taskirat"] },
     { key: "count", title: "الجرد", hint: "عدّ الرفّ · جرد الخزنة", icon: ClipboardCheck, tone: "inventory",

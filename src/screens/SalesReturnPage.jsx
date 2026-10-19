@@ -6,6 +6,7 @@ import { accountByCode } from "../domain/accountByCode.js";
 import { buildReturnJournal } from "../domain/buildReturnJournal.js";
 import { computeExchangeAmounts } from "../domain/computeExchangeAmounts.js";
 import { computeReturnAmounts } from "../domain/computeReturnAmounts.js";
+import { lineCodesLeft, lineReturnLeft, lineReturnedCodes, piecePartOf } from "../domain/returnParts.js";
 import { findSoldUnit } from "../domain/findSoldUnit.js";
 import { inputStyle, itemLabel } from "../domain/helpers.js";
 import { suggestedUnitPrice } from "../domain/suggestedUnitPrice.js";
@@ -35,6 +36,7 @@ function SalesReturnPage({
   const [browse, setBrowse] = useState("");
   const [showList, setShowList] = useState(false);
   const [picked, setPicked] = useState([]);      // أسطر مختارة
+  const [parts, setParts] = useState({});        // أجزاء الأسطر { [i]: { qty, unitCodes } } — قطعةٌ من سطرٍ فيه أكثر من قطعة
   const [reasonId, setReasonId] = useState("changed_mind");
   const [target, setTarget] = useState(() => refundTargetFor(hit?.sale));
   const [note, setNote] = useState("");
@@ -113,20 +115,51 @@ function SalesReturnPage({
       setErr([resolvedCode ? `لم تُباع القطعة ${resolvedCode} (البطاقة مربوطة بها لكن لا فاتورة مطابقة)` : r.why]);
       return;
     }
+    // القطعة الممسوحة مُرتجعة سلفًا: تُقال بدل أن يُختار سطرها
+    if (r.lineIndex != null) {
+      const gone = lineReturnLeft(r.sale, returns, r.lineIndex) <= 0
+        || (r.unitCode && lineReturnedCodes(returns, r.sale, r.lineIndex).has(String(r.unitCode).toUpperCase()));
+      if (gone) { setHit(null); setErr([`القطعة ${String(q).trim()} مُرتجعة سلفًا — ${r.sale.ref}`]); return; }
+    }
     setHit(r);
-    // البحث بالرمز يختار سطره؛ وبالفاتورة يترك الاختيار للبائع
+    // البحث بالرمز يختار سطره وقطعته وحدها؛ وبالفاتورة يترك الاختيار للبائع
     setPicked(r.lineIndex != null ? [r.lineIndex] : []);
+    setParts(r.lineIndex != null ? piecePartOf(r.sale, returns, r.lineIndex, r.unitCode) : {});
     setQuery("");
   };
 
   const sale = hit?.sale || null;
+  const partsOf = (idx) => Object.fromEntries(idx.filter((i) => parts[i]).map((i) => [i, parts[i]]));
   const amounts = useMemo(
-    () => (sale && picked.length ? computeReturnAmounts(sale, picked) : null),
-    [sale, picked]
+    () => (sale && picked.length ? computeReturnAmounts(sale, picked, { returns: returns || [], lineParts: partsOf(picked) }) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sale, picked, parts, returns]
   );
   const reason = RETURN_REASONS.find((r) => r.id === reasonId);
-  const already = (i) =>
-    (returns || []).some((r) => r.saleId === sale?.id && (r.lineIndexes || []).includes(i));
+  const already = (i) => lineReturnLeft(sale, returns, i) <= 0;
+  const qtyFullOf = (i) => Math.max(1, Math.round(Number((sale?.lines || [])[i]?.quantity) || 1));
+  const leftOf = (i) => lineReturnLeft(sale, returns, i);
+  const partQtyOf = (i) => (parts[i] ? Math.max(1, Number(parts[i].qty) || 1) : leftOf(i));
+  const dropLine = (i) => { setPicked((p) => p.filter((x) => x !== i)); setParts((p) => { const n = { ...p }; delete n[i]; return n; }); };
+  // سطرٌ بأكثر من قطعة: يُختار ما بقي منه كلّه، ثم يُستثنى منه برمز القطعة أو بالعدد
+  const toggleLine = (i) => {
+    if (picked.includes(i)) { dropLine(i); return; }
+    setPicked((p) => [...p, i]);
+    setParts((p) => { const n = { ...p }; delete n[i]; return n; });
+  };
+  const togglePiece = (i, code) => {
+    const all = lineCodesLeft(sale, returns, i);
+    const cur = parts[i]?.unitCodes?.length ? parts[i].unitCodes : all.slice(0, leftOf(i));
+    const has = cur.some((x) => x.toUpperCase() === code.toUpperCase());
+    const next = has ? cur.filter((x) => x.toUpperCase() !== code.toUpperCase()) : [...cur, code];
+    if (!next.length) { dropLine(i); return; }
+    setParts((p) => ({ ...p, [i]: { qty: next.length, unitCodes: next } }));
+  };
+  const stepPart = (i, d) => {
+    const q = Math.min(leftOf(i), Math.max(0, partQtyOf(i) + d));
+    if (q <= 0) { dropLine(i); return; }
+    setParts((p) => ({ ...p, [i]: { qty: q, unitCodes: lineCodesLeft(sale, returns, i).slice(0, q) } }));
+  };
   const lineName = (l, i) => {
     const it = items.find((x) => x.id === l.itemId);
     return l.partLabel || l.itemName || l.name || (it ? itemLabel(it) : `سطر ${i + 1}`);
@@ -137,26 +170,26 @@ function SalesReturnPage({
     () => (sale ? (sale.lines || []).map((_, i) => i).filter((i) => !already(i)) : []),
     [sale, returns]
   );
-  const wholePicked = returnable.length > 0 && returnable.every((i) => picked.includes(i));
-  const pickSale = (x) => { setErr([]); setHit({ found: true, sale: x, lineIndex: null }); setPicked([]); setShowList(false); setQuery(""); };
+  const wholePicked = returnable.length > 0 && returnable.every((i) => picked.includes(i) && !parts[i]);
+  // الفاتورة كاملة: كل ما بقي منها دفعةً واحدة، وضغطةٌ أخرى تلغي الاختيار
+  const pickWhole = () => { if (wholePicked) { setPicked([]); setParts({}); return; } setPicked(returnable); setParts({}); };
+  const pickSale = (x) => { setErr([]); setHit({ found: true, sale: x, lineIndex: null }); setPicked([]); setParts({}); setShowList(false); setQuery(""); };
   // آخر المبيعات — أحدثها أوّلًا، بلا المرتجعة كاملةً
   const recentSales = useMemo(() => {
     const q = browse.trim().toLowerCase();
-    const retBySale = {};
-    (returns || []).forEach((r) => { (r.lineIndexes || []).forEach((i) => { (retBySale[r.saleId] = retBySale[r.saleId] || new Set()).add(i); }); });
     return [...sales]
       .filter((x) => !x.voided && (x.lines || []).length)
-      .filter((x) => (x.lines || []).some((_, i) => !(retBySale[x.id] || new Set()).has(i)))
+      .filter((x) => (x.lines || []).some((_, i) => lineReturnLeft(x, returns, i) > 0))
       .filter((x) => !q || [x.ref, x.customerName, x.sellerName, String(x.date).slice(0, 10)]
         .some((f) => String(f || "").toLowerCase().includes(q)))
       .sort((a, b) => String(b.date).localeCompare(String(a.date)))
       .slice(0, 40);
   }, [sales, returns, browse]);
 
-  const reset = () => { setHit(null); setPicked([]); setNewLines([]); setNote(""); setErr([]); };
+  const reset = () => { setHit(null); setPicked([]); setParts({}); setNewLines([]); setNote(""); setErr([]); };
 
   const submit = async () => {
-    const req = { saleId: sale.id, lineIndexes: picked, reasonId, refundTarget: target, note };
+    const req = { saleId: sale.id, lineIndexes: picked, lineParts: partsOf(picked), reasonId, refundTarget: target, note };
     const v = validateReturnRequest(req, { sales, returns, items, openDay, stocktakeLock });
     if (!v.ok) { setErr(v.errors); return; }
     // ⚠ onProcess صار async (يستدعي الباك إند فعليًا) — راجع
@@ -171,12 +204,13 @@ function SalesReturnPage({
   const exchangeLines = newLines.map((l) => ({ ...l, unitPrice: Number(l.unitPrice) || 0 }));
   const exchangeAmounts = useMemo(
     () => (mode === "exchange" && sale && picked.length
-      ? computeExchangeAmounts({ sale, lineIndexes: picked, newLines: exchangeLines, taxRate })
+      ? computeExchangeAmounts({ sale, lineIndexes: picked, lineParts: partsOf(picked), returns: returns || [], newLines: exchangeLines, taxRate })
       : null),
-    [mode, sale, picked, newLines, taxRate]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [mode, sale, picked, parts, returns, newLines, taxRate]
   );
   const submitExchange = async () => {
-    const req = { saleId: sale.id, lineIndexes: picked, reasonId, newLines: exchangeLines, settle, note };
+    const req = { saleId: sale.id, lineIndexes: picked, lineParts: partsOf(picked), reasonId, newLines: exchangeLines, settle, note };
     const v = validateExchangeRequest(req, { sales, returns, items, openDay, stocktakeLock });
     if (!v.ok) { setErr(v.errors); return; }
     if (!onExchange) { setErr(["الاستبدال غير متاح"]); return; }
@@ -322,25 +356,28 @@ function SalesReturnPage({
               <p style={{ color: "var(--accent)", margin: 0 }} className="text-[11px] font-bold">
                 {mode === "exchange" ? "اختر ما يُستبدل" : "اختر ما يُرتجع"}
               </p>
-              {returnable.length > 1 && (
-                <button onClick={() => setPicked(wholePicked ? [] : returnable)}
+              {returnable.length > 0 && (
+                <button onClick={pickWhole} data-return-whole aria-pressed={wholePicked}
                   className="text-[11px] px-2.5 py-1 rounded-full font-bold"
                   style={{ background: wholePicked ? "var(--accentBg)" : "var(--panel)", color: "var(--accent)", border: "1px solid var(--accentLine)" }}>
                   {wholePicked ? "إلغاء تحديد الكل" : mode === "exchange" ? "الفاتورة كاملة" : "إرجاع الفاتورة كاملة"}
                 </button>
               )}
             </div>
+            <p style={{ color: "var(--text3)" }} className="text-[11px] mb-1.5" data-return-hint>
+              قطعةٌ واحدة: امسحها أو اضغط سطرها (وفي سطرٍ بأكثر من قطعة اضغط رمزها) · الفاتورة كاملة: الزرّ أعلاه.
+            </p>
             <div className="flex flex-col gap-2 mb-3">
               {(sale.lines || []).map((l, i) => {
                 const done = already(i);
                 const on = picked.includes(i);
+                const qtyFull = qtyFullOf(i), left = leftOf(i), qtyShown = on ? partQtyOf(i) : left;
+                const pieceCodes = lineCodesLeft(sale, returns, i);
                 return (
+                  <div key={i} data-return-line={i}>
                   <button
-                    key={i}
                     disabled={done}
-                    onClick={() =>
-                      setPicked((p) => (p.includes(i) ? p.filter((x) => x !== i) : [...p, i]))
-                    }
+                    onClick={() => toggleLine(i)}
                     className="w-full text-right"
                   >
                     <Card style={{
@@ -366,16 +403,41 @@ function SalesReturnPage({
                           )}
                         </span>
                         <span style={{ color: "var(--accent)" }} className="text-[11px]">
-                          {fmtMoney((Number(l.unitPrice) || 0) * (Number(l.quantity) || 1))} {currency}
+                          {fmtMoney((Number(l.unitPrice) || 0) * qtyShown)} {currency}
                         </span>
                       </div>
                       <p style={{ color: "var(--text3)" }} className="text-[10px] mt-0.5">
                         {l.karatSnapshot ? `عيار ${l.karatSnapshot} · ` : ""}
                         {l.weightSnapshot ? `${fmtW(l.weightSnapshot)} جم` : ""}
-                        {done ? " · مُرتجع سلفًا" : ""}
+                        {qtyFull > 1 ? ` · ${qtyShown} من ${qtyFull} قطعة` : ""}
+                        {done ? " · مُرتجع سلفًا" : left < qtyFull ? ` · أُرجع ${qtyFull - left} سلفًا` : ""}
                       </p>
                     </Card>
                   </button>
+                  {/* سطرٌ بأكثر من قطعة: تُختار القطع المرتجعة برموزها، أو بالعدد إن لم تُعرف رموزها */}
+                  {on && qtyFull > 1 && left > 1 && (
+                    <div className="flex flex-wrap items-center gap-1.5 mt-1 px-1" data-return-pieces={i}>
+                      <span style={{ color: "var(--text2)" }} className="text-[11px] font-bold">القطع المرتجعة:</span>
+                      {pieceCodes.length > 1 ? pieceCodes.map((c) => {
+                        const inPart = !parts[i] || (parts[i].unitCodes || []).some((x) => x.toUpperCase() === c.toUpperCase());
+                        return (
+                          <button key={c} type="button" data-return-piece={c} aria-pressed={inPart} onClick={() => togglePiece(i, c)}
+                            className="text-[11px] px-2 py-1 rounded-full font-bold"
+                            style={{ minHeight: 28, fontFamily: "monospace", background: inPart ? "var(--accent)" : "var(--panel)", color: inPart ? "var(--panel)" : "var(--text2)", border: "1px solid var(--accentLine)" }}>
+                            {c}
+                          </button>
+                        );
+                      }) : (
+                        <span className="flex items-center gap-2">
+                          <button type="button" onClick={() => stepPart(i, -1)} aria-label="أنقص" className="px-2 rounded-lg" style={{ minHeight: 28, background: "var(--panel)", border: "1px solid var(--line)", color: "var(--text)" }}>−</button>
+                          <b style={{ color: "var(--text)" }} className="text-[12px]" data-return-qty={i}>{qtyShown}</b>
+                          <button type="button" onClick={() => stepPart(i, 1)} aria-label="زد" className="px-2 rounded-lg" style={{ minHeight: 28, background: "var(--panel)", border: "1px solid var(--line)", color: "var(--text)" }}>+</button>
+                          <span style={{ color: "var(--text3)" }} className="text-[11px]">من {left}</span>
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  </div>
                 );
               })}
             </div>

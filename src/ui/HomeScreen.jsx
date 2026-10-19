@@ -28,7 +28,7 @@ function HomeScreen({ userName = "", totals = {}, scrapTotals = {}, safeGoldBala
   const has = (id) => permitted.includes(id);
   const scrapTarget = has("scrapIntake") ? "scrapIntake" : has("scrapCustody") ? "scrapCustody" : has("scrap") ? "scrap" : null;
   const primary = [
-    has("sales") && { id: "sell", label: "بيع", hint: openDay ? "فاتورة جديدة" : "افتح اليوم أولًا", icon: Receipt, onClick: onSell, hero: true },
+    has("sales") && { id: "sell", label: "بيع", hint: openDay ? "امسح القطعة وبِع" : "افتح اليوم أولًا", icon: Receipt, onClick: onSell, hero: true },
     // ⚠ زرّ الكسر يفتح كل خيارات الكسر (استلام · عهدة · سجل) لا شاشةً واحدة
     scrapTarget && { id: "scrap", label: "كسر", hint: "كل خيارات الكسر", icon: Flame, onClick: () => (onScrap ? onScrap() : onGo(scrapTarget)) },
     has("stocktake") && { id: "stocktake", label: "جرد", hint: "عدّ الرفّ", icon: ClipboardCheck, onClick: () => onGo("stocktake") },

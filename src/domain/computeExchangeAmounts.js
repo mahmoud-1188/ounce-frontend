@@ -5,8 +5,8 @@ import { computeReturnAmounts } from "./computeReturnAmounts.js";
 /// (POST /sales/:id/exchange).
 ///   { returnAmounts, newNet, newTax, newTotal, diff, direction }
 ///   diff > 0: يدفع العميل · diff < 0: يُردّ له · 0: متعادل
-function computeExchangeAmounts({ sale, lineIndexes, newLines, taxRate = 0 }) {
-  const returnAmounts = computeReturnAmounts(sale, lineIndexes);
+function computeExchangeAmounts({ sale, lineIndexes, lineParts = {}, returns = null, newLines, taxRate = 0 }) {
+  const returnAmounts = computeReturnAmounts(sale, lineIndexes, { returns, lineParts });
   const rate = Number(taxRate) || 0;
   const newTotalH = (newLines || []).reduce(
     (a, l) => a + halalas((Number(l.unitPrice) || 0) * (Number(l.quantity) || 1)), 0);

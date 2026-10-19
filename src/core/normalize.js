@@ -84,6 +84,8 @@ function normalizeSales(saleRows, saleLineRows) {
       workmanshipSnapshot: toMoney(l.workmanship_snapshot),
       // «خاتم من طقم ‹رمز›» — سطر جزء الطقم (migration 066)
       partLabel: l.part_label || null,
+      // رموز قطع السطر التي ما زالت عند العميل — المرتجع يجد السطر بمسح إحداها
+      unitCodes: Array.isArray(l.unit_codes) ? l.unit_codes : [],
     });
     linesBySale.set(l.sale_id, list);
   }
