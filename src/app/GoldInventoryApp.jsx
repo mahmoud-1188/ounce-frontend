@@ -54,6 +54,11 @@ const API_ERROR_MESSAGES = {
   invalid_account: "حسابٌ غير صالح في المسودّة",
   branch_locked: "النظام غير متاح حاليًا — حاول مرة أخرى لاحقًا",
   approval_limits_by_hq: "حدود الاعتماد تحدّدها الإدارة المركزية",
+  ledger_setup: "فترة التجهيز — لا بيع ولا حركة نقد قبل «بدء التشغيل»",
+  code_old_stock_first: "كوّد بضاعة المحل القديمة أوّلًا — أو علّم «لا بضاعة قديمة» في الرصيد الافتتاحي",
+  opening_balance_first: "أدخل الرصيد الافتتاحي واحفظه أوّلًا",
+  go_live_pending: "طلب بدء التشغيل عند الإدارة",
+  already_live: "الفرع يعمل فعلًا",
   staff_by_hq: "إضافة الموظفين وصلاحياتهم من الإدارة المركزية",
   approval_not_found: "طلب الاعتماد غير موجود",
   approval_already_executed: "نُفِّذ هذا الطلب سلفًا",
@@ -379,6 +384,7 @@ import { IssueOutPage } from "../screens/IssueOutPage.jsx";
 import { ItemEditPage } from "../screens/ItemEditPage.jsx";
 import { NavCustomizePage } from "../screens/NavCustomizePage.jsx";
 import { OpeningBalancePage } from "../screens/OpeningBalancePage.jsx";
+import { SetupGoLivePanel } from "../ui/SetupGoLivePanel.jsx";
 import { HomeScreen } from "../ui/HomeScreen.jsx";
 import { OpeningComparePage } from "../screens/OpeningComparePage.jsx";
 import { PartnersPage } from "../screens/PartnersPage.jsx";
@@ -534,6 +540,9 @@ export default function GoldInventoryApp() {
   // باقة المحل (migration 070): "full" أو "no_accounting"
   const [storePackage, setStorePackage] = useState("full");
   const [hqControl, setHqControl] = useState({ linked: false, full: false, noApprovals: false });
+  // فترة التجهيز (migration 073): { ledgerState, codedPieces, noOldStock, openingSaved, linked, request }
+  const [setupInfo, setSetupInfo] = useState(null);
+  const refreshSetup = () => api.setupApi.state().then(setSetupInfo).catch(() => {});
   // الفرع المرتبط بالإدارة: حدوده وموظفوه بيدها ما لم تفوّضه كاملًا
   const hqOwnsStaff = hqControl.linked && !hqControl.full;
   const [costCenters, setCostCenters] = useState([]);
@@ -1775,6 +1784,14 @@ export default function GoldInventoryApp() {
 
   /// تنفيذ طلبٍ معتمد — تُعاد العملية نفسها بحمولتها ومعها approvalId،
   /// والخادم يختم التنفيذ في معاملتها: مرّةً واحدة وبالمبلغ نفسه.
+  const handleGoLive = async (approvalId = null) => {
+    try {
+      const res = await api.setupApi.goLive({ startDate: new Date().toISOString().slice(0, 10), ...(approvalId ? { approvalId } : {}) });
+      if (res?.approvalPending) { notePendingApproval(res.approvalPending); flashToast(`أُرسل طلب بدء التشغيل ${res.approvalPending.ref} للإدارة`); }
+      else if (res?.live) { flashToast("✓ بدأ التشغيل — الحسابات تعمل الآن"); loadBootstrap(currentUser).catch(() => {}); }
+    } catch (err) { flashToast(apiErrorMessage(err, "تعذّر بدء التشغيل")); }
+    refreshSetup();
+  };
   const executeApproval = async (ap) => {
     const p = { ...(ap.payload || {}), approvalId: ap.id };
     try {
@@ -1798,6 +1815,7 @@ export default function GoldInventoryApp() {
         const res = body.sellWeight ? await api.createPartialSale(body) : body.partLabel ? await api.sellSetPart(body) : await api.createSale(body);
         if (res?.approvalPending) { notePendingApproval(res.approvalPending); return false; }
       } else if (ap.kind === "safe_audit") await api.safe.audit(p);
+      else if (ap.kind === "go_live") { await api.setupApi.goLive({ ...(ap.payload || {}), approvalId: ap.id }); refreshSetup(); }
       else {
         flashToast("نوع طلبٍ لا يُنفَّذ من هنا");
         return false;
@@ -2688,7 +2706,12 @@ export default function GoldInventoryApp() {
     }
   };
   const persistOpeningBalance = (next) => persist(OPENING_BALANCE_KEY, next, setOpeningBalance);
-  const handleSaveOpeningBalance = (next) => {
+  const handleSaveOpeningBalance = async (next, opts = {}) => {
+    // في التجهيز يُحفظ على الخادم مسوّدةً بلا قيد — شرطًا لبدء التشغيل، ويُرفض قبل التكويد إلا بعلَم «لا بضاعة قديمة»
+    if (setupInfo?.ledgerState === "setup") {
+      try { setSetupInfo({ ...(await api.setupApi.saveOpening(next, !!opts.noOldStock)), linked: setupInfo.linked }); }
+      catch (err) { flashToast(apiErrorMessage(err, "تعذّر حفظ الرصيد الافتتاحي")); return false; }
+    }
     // ⚠ يُجمَّد المركز الذهبي هنا أيضًا: أول سنةٍ لا إقفال سابقًا لها،
     // فبلا هذا لا افتتاحي يُقاس منه ربح أول سنة بالجرام.
     persistOpeningBalance(normalizeOpeningBalance({
@@ -4856,6 +4879,7 @@ export default function GoldInventoryApp() {
     const boot = await api.fetchBootstrap();
     applyBootstrap(boot);
     api.setCachedBootstrap(boot, user);
+    refreshSetup();
   };
 
   /// الدخول باختيار المستخدم مباشرة — حين تكون الحماية مطفأة.
@@ -8129,7 +8153,8 @@ export default function GoldInventoryApp() {
               && !moduleHiddenPages.includes(id) && (id !== "bankRecon" || !!appSettings.bankReconEnabled)}
             onOpen={openPage} />
         )}
-        {morePage === null && tab === "home" && role === "manager" && (
+        {/* في فترة التجهيز لوحة «بدء التشغيل» تحلّ محلّ «ابدأ هنا» — لا يومَ ولا بيعَ قبلها */}
+        {morePage === null && tab === "home" && role === "manager" && setupInfo?.ledgerState !== "setup" && (
           <StartHereCard
             steps={branchStartSteps({
               storeName: branchIdentity?.name || appSettings?.storeName || branchLink?.branchName || "", price24: priceData.current || 0,
@@ -8140,6 +8165,11 @@ export default function GoldInventoryApp() {
             })}
             onGo={(id) => (id === "price" ? setShowPrice(true) : openPage(id))}
           />
+        )}
+        {morePage === null && tab === "home" && setupInfo?.ledgerState === "setup" && (
+          <SetupGoLivePanel setup={setupInfo} canStart={role === "manager"}
+            onOpenCoding={() => openPage("addGoods")} onOpenOpening={() => openPage("openingBalance")}
+            onGoLive={() => handleGoLive(setupInfo.request?.status === "approved" ? setupInfo.request.id : null)} />
         )}
         {morePage === null && tab === "home" && (
           <HomeScreen
@@ -9502,6 +9532,8 @@ export default function GoldInventoryApp() {
           <OpeningBalancePage
             openingBalance={openingBalance}
             onSave={handleSaveOpeningBalance}
+            setupMode={setupInfo?.ledgerState === "setup"}
+            noOldStockInit={!!setupInfo?.noOldStock}
             openingMode={!!appSettings.openingMode}
             openingFinishedAt={appSettings.openingFinishedAt || null}
             openingStats={openingStats}

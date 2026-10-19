@@ -796,3 +796,9 @@ export {
 // علامة طباعة الملصق على القطع (migration 071)
 export const setUnitsPrinted = (codes, printed = true) => apiFetch("/items/units/printed", { method: "POST", body: { codes, printed } });
 
+// فترة التجهيز وبدء التشغيل (migration 073)
+export const setupApi = {
+  state: () => apiFetch("/setup/state"),
+  saveOpening: (balance, noOldStock = false) => apiFetch("/setup/opening-balance", { method: "POST", body: { balance, noOldStock } }),
+  goLive: (body = {}) => apiFetch("/setup/go-live", { method: "POST", body }),
+};
