@@ -11,11 +11,9 @@ import { verifyToken } from "../domain/verifyToken.js";
 import { Card } from "../ui/Card.jsx";
 import { ControlsSettingsCard } from "../ui/ControlsSettingsCard.jsx";
 import { Field } from "../ui/Field.jsx";
-import { MgrFeeSettingsCard } from "../ui/MgrFeeSettingsCard.jsx";
 import { NumericInput } from "../ui/NumericInput.jsx";
 import { RfidSettingsCard } from "../ui/RfidSettingsCard.jsx";
 import { ScaleSettingsCard } from "../ui/ScaleSettingsCard.jsx";
-import { HiddenModeSettingsCard } from "../ui/HiddenModeSettingsCard.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 import { InstallAppCard } from "../ui/InstallAppCard.jsx";
 
@@ -172,7 +170,7 @@ function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSa
           كل شيء كما تركه.
         </p>
 
-        {canEditControls && <HiddenModeSettingsCard />}
+
 
         {/* ── السمة ── */}
         <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">
@@ -787,9 +785,7 @@ function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSa
           </p>
         </Card>
 
-        {/* ── عمولة المدير ── */}
-        <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">عمولة المدير</p>
-        <MgrFeeSettingsCard settings={settings} onSave={onSave} />
+        {/* عمولة المدير أُلغيت نهائيًّا — والوضع الخفي أُلغي؛ القطع المعلّقة القديمة تُقرأ وتُباع كما كانت */}
 
         {/* ── واتساب المحل ── */}
         <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">واتساب المحل</p>
