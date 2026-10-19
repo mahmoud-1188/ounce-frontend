@@ -2905,7 +2905,54 @@ export default function GoldInventoryApp() {
       return next;
     });
   };
+  // ══ الرجوع مثل الجوال: زرّ الجهاز والمتصفّح (popstate) · السحب من الحافّة · Escape — خطوةٌ واحدة كل مرّة ══
+  const navStack = useRef([]);
+  const navRef = useRef({ tab, morePage });
+  navRef.current = { tab, morePage };
+  const goBack = () => {
+    const prev = navStack.current.pop();
+    if (prev) { setTab(prev.tab); setMorePage(prev.morePage); return true; }
+    if (navRef.current.morePage) { setMorePage(null); return true; }
+    if (navRef.current.tab !== "home") { setTab("home"); return true; }
+    return false;
+  };
+  const goBackRef = useRef(goBack);
+  goBackRef.current = goBack;
+  useEffect(() => {
+    const onPop = () => { goBackRef.current(); };
+    const onKey = (e) => {
+      if (e.key !== "Escape") return;
+      const t = e.target;
+      if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) && String(t.value || "") !== "") return;
+      // نافذةٌ مفتوحة تُغلق نفسها أوّلًا
+      if (document.querySelector(".fixed.inset-0.z-50")) return;
+      goBackRef.current();
+    };
+    let sx = null, sy = 0;
+    const onStart = (e) => { const x = e.touches?.[0]?.clientX ?? 0; sx = x < 24 || x > window.innerWidth - 24 ? x : null; sy = e.touches?.[0]?.clientY ?? 0; };
+    const onEnd = (e) => {
+      if (sx == null) return;
+      const t = e.changedTouches?.[0];
+      const dx = Math.abs((t?.clientX ?? sx) - sx), dy = Math.abs((t?.clientY ?? sy) - sy);
+      sx = null;
+      if (dx > 70 && dy < 50 && !document.querySelector(".fixed.inset-0.z-50")) goBackRef.current();
+    };
+    window.addEventListener("popstate", onPop);
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("touchstart", onStart, { passive: true });
+    window.addEventListener("touchend", onEnd, { passive: true });
+    return () => {
+      window.removeEventListener("popstate", onPop); window.removeEventListener("keydown", onKey);
+      window.removeEventListener("touchstart", onStart); window.removeEventListener("touchend", onEnd);
+    };
+  }, []);
   const openPage = (id) => {
+    // كل فتحٍ خطوةٌ في سجلّ الرجوع، وسطرٌ في سجلّ المتصفّح فيعمل زرّ الجهاز
+    const cur = navRef.current;
+    if ((TAB_KIND_IDS.includes(id) ? cur.tab !== id || cur.morePage : cur.morePage !== id)) {
+      navStack.current = [...navStack.current.slice(-30), { tab: cur.tab, morePage: cur.morePage }];
+      try { window.history.pushState({ ons: navStack.current.length }, ""); } catch { /* لا تاريخ */ }
+    }
     // ⚠ نعدّ من أين جئت لا ما فتحت وحده: «اليومية» تُفتح من التقارير
     // ومن البحث، وخلطهما يجعل ضغطة المخزون المطوّلة تفتح اليومية.
     notePageOpen(morePage || tab, id);
