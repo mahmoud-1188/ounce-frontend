@@ -6421,7 +6421,9 @@ export default function GoldInventoryApp() {
       kycName: draft.kycName || undefined,
       kycIdNumber: draft.kycIdNumber || undefined,
       giftAmount: Number(draft.giftAmount) || 0,
-      lines: draft.lines.map((l) => ({ itemId: l.itemId, quantity: l.quantity, unitPrice: l.unitPrice })),
+      // الرموز الممسوحة تُرسل فتُباع القطع التي في اليد بعينها
+      lines: draft.lines.map((l) => ({ itemId: l.itemId, quantity: l.quantity, unitPrice: l.unitPrice, ...(Array.isArray(l.unitCodes) && l.unitCodes.length ? { unitCodes: l.unitCodes } : {}) })),
+      ...(draft.cardAuth ? { cardAuth: draft.cardAuth } : {}),
       taxApplicable: !!draft.taxApplicable,
       cashPart: Number(draft.cashPart) || 0,
       networkPart: Number(draft.networkPart) || 0,

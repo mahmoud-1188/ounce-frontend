@@ -74,6 +74,7 @@ ${full ? `<div class="buyer"><b>${L("المشتري", "Buyer")}:</b> ${esc(buyer
   ${Number(sale.giftPart) > 0 ? `<div><span>${L("مدفوعٌ ببطاقة هدية", "Paid by gift card")}</span><span>${money(sale.giftPart)} ${cur}</span></div>` : ""}
   <div class="g"><span>${L("الإجمالي", "Total")}${taxed ? ` ${L("شامل الضريبة", "incl. VAT")}` : ""}</span><span>${money(sale.total)} ${cur}</span></div>
   <div><span>${L("الدفع", "Payment")}</span><span>${pay}</span></div>
+  ${sale.cardAuth?.approvalCode ? `<div><span>${L("اعتماد الشبكة", "Card auth")}</span><span>${esc(sale.cardAuth.approvalCode)}${sale.cardAuth.last4 ? ` · •••• ${esc(sale.cardAuth.last4)}` : ""}</span></div>` : ""}
   ${full ? `<div class="words">${esc(arabicAmountWords(sale.total))}</div>` : ""}
 </div>
 ${qr ? `<div class="qr">${qrSvg(qr, thermal ? 120 : 140)}</div>` : ""}

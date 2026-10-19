@@ -5,6 +5,7 @@ import { CARD_NETWORKS, PAYMENT_METHODS } from "../core/money-rules.js";
 import { cardFeeOf, categoryLabel, epcHexToCode, inputStyle, isPartial, itemLabel, onlineBlockReason, readPlateEpc, remainingQty, rfidSettingsFor, unitCurrentValue, useNhrReader } from "../domain/helpers.js";
 import { RFID_DEFAULTS } from "../core/constants.js";
 import { SaleTotalsBar } from "../ui/SaleTotalsBar.jsx";
+import { payTerminalBrandLabel, payTerminalCfg, payTerminalCharge, payTerminalRequest, sanitizeCardAuth } from "../domain/payTerminal.js";
 import { computeCommission } from "../domain/computeCommission.js";
 import { sanitizeNumeric } from "../domain/sanitizeNumeric.js";
 import { tradeInValue } from "../domain/tradeInValue.js";
@@ -166,7 +167,29 @@ function NewSaleModal({ activeItems, priceData,
   const amlNeeded = amlTh > 0 && cashDue >= amlTh && !(amlCustomer && amlCustomer.idNumber);
   const selectedCount = Object.keys(selection).length;
 
+  // جهاز الدفع (إن ضُبط في هذا الجهاز): يُطلب منه مبلغ الشبكة ويُحفظ اعتماده على الفاتورة، أو يُكتب رقم الاعتماد من إيصاله باليد
+  const termCfg = useMemo(() => payTerminalCfg(), []);
+  const [term, setTerm] = useState({ status: "idle", result: null, why: "" });
+  const [manualAuth, setManualAuth] = useState("");
+  const termAbort = useRef(null);
+  const cardPay = splitPay || paymentMethod === "card";
+  const networkAmount = splitPay ? Math.max(0, total - (Number(cashPart) || 0)) : dueNow;
+  const termOk = term.status === "ok" && !!term.result && term.result.amountMinor === Math.round(networkAmount * 100);
+  const cardAuth = !cardPay ? null : termOk ? term.result
+    : manualAuth.trim() ? { approvalCode: manualAuth.trim().slice(0, 12), manual: true, amountMinor: Math.round(networkAmount * 100), provider: termCfg?.brand || "", at: new Date().toISOString() } : null;
+  const askTerminal = async () => {
+    if (!termCfg || !(networkAmount > 0)) return;
+    termAbort.current?.abort(); termAbort.current = new AbortController();
+    setTerm({ status: "waiting", result: null, why: "" });
+    const r = await payTerminalCharge(termCfg, payTerminalRequest(termCfg, { amount: networkAmount, ref: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}` }), { signal: termAbort.current.signal });
+    if (r.ok) { setTerm({ status: "ok", result: r, why: "" }); if (r.network && CARD_NETWORKS.some((n) => n.id === r.network)) setCardNetwork(r.network); }
+    else setTerm({ status: "fail", result: null, why: r.why });
+  };
+  useEffect(() => () => termAbort.current?.abort(), []);
+  const termBlock = cardPay && ((termCfg?.require && !cardAuth) || term.status === "waiting");
+
   const handleConfirm = () => {
+    if (termBlock) return;
     const lines = linesOf();
     // الدفع المقسّم: جزء نقدي وجزء شبكة. المتبقي بعد النقدي يذهب للشبكة
     // بعمولتها — الجمع اليدوي للجزأين يفتح باب خطأ لا يُكتشف.
@@ -192,6 +215,7 @@ function NewSaleModal({ activeItems, priceData,
       frozenPrice,
       frozenAt,
       draftId: initialDraft?.id || undefined,
+      cardAuth: sanitizeCardAuth(cardAuth),
     });
   };
   // ⏸ تعليق الفاتورة أو حفظها عرض سعر — لا حركة ولا قيد، تُستأنف من «الفواتير المعلّقة»
@@ -984,6 +1008,21 @@ function NewSaleModal({ activeItems, priceData,
         </Field>
       )}
 
+      {cardPay && termCfg && (
+        <div data-pay-terminal className="mb-3 p-3 rounded-xl" style={{ border: "1px solid var(--accentLine)", background: "var(--accentBg)" }}>
+          <button type="button" data-pay-terminal-charge onClick={term.status === "waiting" ? () => termAbort.current?.abort() : askTerminal} disabled={!(networkAmount > 0) || termOk}
+            className="w-full py-2.5 rounded-xl text-xs font-bold" style={{ background: termOk ? "var(--panel)" : "linear-gradient(135deg,var(--gradFrom),var(--gradTo))", color: termOk ? "var(--good)" : "var(--panel)" }}>
+            {termOk ? `✓ اعتُمد ${term.result.approvalCode || term.result.intentId}${term.result.last4 ? ` · •••• ${term.result.last4}` : ""}`
+              : term.status === "waiting" ? "ينتظر البطاقة على الجهاز… (اضغط للإلغاء)" : `اطلب ${fmtMoney(networkAmount)} من ${payTerminalBrandLabel(termCfg.brand)}`}
+          </button>
+          {term.status === "fail" && <p data-pay-terminal-fail style={{ color: "var(--bad)" }} className="text-[11px] mt-1">✗ {term.why}</p>}
+          {!termOk && (
+            <input style={{ ...inputStyle, marginTop: 8, marginBottom: 0 }} value={manualAuth} onChange={(e) => setManualAuth(e.target.value.replace(/[^\w-]/g, ""))}
+              placeholder={termCfg.require ? "أو رقم الاعتماد من إيصال الجهاز (إلزامي)" : "أو رقم الاعتماد من إيصال الجهاز (اختياري)"} data-pay-terminal-manual />
+          )}
+        </div>
+      )}
+
       {/* اختيار الضريبة للمدير وحده — البائع يبيع بالإعداد الافتراضي
           ولا يقرر إعفاء فاتورة من الضريبة. */}
       {taxEnabled && role === "manager" && (
@@ -1108,7 +1147,7 @@ function NewSaleModal({ activeItems, priceData,
         const tradeOk =
           paymentMethod !== "scrap" || splitPay || tradeLines.length > 0;
         const canConfirm =
-          selectedCount > 0 && allPriced && tradeOk &&
+          selectedCount > 0 && allPriced && tradeOk && !termBlock &&
           !(paymentMethod === "credit" && !customerId);
         return (
           <>

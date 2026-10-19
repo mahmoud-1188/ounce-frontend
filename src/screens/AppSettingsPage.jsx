@@ -3,6 +3,7 @@ import { Check, Coins, Link2, Printer, Puzzle, Settings2, ShieldCheck } from "lu
 import { APP_MODES, DEFAULT_APP_MODE, DEFAULT_SETTINGS } from "../core/constants.js";
 import { UI_LANGS, readUiLang, setUiLang } from "../domain/i18n.js";
 import { ACCOUNTING_MODES } from "../core/storePackage.js";
+import { PayTerminalCard } from "../ui/PayTerminalCard.jsx";
 import { KARATS, fmt, pricePerGram } from "../core/money.js";
 import { CARD_NETWORKS, DEFAULT_CARD_FEES, DEFAULT_MARGINS } from "../core/money-rules.js";
 import { THEMES, THEME_DESIGNS, applyTheme, designOfTheme, effectiveTheme, isDarkTheme } from "../core/theme.js";
@@ -812,6 +813,9 @@ function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSa
             <input type="checkbox" data-help-badges-toggle checked={settings.helpBadges !== false} onChange={(e) => onSave({ ...settings, helpBadges: e.target.checked })} style={{ accentColor: "var(--accent)", width: 18, height: 18 }} />
           </label>
         </Card>
+
+        {/* ── جهاز الدفع (تفضيلٌ لهذا الجهاز) ── */}
+        <PayTerminalCard />
 
         {/* ── طباعة الفواتير (مطفأة افتراضًا في الفرع) ── */}
         <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">طباعة الفواتير</p>

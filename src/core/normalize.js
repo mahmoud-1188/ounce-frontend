@@ -100,6 +100,7 @@ function normalizeSales(saleRows, saleLineRows) {
     price24Snapshot: s.price24_snapshot == null ? null : Number(s.price24_snapshot),
     priceFrozenAt: s.price_frozen_at,
     cardNetwork: s.card_network,
+    cardAuth: s.card_auth || null,
     cashPart: toMoney(s.cash_part),
     networkPart: toMoney(s.network_part),
     networkFeePct: s.network_fee_pct == null ? 0 : Number(s.network_fee_pct),
