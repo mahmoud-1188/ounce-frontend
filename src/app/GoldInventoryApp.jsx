@@ -387,6 +387,9 @@ import { NavCustomizePage } from "../screens/NavCustomizePage.jsx";
 import { OpeningBalancePage } from "../screens/OpeningBalancePage.jsx";
 import { SetupGoLivePanel } from "../ui/SetupGoLivePanel.jsx";
 import { setGoldEqContext } from "../ui/GoldEq.jsx";
+import { NetWeightCard } from "../ui/NetWeightCard.jsx";
+import { netWeightPosition } from "../domain/netWeight.js";
+import { CHART_OF_ACCOUNTS as NW_CHART } from "../core/chart.js";
 import { HomeScreen } from "../ui/HomeScreen.jsx";
 import { OpeningComparePage } from "../screens/OpeningComparePage.jsx";
 import { PartnersPage } from "../screens/PartnersPage.jsx";
@@ -545,6 +548,12 @@ export default function GoldInventoryApp() {
   // فترة التجهيز (migration 073): { ledgerState, codedPieces, noOldStock, openingSaved, linked, request }
   const [setupInfo, setSetupInfo] = useState(null);
   const refreshSetup = () => api.setupApi.state().then(setSetupInfo).catch(() => {});
+  // المصروفات الثابتة المستحقّة غير المسجّلة — تدخل الالتزامات في «صافي الفرع بالوزن»
+  const [fixedDue, setFixedDue] = useState([]);
+  const refreshFixedDue = () => api.fixedExpensesApi.list().then((r) => {
+    const ym = new Date().toISOString().slice(0, 7), d = new Date().getDate();
+    setFixedDue((r.fixed || []).filter((f) => f.active && f.lastPosted !== ym && d >= f.day));
+  }).catch(() => setFixedDue([]));
   // الفرع المرتبط بالإدارة: حدوده وموظفوه بيدها ما لم تفوّضه كاملًا
   const hqOwnsStaff = hqControl.linked && !hqControl.full;
   const [costCenters, setCostCenters] = useState([]);
@@ -4882,6 +4891,7 @@ export default function GoldInventoryApp() {
     applyBootstrap(boot);
     api.setCachedBootstrap(boot, user);
     refreshSetup();
+    refreshFixedDue();
   };
 
   /// الدخول باختيار المستخدم مباشرة — حين تكون الحماية مطفأة.
@@ -8190,6 +8200,14 @@ export default function GoldInventoryApp() {
             })}
             onGo={(id) => (id === "price" ? setShowPrice(true) : openPage(id))}
           />
+        )}
+        {morePage === null && tab === "home" && setupInfo?.ledgerState !== "setup" && storePackage !== "no_accounting" && ["manager", "accountant"].includes(role) && (
+          <NetWeightCard currency={priceData.currency || "ر.س"} onOpen={openPage}
+            pos={netWeightPosition({
+              journal, price24: Number(priceData.current) || 0, fixedDue, baseKarat: appSettings?.baseKarat || 21,
+              goldOwned24: (combinedGold.physical.inventory || 0) + (combinedGold.physical.scrap || 0) - (combinedGold.goldOwed.total || 0),
+              accountName: (c) => NW_CHART.find((a) => a.code === c)?.name || c,
+            })} />
         )}
         {morePage === null && tab === "home" && setupInfo?.ledgerState === "setup" && (
           <SetupGoLivePanel setup={setupInfo} canStart={role === "manager"}
