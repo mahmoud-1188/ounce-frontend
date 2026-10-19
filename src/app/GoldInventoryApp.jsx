@@ -1047,10 +1047,17 @@ export default function GoldInventoryApp() {
     })();
   }, []);
 
-  const flashToast = (msg) => {
+  // flashToast(msg, { actions: [{ label, go }] }) — «الخطوة التالية» بعد العملية: يبقى أطول (7 ثوانٍ) والضغط يُغلق ثم يفعل
+  const toastTimer = useRef(0);
+  const [toastActs, setToastActs] = useState([]);
+  const flashToast = (msg, opts = {}) => {
+    const acts = Array.isArray(opts?.actions) ? opts.actions.filter((a) => a && a.label && a.go).slice(0, 2) : [];
     setToast(msg);
-    setTimeout(() => setToast(""), 1800);
+    setToastActs(acts);
+    clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => { setToast(""); setToastActs([]); }, acts.length ? 7000 : 1800);
   };
+  const closeToast = () => { clearTimeout(toastTimer.current); setToast(""); setToastActs([]); };
 
   // ── نافذة أخرى مفتوحة ──
   //
@@ -1814,7 +1821,7 @@ export default function GoldInventoryApp() {
     try {
       const res = await api.setupApi.goLive({ startDate: new Date().toISOString().slice(0, 10), ...(approvalId ? { approvalId } : {}) });
       if (res?.approvalPending) { notePendingApproval(res.approvalPending); flashToast(`أُرسل طلب بدء التشغيل ${res.approvalPending.ref} للإدارة`); }
-      else if (res?.live) { flashToast("✓ بدأ التشغيل — الحسابات تعمل الآن"); loadBootstrap(currentUser).catch(() => {}); }
+      else if (res?.live) { flashToast("✓ بدأ التشغيل — الحسابات تعمل الآن", { actions: [{ label: "افتح يوم العمل", go: () => openPage("workday") }] }); loadBootstrap(currentUser).catch(() => {}); }
     } catch (err) { flashToast(apiErrorMessage(err, "تعذّر بدء التشغيل")); }
     refreshSetup();
   };
@@ -2749,7 +2756,7 @@ export default function GoldInventoryApp() {
       ...next, date: openingBalance.date || new Date().toISOString(),
       goldPosition: { ...goldPosition, frozenAt: new Date().toISOString() },
     }));
-    flashToast("تم حفظ الرصيد الافتتاحي");
+    flashToast("تم حفظ الرصيد الافتتاحي", setupInfo?.ledgerState === "setup" ? { actions: [{ label: "بدء التشغيل", go: () => { setMorePage(null); setTab("home"); } }] } : {});
   };
   const persistFiscalClosures = (next) => persist(FISCAL_CLOSURES_KEY, next, setFiscalClosures);
   // Closes the current fiscal period: computes this period's net profit
@@ -6356,7 +6363,7 @@ export default function GoldInventoryApp() {
     if (Number(srvSale.depositApplied) > 0 || Number(srvSale.giftApplied) > 0 || draft.customOrderId) {
       setShowNewSale(false); setResumeDraft(null);
       setQuickSaleItemId(null); setQuickSaleCustomerId(null);
-      flashToast(`تم إنشاء الفاتورة — خُصم ${Number(srvSale.depositApplied) > 0 ? `عربون ${fmtMoney(srvSale.depositApplied)}` : ""}${Number(srvSale.giftApplied) > 0 ? ` بطاقة ${fmtMoney(srvSale.giftApplied)}` : ""} والمقبوض ${fmtMoney(srvSale.payable)}${srvSale.pointsEarned ? ` · +${srvSale.pointsEarned} نقطة` : ""}`);
+      flashToast(`تم إنشاء الفاتورة — خُصم ${Number(srvSale.depositApplied) > 0 ? `عربون ${fmtMoney(srvSale.depositApplied)}` : ""}${Number(srvSale.giftApplied) > 0 ? ` بطاقة ${fmtMoney(srvSale.giftApplied)}` : ""} والمقبوض ${fmtMoney(srvSale.payable)}${srvSale.pointsEarned ? ` · +${srvSale.pointsEarned} نقطة` : ""}`, { actions: [{ label: "بيع جديد", go: () => { setQuickSaleItemId(null); setQuickSaleCustomerId(null); setShowNewSale(true); } }] });
       loadBootstrap(currentUser).catch(() => {});
       return;
     }
@@ -6454,7 +6461,7 @@ export default function GoldInventoryApp() {
 
     setShowNewSale(false); setResumeDraft(null);
     setQuickSaleItemId(null); setQuickSaleCustomerId(null);
-    flashToast("تم إنشاء الفاتورة");
+    flashToast("تم إنشاء الفاتورة", { actions: [{ label: "بيع جديد", go: () => { setQuickSaleItemId(null); setQuickSaleCustomerId(null); setShowNewSale(true); } }, { label: "مرتجع", go: () => openPage("salesReturn") }] });
     if (appSettings.postSaleSheet) setPostSale(sale);
   };
 
@@ -6966,7 +6973,7 @@ export default function GoldInventoryApp() {
         if (res.cashTx.pool === "safe") setSafeTx((prev) => [cashEntry, ...prev]);
         else setCashTx((prev) => [cashEntry, ...prev]);
       }
-      flashToast("تم تسجيل المصروف");
+      flashToast("تم تسجيل المصروف", { actions: [{ label: "مصروف آخر", go: () => openPage("expenses") }] });
       return record;
     } catch (err) {
       flashToast(apiErrorMessage(err, "تعذّر تسجيل المصروف"));
@@ -7867,7 +7874,7 @@ export default function GoldInventoryApp() {
           <EnrollClaimSheet branchName={branchLink?.branchName || ""} onClaim={handleClaimEnroll} onClose={() => setClaiming(false)} />
         )}
         {lockOverlay}
-        <Toast message={toast} />
+        <Toast message={toast} actions={toastActs} onClose={closeToast} />
       </>
     );
   }
@@ -10135,7 +10142,7 @@ export default function GoldInventoryApp() {
         <AddPurchaseModal suppliers={suppliers} offices={taskirOffices} onClose={() => setShowAddPurchase(false)} onSave={handleAddPurchase} />
       )}
 
-      <Toast message={toast} />
+      <Toast message={toast} actions={toastActs} onClose={closeToast} />
     </div>
   );
 }
