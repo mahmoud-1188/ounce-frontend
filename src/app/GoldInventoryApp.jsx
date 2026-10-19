@@ -52,7 +52,9 @@ const API_ERROR_MESSAGES = {
   proposal_not_pending: "قُرِّرت هذه المسودّة سلفًا",
   proposal_unbalanced: "المسودّة غير متوازنة — لا تُرحَّل",
   invalid_account: "حسابٌ غير صالح في المسودّة",
-  branch_locked: "الفرع مقفلٌ من الإدارة",
+  branch_locked: "النظام غير متاح حاليًا — حاول مرة أخرى لاحقًا",
+  approval_limits_by_hq: "حدود الاعتماد تحدّدها الإدارة المركزية",
+  staff_by_hq: "إضافة الموظفين وصلاحياتهم من الإدارة المركزية",
   approval_not_found: "طلب الاعتماد غير موجود",
   approval_already_executed: "نُفِّذ هذا الطلب سلفًا",
   approval_not_approved: "الطلب لم يُعتمد بعد",
@@ -531,6 +533,9 @@ export default function GoldInventoryApp() {
   const [isHq, setIsHq] = useState(false);
   // باقة المحل (migration 070): "full" أو "no_accounting"
   const [storePackage, setStorePackage] = useState("full");
+  const [hqControl, setHqControl] = useState({ linked: false, full: false, noApprovals: false });
+  // الفرع المرتبط بالإدارة: حدوده وموظفوه بيدها ما لم تفوّضه كاملًا
+  const hqOwnsStaff = hqControl.linked && !hqControl.full;
   const [costCenters, setCostCenters] = useState([]);
   const [budgets, setBudgets] = useState([]);
   const [periodCloses, setPeriodCloses] = useState([]);
@@ -1459,6 +1464,16 @@ export default function GoldInventoryApp() {
     window.addEventListener("ons-glossary", open);
     return () => window.removeEventListener("ons-glossary", open);
   }, []);
+  // المسار السريع: ما دام للفرع طلبٌ معلّق يُسأل الخادم كل ثوانٍ — فيصل قرار الإدارة فورًا لا بعد دقيقة
+  const hasPendingApproval = approvals.some((a) => a.status === "pending");
+  useEffect(() => {
+    if (!currentUser || !hasPendingApproval) return undefined;
+    const t = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      api.controlApi.approvals().then((r) => { if (Array.isArray(r?.approvals)) setApprovals(r.approvals); }).catch(() => {});
+    }, 8000);
+    return () => clearInterval(t);
+  }, [currentUser, hasPendingApproval]);
   const canManageDayNow = !!ROLES[role]?.canManageDay;
   useEffect(() => {
     if (!currentUser || !canManageDayNow || openDay) { setDayAsks([]); return undefined; }
@@ -4811,6 +4826,7 @@ export default function GoldInventoryApp() {
     setGoldLedger(n.goldLedger);
     setIsHq(n.isHq);
     setStorePackage(n.storePackage);
+    if (n.hqControl) setHqControl(n.hqControl);
     if (n.appSettings) {
       // ⚠ دمج لا استبدال: appSettings يحمل أيضًا تفضيلات محلية بحتة
       // (الثيم، طباعة، requirePin...) لا وجود لها في الباك إند بعد —
@@ -7647,14 +7663,11 @@ export default function GoldInventoryApp() {
   const lockOverlay = branchLock ? (
     <div className="fixed inset-0 flex items-center justify-center px-6" dir="rtl" style={{ background: "rgba(10,9,8,.96)", zIndex: 9998 }}>
       <Card style={{ padding: 18, maxWidth: 360, width: "100%", border: "1px solid var(--badLine)" }}>
-        <p style={{ color: "var(--bad)" }} className="text-base font-bold mb-2">الفرع موقوف من الإدارة المركزية</p>
-        <p style={{ color: "var(--text2)" }} className="text-xs mb-3">
-          {branchLock.reason ? `السبب: ${branchLock.reason}` : "لا بيعَ ولا حركةَ حتى تفكّ الإدارة القفل."}
-          {branchLock.lockedAt ? ` · منذ ${new Date(branchLock.lockedAt).toLocaleString("en-GB")}` : ""}
-          {branchLock.lockedBy ? ` · ${branchLock.lockedBy}` : ""}
-        </p>
+        {/* الإيقاف الصامت: نصٌّ محايد بلا جهةٍ ولا سببٍ ولا وقت */}
+        <p style={{ color: "var(--text)" }} className="text-base font-bold mb-2" data-branch-unavailable>النظام غير متاح حاليًا</p>
+        <p style={{ color: "var(--text2)" }} className="text-xs mb-3">تعذّر فتح النظام الآن. حاول مرة أخرى لاحقًا.</p>
         <button onClick={checkBranchLock} className="w-full py-2.5 rounded-xl text-xs font-bold" style={{ background: "var(--accentBg)", color: "var(--accent)", border: "1px solid var(--accentLine)" }}>
-          {currentUser ? "تحقّق الآن من الإدارة" : "حسنًا"}
+          {currentUser ? "حاول مرة أخرى" : "حسنًا"}
         </button>
         {currentUser && (
           <button onClick={() => { setBranchLock(null); handleLogout(); }} className="w-full mt-2 py-2 rounded-xl text-[11px]" style={{ background: "var(--panel)", color: "var(--text2)", border: "1px solid var(--line)" }}>خروج</button>
@@ -8526,6 +8539,7 @@ export default function GoldInventoryApp() {
         {morePage === "access" && (
           <AccessSettingsPage
             users={users}
+            staffByHq={hqOwnsStaff}
             navRegistry={NAV_REGISTRY.filter((n) => n.id !== "home")}
             roles={ROLES}
             onAddUser={handleAddUser}
@@ -8551,7 +8565,7 @@ export default function GoldInventoryApp() {
             priceData={priceData}
             settings={appSettings} onSave={handleUpdateSettings} branchIdentity={branchIdentity} onSaveBranch={handleSaveBranchIdentity} hqPermissions={hqPermissions}
             canEditControls={role === "manager"} onSaveControls={handleSaveControls}
-            hqManaged={branchProvision?.locked ? { by: branchProvision.by, at: branchProvision.at } : null}
+            hqManaged={branchProvision?.locked ? { by: branchProvision.by, at: branchProvision.at } : null} limitsByHq={hqOwnsStaff}
             onBack={() => setMorePage(null)} />
         )}
         {morePage === "openingCompare" && (

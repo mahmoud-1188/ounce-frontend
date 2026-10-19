@@ -35,7 +35,7 @@ const SETTINGS_ROWS = [
     screens: [["modules", "الوحدات"], ["backup", "النسخ"]], status: () => "الوحدات الاختيارية والنسخ الاحتياطي" },
 ];
 
-function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSaveBranch, hqPermissions, priceData = {}, onBackfill, canEditControls = false, onSaveControls = null, hqManaged = null, onBack }) {
+function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSaveBranch, hqPermissions, priceData = {}, onBackfill, canEditControls = false, onSaveControls = null, hqManaged = null, limitsByHq = false, onBack }) {
   const [newRecovery, setNewRecovery] = useState("");
   const [fees, setFees] = useState(() => ({ ...DEFAULT_CARD_FEES, ...(settings.cardFees || {}) }));
   const [margins, setMargins] = useState(() => ({ ...DEFAULT_MARGINS, ...(settings.marginByKarat || {}) }));
@@ -258,7 +258,7 @@ function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSa
             <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">
               الرقابة — الاعتماد وقفل الفترات
             </p>
-            <ControlsSettingsCard settings={settings} canEdit={canEditControls} onSave={onSaveControls} />
+            <ControlsSettingsCard settings={settings} canEdit={canEditControls} onSave={onSaveControls} limitsByHq={limitsByHq} />
           </>
         )}
 

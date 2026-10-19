@@ -784,6 +784,8 @@ function normalizeBootstrap(boot) {
     // هنا فقط: isHq يقرّر ظهور تبويب "تقرير الفروع" من عدمه.
     isHq: !!boot.branch?.is_hq,
     storePackage: boot.storePackage === "no_accounting" ? "no_accounting" : "full",
+    // تحكّم الإدارة (migration 072): حدود الاعتماد والموظفين لها ما لم تفوّض الفرع
+    hqControl: { linked: !!boot.hqControl?.linked, full: !!boot.hqControl?.full, noApprovals: !!boot.hqControl?.noApprovals },
   };
 }
 
