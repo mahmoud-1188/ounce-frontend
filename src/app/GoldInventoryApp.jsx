@@ -4097,7 +4097,10 @@ export default function GoldInventoryApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [morePage]);
   // طباعة الفاتورة من موضعٍ واحد: نافذة الفاتورة وفعل «طباعة الفاتورة» على صفّها
+  // ⚠ طباعة الفواتير معطّلةٌ في الفرع افتراضًا (قرار المالك) — تُفعَّل من الإعدادات؛ والحارس هنا فكل الطرق تمرّ منه
+  const invoicePrintOn = !!appSettings?.invoicePrintOn;
   const printSale = (sl) => {
+    if (!invoicePrintOn) { flashToast("طباعة الفواتير مطفأة في هذا الفرع — فعّلها من الإعدادات"); return; }
     const info = { ...(branchProvision?.profile || {}), name: branchIdentity?.name || "" };
     const withAttrs = { ...sl, lines: (sl.lines || []).map((l) => { const it = items.find((x) => x.id === l.itemId); return { ...l, itemName: it ? `${categoryLabel(l.category)} ع${l.karatSnapshot}` : undefined, gem: it?.gem || null, watch: it?.watch || null }; }) };
     const einvoice = appSettings.serverModules?.zatca?.on ? api.einvoiceApi.of("sales", withAttrs.id).then((r) => r.einvoice) : null;
@@ -9978,7 +9981,7 @@ export default function GoldInventoryApp() {
           customer={customers.find((c) => c.id === postSale.customerId) || null}
           currency={priceData.currency || "ر.س"}
           storeName={branchIdentity?.name || ""}
-          onPrint={() => printSale(postSale)}
+          onPrint={invoicePrintOn ? () => printSale(postSale) : null}
           onNew={() => { setPostSale(null); setQuickSaleItemId(null); setQuickSaleCustomerId(null); setShowNewSale(true); }}
           onClose={() => setPostSale(null)}
         />
@@ -10021,7 +10024,7 @@ export default function GoldInventoryApp() {
           suppliers={suppliers}
           canReturn={(permsNow.allowedMore || []).includes("salesReturn")}
           onReturn={(saleId, mode) => { setReturnPreset({ saleId, mode }); setViewingSale(null); openPage("salesReturn"); }}
-          onPrint={printSale}
+          onPrint={invoicePrintOn ? printSale : null}
           onClose={() => setViewingSale(null)}
         />
       )}
