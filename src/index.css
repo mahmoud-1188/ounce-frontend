@@ -39,3 +39,19 @@ body {
 /* أفعال الصفّ السريعة: تظهر عند مرور الفأرة أو التركيز، وتختفي على اللمس */
 .ons-row-quick{display:none}
 @media (hover:hover) and (pointer:fine){.ons-row:hover .ons-row-quick,.ons-row:focus-within .ons-row-quick{display:grid}}
+
+/* علامة «؟» معلّقةٌ على حافّة الزرّ العليا عند زاوية نهايته، تُلمس وحدها فتشرح الزرّ ولا تنفّذه */
+:where(html[data-help-badges=on]) :where(button, [role=button]) { position: relative; }
+html[data-help-badges=on] :is([style*="overflow: hidden"], [style*="overflow: auto"], [style*="overflow-x: auto"], .overflow-x-auto, .ons-hero, [data-hb-in]) {
+  --hb-top: clamp(2px, 8%, 6px); --hb-end: clamp(2px, 8%, 6px); --hb-shift: none; --hb-size: clamp(14px, 36%, 18px);
+}
+html[data-help-badges=on] :is(button, [role=button]):not([data-help-btn], [role=switch], .ons-hero, [data-no-help], [data-no-help] *)::after,
+html[data-help-badges=on] .ons-hero:not([data-no-help], [data-no-help] *)::before {
+  content: "؟"; content: "؟" / ""; position: absolute; top: var(--hb-top, 0); inset-inline-end: var(--hb-end, clamp(0px, 6%, 10px));
+  transform: var(--hb-shift, translateY(-50%)); height: var(--hb-size, clamp(16px, 46%, 20px)); width: auto; aspect-ratio: 1 / 1; box-sizing: border-box;
+  display: grid; place-items: center; border-radius: 999px; pointer-events: auto;
+  background: var(--panel); color: var(--accent); border: 1px solid var(--accentLine);
+  font: 800 11px/1 'Cairo', sans-serif; letter-spacing: 0; text-indent: 0; text-transform: none; text-shadow: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .22);
+}
+@media print { html[data-help-badges] :is(button, [role=button])::after, html[data-help-badges] .ons-hero::before { content: none !important; } }

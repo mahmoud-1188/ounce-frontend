@@ -1,4 +1,6 @@
 import React, { useState } from "react";
+import { CodingScaleBar } from "../ui/CodingScaleBar.jsx";
+import { scaleAutoPref, scaleSettingsWrap, setScaleAutoPref } from "../domain/scale.js";
 import { Barcode, Camera, Check, Landmark, Loader2, Plus, Trash2, Truck } from "lucide-react";
 import { CATEGORY_STATE } from "../core/constants.js";
 import { fmt, fmtW, fromHalalas, halalas, roundW } from "../core/money.js";
@@ -17,7 +19,7 @@ import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 
 function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions = [], onSetPrinted, onCreateSupplierLot, onDeleteItem, onBack, flashToast,
   openingMode = false, onCreateOpeningLot = null, currency = "ر.س", price24 = 0, modules = {},
-  codingModel = "both", onSendLotToHq = null, onRecallLot = null, printerCfg = null, onSavePrinter = null, onBindEpc = null }) {
+  codingModel = "both", onSendLotToHq = null, onRecallLot = null, printerCfg = null, onSavePrinter = null, onBindEpc = null, onUncode = null }) {
   const gemOn = !!modules?.gemstones?.on, watchOn = !!modules?.watches?.on;
   const defWarranty = Number(modules?.watches?.cfg?.warrantyMonths) || 24;
   const [detailItem, setDetailItem] = useState(null);
@@ -27,7 +29,28 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
   const [lotId, setLotId] = useState("");
   const [localLots, setLocalLots] = useState([]);
   const [showQuickLot, setShowQuickLot] = useState(false);
-  const [rows, setRows] = useState([emptyRow()]);
+  // ثبات التكويد: القسم والمصنعية يبقيان من قطعةٍ إلى التالية (وعلى الجهاز بين الجلسات)
+  const STICKY_KEY = "ounce_coding_sticky_v1";
+  const stickyOf = (r) => ({ category: r.category, wmMode: r.wmMode, workmanshipPerGram: r.workmanshipPerGram, workmanshipPerUnit: r.workmanshipPerUnit });
+  const loadSticky = () => { try { return JSON.parse(localStorage.getItem(STICKY_KEY) || "null") || {}; } catch { return {}; } };
+  const saveSticky = (r) => { try { localStorage.setItem(STICKY_KEY, JSON.stringify(stickyOf(r))); } catch { /* تخزينٌ محجوب */ } };
+  const seededRow = (from = null) => {
+    const base = emptyRow();
+    const st = from ? stickyOf(from) : loadSticky();
+    const okCat = st.category && CATEGORY_STATE.list.some((c) => c.id === st.category);
+    return { ...base, ...(okCat ? { category: st.category } : {}), ...(st.wmMode ? { wmMode: st.wmMode } : {}),
+      workmanshipPerGram: st.workmanshipPerGram ?? "", workmanshipPerUnit: st.workmanshipPerUnit ?? "" };
+  };
+  const [rows, setRows] = useState(() => [seededRow()]);
+  // الميزان: شريطٌ واحد أعلى القائمة يكتب في الصنف الحالي (آخر ما أُضيف أو ما ضغطت خانة وزنه)
+  const scaleCfg = scaleSettingsWrap();
+  const scaleOn = !!scaleCfg.scale.enabled;
+  const [curKey, setCurKey] = useState(null);
+  const [fresh, setFresh] = useState(0);
+  const [scaleAuto, setScaleAutoState] = useState(scaleAutoPref);
+  const [scaleMsg, setScaleMsg] = useState(null);
+  const setScaleAuto = (on) => { setScaleAutoState(on); setScaleAutoPref(on); };
+  const pickRow = (key) => { if (key !== curKey) { setCurKey(key); setFresh(Date.now()); } };
   const [savingPhotoKey, setSavingPhotoKey] = useState(null);
 
   const allLots = [...localLots, ...lots];
@@ -41,9 +64,14 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
   const activeItems = items.filter((i) => remainingQty(i) > 0);
 
   const updateRow = (key, field, val) => {
-    setRows((prev) => prev.map((r) => (r.key === key ? { ...r, [field]: val } : r)));
+    // الوزن المكتوب باليد يفقد دليل الميزان — فلا يغيّره الوزن التلقائي بعدها
+    setRows((prev) => prev.map((r) => (r.key === key ? { ...r, [field]: val, ...(field === "weight" ? { weightEv: null } : {}) } : r)));
   };
-  const addRow = () => setRows((prev) => [...prev, emptyRow()]);
+  const addRow = () => {
+    const next = seededRow(rows[rows.length - 1]);
+    setRows((prev) => [...prev, next]);
+    setCurKey(next.key); setFresh(Date.now());
+  };
   const removeRow = (key) => setRows((prev) => (prev.length > 1 ? prev.filter((r) => r.key !== key) : prev));
 
   const handlePhotoSelect = async (key, file) => {
@@ -112,7 +140,9 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
       // فور إدخالها، وتأجيلها يعني قطعًا بلا رقاقة في الصندوق اليومي.
       if (created && created.length) {
         setJustEntered(created);
-        setRows([emptyRow()]);
+        saveSticky(rows[rows.length - 1]);
+        setRows([seededRow(rows[rows.length - 1])]);
+        setCurKey(null);
       }
     } finally {
       setSaving(false);
@@ -383,8 +413,19 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
 
         {lotId && selectedLot && !lotAtHq && !codingBlocked && (
           <div className="flex flex-col gap-4 mb-4">
-            {rows.map((r, idx) => (
-              <Card key={r.key} style={{ padding: 12 }}>
+            {scaleOn && (() => {
+              const cur = rows.find((r) => r.key === curKey) || rows[rows.length - 1];
+              const n = rows.findIndex((r) => r.key === cur.key) + 1;
+              return (
+                <CodingScaleBar settings={scaleCfg} auto={scaleAuto} onAuto={setScaleAuto} row={cur} rowLabel={`صنف ${n}`} fresh={fresh}
+                  msg={scaleMsg} onMsg={setScaleMsg}
+                  onWeight={(g, ev) => setRows((prev) => prev.map((r) => (r.key === cur.key ? { ...r, weight: String(g), weightEv: ev } : r)))} />
+              );
+            })()}
+            {rows.map((r, idx) => {
+              const isCur = scaleOn && (curKey ? r.key === curKey : idx === rows.length - 1);
+              return (
+              <Card key={r.key} style={{ padding: 12, border: isCur ? "1px solid var(--accentLine)" : undefined }}>
                 <div className="flex items-center justify-between mb-2">
                   <span style={{ color: "var(--text2)" }} className="text-xs font-bold">
                     صنف {idx + 1}
@@ -462,7 +503,10 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
 
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="وزن الذهب (جرام)">
-                    <input style={inputStyle} type="text" inputMode="decimal" value={r.weight} onChange={(e) => updateRow(r.key, "weight", sanitizeNumeric(e.target.value))} placeholder="0.00" />
+                    <input style={inputStyle} type="text" inputMode="decimal" value={r.weight} data-row-weight={idx}
+                      onFocus={() => pickRow(r.key)}
+                      onChange={(e) => updateRow(r.key, "weight", sanitizeNumeric(e.target.value))} placeholder="0.00" />
+                    {r.weightEv?.source === "scale" && <span style={{ color: "var(--good)" }} className="text-[10px]" data-weight-from-scale>⚖ من الميزان</span>}
                   </Field>
                   <Field label="وزن الفصوص (اختياري)">
                     <input style={inputStyle} type="text" inputMode="decimal" value={r.stonesWeight} onChange={(e) => updateRow(r.key, "stonesWeight", sanitizeNumeric(e.target.value))} placeholder="0.00" />
@@ -517,7 +561,8 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
                   <Barcode size={12} /> سيُولَّد رمز فريد تلقائيًا لكل قطعة — اطبع ملصقاتها من صفحة الطباعة بعد الحفظ
                 </p>
               </Card>
-            ))}
+              );
+            })}
 
             <button
               onClick={addRow}
@@ -568,7 +613,7 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
                 <div className="flex flex-col gap-2">
                   {mine.map((it) => (
                     <Card key={it.id} style={{ padding: 10 }}>
-                      <button onClick={() => setDetailItem(it)} className="w-full text-right">
+                      <button data-coded-item={it.id} onClick={() => setDetailItem(it)} className="w-full text-right">
                         <div className="flex items-center gap-2">
                           <Hallmark karat={it.karat} size={30} />
                           <span style={{ color: "var(--text)" }} className="text-xs flex-1">
@@ -595,7 +640,8 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
         })()}
       </div>
       {detailItem && (
-        <ItemDetailModal item={detailItem} lots={lots} suppliers={suppliers} onClose={() => setDetailItem(null)} />
+        <ItemDetailModal item={detailItem} lots={lots} suppliers={suppliers} onClose={() => setDetailItem(null)}
+          onUncode={onUncode ? async (codes, reason) => { const ok = await onUncode(codes, reason); if (ok) setDetailItem(null); } : null} />
       )}
     </div>
   );

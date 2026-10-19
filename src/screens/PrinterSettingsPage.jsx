@@ -1,4 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
+import { labelModelList, renameLabelModel } from "../domain/labelModels.js";
+import { LabelModelPicker } from "../ui/LabelModelPicker.jsx";
 import { Check } from "lucide-react";
 import { DEFAULT_PRINTER, PRINTER_SERVICES } from "../core/constants.js";
 import { PURITY, fmt, fmtW } from "../core/money.js";
@@ -439,6 +441,18 @@ function PrinterSettingsPage({ config, onSave, sampleItem, currency, price24, on
             {/* ── تخطيط الملصق ── */}
             <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">تخطيط الملصق — اسحب بإصبعك</p>
             <Card style={{ padding: 14, marginBottom: 12 }}>
+              {/* ثلاثة نماذج ملصق لكلٍّ مقاسه وتخطيطه واسمه، وتُختار عند الطباعة بعد التكويد أيضًا */}
+              <Card style={{ padding: 11, marginBottom: 10, border: "1px solid var(--accentLine)" }} data-label-models-settings>
+                <p style={{ color: "var(--accent)", margin: "0 0 5px" }} className="text-[11px] font-bold">نماذج الملصق — اختر نموذجًا ثم اضبط مقاسه وتخطيطه</p>
+                <div className="mb-2"><LabelModelPicker cfg={cfg} onChange={(n) => { setCfg(n); onSave(n); }} /></div>
+                <Field label="اسم النموذج الفعّال">
+                  <input style={inputStyle} aria-label="اسم النموذج الفعّال" data-label-model-name maxLength={24}
+                    value={labelModelList(cfg).find((m) => m.active)?.name || ""}
+                    onChange={(e) => setCfg(renameLabelModel(cfg, cfg.activeModel || "m1", e.target.value))}
+                    onBlur={() => onSave(cfg)} />
+                </Field>
+                <p style={{ color: "var(--text3)", margin: 0 }} className="text-[11px] leading-6">المقاس والتخطيط لكل نموذج وحده، والباقي (الطابعة · الدقّة · الرقاقة) مشترك.</p>
+              </Card>
               {/* ══ ① المقاس والمعايرة — قبل أي شيء ══ */}
               <Card style={{ padding: 11, marginBottom: 10, border: "1px solid var(--accentLine)" }}>
                 <p style={{ color: "var(--accent)", margin: "0 0 5px" }} className="text-[11px] font-bold">

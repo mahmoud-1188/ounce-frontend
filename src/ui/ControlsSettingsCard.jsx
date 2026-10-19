@@ -14,7 +14,7 @@ import { NumericInput } from "./NumericInput.jsx";
 ///   · قفلٌ جزئيّ: المدير وحده يعدّل حتى هذا التاريخ.
 const KINDS = ["expense", "refund", "supplier_settle"];
 
-function ControlsSettingsCard({ settings = {}, canEdit = false, onSave }) {
+function ControlsSettingsCard({ settings = {}, canEdit = false, onSave, limitsByHq = false }) {
   const rules = APPROVAL_RULES.filter((r) => KINDS.includes(r.id));
   const init = () => ({
     enabled: settings.approvalsEnabled !== false,
@@ -28,33 +28,42 @@ function ControlsSettingsCard({ settings = {}, canEdit = false, onSave }) {
   const save = async () => {
     setBusy(true);
     try {
+      // حدود الاعتماد للإدارة: لا تُرسل — يُحفظ قفل الفترات وحده
       await onSave({
-        approvalsEnabled: f.enabled,
-        approvalThresholds: Object.fromEntries(rules.map((r) => [r.id, Number(f.th[r.id]) || 0])),
+        ...(limitsByHq ? {} : {
+          approvalsEnabled: f.enabled,
+          approvalThresholds: Object.fromEntries(rules.map((r) => [r.id, Number(f.th[r.id]) || 0])),
+        }),
         lockAll: f.lockAll || null,
         lockPosted: f.lockPosted || null,
       });
     } finally { setBusy(false); }
   };
   const dis = !canEdit;
+  const limDis = dis || limitsByHq;
   return (
     <Card style={{ padding: 14, marginBottom: 12 }}>
       <div className="flex items-center justify-between mb-2">
         <span style={{ color: "var(--text)" }} className="text-sm font-bold">
           الاعتماد {f.enabled ? "مفعّل" : "مطفأ"}
         </span>
-        <button aria-label="الاعتماد" disabled={dis} onClick={() => setF((x) => ({ ...x, enabled: !x.enabled }))}
+        <button aria-label="الاعتماد" disabled={limDis} onClick={() => setF((x) => ({ ...x, enabled: !x.enabled }))}
           style={{ width: 46, height: 25, borderRadius: 13, position: "relative", flexShrink: 0,
-            background: f.enabled ? "var(--goodSolid)" : "var(--edge)", transition: "background .2s", opacity: dis ? 0.5 : 1 }}>
+            background: f.enabled ? "var(--goodSolid)" : "var(--edge)", transition: "background .2s", opacity: limDis ? 0.5 : 1 }}>
           <div style={{ width: 19, height: 19, borderRadius: "50%", background: "var(--text)",
             position: "absolute", top: 3, right: f.enabled ? 24 : 3, transition: "right .2s" }} />
         </button>
       </div>
       <p style={{ color: "var(--text2)" }} className="text-[11px] mb-2">ما بلغ الحدّ لا يُنفَّذ بل يُحفظ طلبًا للمدير، ويُنفَّذ مرّةً واحدة عند اعتماده.</p>
+      {limitsByHq && (
+        <p style={{ color: "var(--accentText)" }} className="text-[11px] mb-2 font-bold" data-limits-by-hq>
+          🔒 حدود الاعتماد تحدّدها الإدارة المركزية — تُعرض هنا للاطّلاع.
+        </p>
+      )}
       <div className="grid grid-cols-3 gap-2">
         {rules.map((r) => (
           <Field key={r.id} label={`${r.label} — من`}>
-            <NumericInput value={f.th[r.id]} onChange={(v) => !dis && setF((x) => ({ ...x, th: { ...x.th, [r.id]: v } }))} placeholder="0" />
+            <NumericInput value={f.th[r.id]} onChange={(v) => !limDis && setF((x) => ({ ...x, th: { ...x.th, [r.id]: v } }))} placeholder="0" />
           </Field>
         ))}
       </div>

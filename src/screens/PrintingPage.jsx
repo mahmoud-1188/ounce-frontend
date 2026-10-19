@@ -9,7 +9,7 @@ import { PseudoBarcode } from "../ui/PseudoBarcode.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 import { isLabelPrinter, printLabelsToDevice } from "../domain/labelPrint.js";
 
-function PrintingPage({ activeItems, onSetPrinted, onReplaceCode, onBack, printerCfg = null, currency = "ر.س", price24 = 0, onSavePrinter = null, onBindEpc = null }) {
+function PrintingPage({ activeItems, onSetPrinted, onReplaceCode, onBack, printerCfg = null, currency = "ر.س", price24 = 0, onSavePrinter = null, onBindEpc = null, onReprintGate = null }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all"); // 'all' | 'unprinted'
   const [selected, setSelected] = useState(new Set());
@@ -84,23 +84,32 @@ function PrintingPage({ activeItems, onSetPrinted, onReplaceCode, onBack, printe
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [printQueue]);
 
-  const handlePrint = () => {
-    setPrintQueue(Array.from(selected));
+  // ⚠ ما طُبع ملصقه لا يُطبع ثانيةً ولا تُستبدل رقاقته ولا تُلغى علامته إلا بموافقة (label_reprint) — بلا ملصقٍ ثانٍ بلا أثر
+  const gate = async (codes, action) => (onReprintGate ? onReprintGate(codes, action) : true);
+  const isPrinted = (code) => activeItems.some((it) => (it.units || []).some((u) => u.code === code && u.printed));
+  const handlePrint = async () => {
+    const codes = Array.from(selected);
+    const again = codes.filter(isPrinted);
+    if (again.length && !(await gate(again, "reprint"))) return;
+    setPrintQueue(codes);
   };
 
-  const handleReplaceSticker = (e, code) => {
+  const handleReplaceSticker = async (e, code) => {
     e.stopPropagation();
+    if (isPrinted(code) && !(await gate([code], "reprint"))) return;
     setPrintQueue([code]);
   };
 
-  const handleReplaceTag = (e, itemId, oldCode) => {
+  const handleReplaceTag = async (e, itemId, oldCode) => {
     e.stopPropagation();
+    if (!(await gate([oldCode], "replace"))) return;
     const newCode = onReplaceCode(itemId, oldCode);
     setPrintQueue([newCode]);
   };
 
-  const handleUndoPrint = (e, itemId, code) => {
+  const handleUndoPrint = async (e, itemId, code) => {
     e.stopPropagation();
+    if (!(await gate([code], "unmark"))) return;
     onSetPrinted(itemId, [code], false);
   };
 

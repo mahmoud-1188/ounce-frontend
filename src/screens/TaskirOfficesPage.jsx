@@ -8,10 +8,11 @@ import { EmptyState } from "../ui/EmptyState.jsx";
 import { Field } from "../ui/Field.jsx";
 import { NumericInput } from "../ui/NumericInput.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
+import { OfficeHoldingsCard } from "../ui/OfficeHoldingsCard.jsx";
 
 function TaskirOfficesPage({
   offices = [], officeTx = [], suppliers = [], currency, price24 = 0,
-  branchName, canManage, onSettle, onAddOffice, onBack, flashToast,
+  branchName, canManage, onSettle, onAddOffice, onBack, flashToast, onHold = null,
 }) {
   const [pick, setPick] = useState(null);
   const [form, setForm] = useState(null);   // { officeId, mode, weight, karat, amount, source }
@@ -20,8 +21,9 @@ function TaskirOfficesPage({
 
   // ── حساب كل مكتب ──
   const build = (o) => {
-    const tx = officeTx.filter((t) => t.officeId === o.id);
-    // debit = علينا للمكتب · credit = سدّدناه
+    const all = officeTx.filter((t) => t.officeId === o.id);
+    const tx = all.filter((t) => t.kind !== "hold");
+    // debit = علينا للمكتب · credit = سدّدناه — وذهبنا المحفوظ عنده (hold) أصلٌ لنا لا يدخل الدين
     const owed = tx.reduce((a, t) => {
       const w = fine24(t.weight, t.karat || 24);
       return a + (t.type === "debit" ? w : -w);
@@ -31,7 +33,7 @@ function TaskirOfficesPage({
     return {
       office: o, tx: [...tx].sort((a, b) => String(b.date).localeCompare(String(a.date))),
       owed: roundW(owed), cashPaid,
-      count: tx.length,
+      count: tx.length, holdTx: all.filter((t) => t.kind === "hold"),
     };
   };
 
@@ -286,6 +288,10 @@ function TaskirOfficesPage({
               )
             )}
 
+            {onHold && (
+              <OfficeHoldingsCard tx={A.holdTx} suppliers={suppliers} currency={currency} price24={price24} canManage={canManage}
+                onHold={(f) => onHold(A.office.id, f)} />
+            )}
             <p style={{ color: "var(--accent)" }} className="text-[11px] font-bold mb-1">
               الحركات ({A.tx.length})
             </p>

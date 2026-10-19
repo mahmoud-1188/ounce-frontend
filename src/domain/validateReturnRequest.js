@@ -1,3 +1,4 @@
+import { lineReturnLeft } from "./returnParts.js";
 import { REFUND_TARGETS, RETURN_REASONS } from "../core/workflow.js";
 
 function validateReturnRequest(req, ctx) {
@@ -25,9 +26,7 @@ function validateReturnRequest(req, ctx) {
     }
     const l = lines[i];
     // ⚠ منع الإرجاع المزدوج: نفحص كل مرتجع سابق لهذه الفاتورة.
-    const already = (returns || []).some(
-      (r) => r.saleId === sale.id && (r.lineIndexes || []).includes(i)
-    );
+    const already = lineReturnLeft(sale, returns, i) <= 0;
     if (already) {
       errors.push(`السطر ${i + 1} (${l.itemName || l.name || ""}) مُرتجع سلفًا`);
     }

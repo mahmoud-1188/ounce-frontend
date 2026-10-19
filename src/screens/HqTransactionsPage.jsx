@@ -60,6 +60,22 @@ function HqTransactionsPage({ currency = "ر.س", onBack, flashToast, onCashRece
 
   useEffect(() => { load(); }, []);
 
+  // سحب الإدارة من رأس مال الفرع: المدير يوافق فيخرج النقد من الخزنة، أو يرفض بسببه
+  async function decideDraw(t, approve) {
+    let note = "";
+    if (!approve) { note = window.prompt("سبب الرفض (يصل الإدارة):", "") || ""; if (!note.trim()) return; }
+    setBusyId(t.id);
+    try {
+      await api.hqTransactionsApi.decideCapitalDraw(t.id, approve ? "approved" : "rejected", note);
+      flashToast?.(approve ? "خرج المبلغ من الخزنة إلى الإدارة — ورُحّل قيده" : "رُفض السحب وأُبلغت الإدارة");
+      if (approve) onCashReceived?.();
+      await load();
+    } catch (err) {
+      const code = err?.body?.error;
+      flashToast?.(code === "insufficient_source_cash" ? `نقد الخزنة لا يكفي (المتاح ${err.body.available})` : code === "manager_only" ? "القرار لمدير الفرع" : "تعذّر تسجيل القرار");
+    } finally { setBusyId(null); }
+  }
+
   async function handleReceive(id) {
     setBusyId(id);
     try {
@@ -122,6 +138,14 @@ function HqTransactionsPage({ currency = "ر.س", onBack, flashToast, onCashRece
               )}
               {t.flow === "cash_from_hq" && t.fromBranchName && (
                 <p style={{ color: "var(--text3)" }} className="text-[11px] mt-0.5">من خزنة {t.fromBranchName} — يدخل خزنتك نقدًا عند تأكيد الاستلام</p>
+              )}
+              {t.flow === "capital_draw" && t.status === "pending" && (
+                <div className="grid grid-cols-2 gap-2 mt-2.5" data-capital-draw={t.id}>
+                  <button onClick={() => decideDraw(t, true)} disabled={busyId === t.id} className="py-2 rounded-xl text-[12px] font-bold"
+                    style={{ background: "var(--goodBg)", color: "var(--good)", border: "1px solid var(--goodLine)" }}>موافقة — أخرج المبلغ</button>
+                  <button onClick={() => decideDraw(t, false)} disabled={busyId === t.id} className="py-2 rounded-xl text-[12px] font-bold"
+                    style={{ background: "var(--panel)", color: "var(--bad)", border: "1px solid var(--line)" }}>رفض</button>
+                </div>
               )}
               {BRANCH_RECEIVES.has(t.flow) && (t.status === "approved" || (HQ_INITIATED.has(t.flow) && t.status === "pending")) && (
                 <button

@@ -1,6 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Check, Coins, Link2, Printer, Puzzle, Settings2, ShieldCheck } from "lucide-react";
 import { APP_MODES, DEFAULT_APP_MODE, DEFAULT_SETTINGS } from "../core/constants.js";
+import { UI_LANGS, readUiLang, setUiLang } from "../domain/i18n.js";
+import { ACCOUNTING_MODES } from "../core/storePackage.js";
+import { PayTerminalCard } from "../ui/PayTerminalCard.jsx";
 import { KARATS, fmt, pricePerGram } from "../core/money.js";
 import { CARD_NETWORKS, DEFAULT_CARD_FEES, DEFAULT_MARGINS } from "../core/money-rules.js";
 import { THEMES, THEME_DESIGNS, applyTheme, designOfTheme, effectiveTheme, isDarkTheme } from "../core/theme.js";
@@ -11,10 +14,9 @@ import { verifyToken } from "../domain/verifyToken.js";
 import { Card } from "../ui/Card.jsx";
 import { ControlsSettingsCard } from "../ui/ControlsSettingsCard.jsx";
 import { Field } from "../ui/Field.jsx";
-import { MgrFeeSettingsCard } from "../ui/MgrFeeSettingsCard.jsx";
 import { NumericInput } from "../ui/NumericInput.jsx";
 import { RfidSettingsCard } from "../ui/RfidSettingsCard.jsx";
-import { HiddenModeSettingsCard } from "../ui/HiddenModeSettingsCard.jsx";
+import { ScaleSettingsCard } from "../ui/ScaleSettingsCard.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 import { InstallAppCard } from "../ui/InstallAppCard.jsx";
 
@@ -26,7 +28,7 @@ const SETTINGS_ROWS = [
     screens: [["access", "الصلاحيات"]], status: (s) => `الرقم السري ${s.requirePin ? "مفعّل" : "مطفأ"} · الاعتماد ${s.approvalsEnabled ? "مفعّل" : "مطفأ"}` },
   { id: "money", label: "المال والضريبة", icon: Coins, keys: ["الضريبه", "هوامش", "هامش", "عمولات", "مطابقة البنك", "الزكاه", "فحص الكسر", "حد الاجل", "بعد البيع", "واتساب", "البيع اثناء الجرد", "عرض السعر"],
     screens: [], status: (s) => (s.taxEnabled ? `ضريبة ${Math.round((Number(s.taxRate) || 0) * 1000) / 10}٪` : "بلا ضريبة") + ` · الزكاة ${s.zakatEnabled === false ? "مطفأة" : "مفعّلة"}` },
-  { id: "devices", label: "الأجهزة", icon: Printer, keys: ["قارئ rfid", "الطابعه"],
+  { id: "devices", label: "الأجهزة", icon: Printer, keys: ["قارئ rfid", "الطابعه", "الميزان"],
     screens: [["printerSetup", "الطابعة"], ["rfidSettings", "القارئ"]], status: () => "الطابعة وقارئ RFID" },
   { id: "links", label: "الربط", icon: Link2, keys: ["ربط الفرع", "البرنامج المركزي"],
     screens: [["integration", "الأنظمة"]], status: (s, b) => (b?.code ? `مربوطٌ بالإدارة · ${b.code}` : "غير مربوطٍ بالإدارة") },
@@ -34,8 +36,9 @@ const SETTINGS_ROWS = [
     screens: [["modules", "الوحدات"], ["backup", "النسخ"]], status: () => "الوحدات الاختيارية والنسخ الاحتياطي" },
 ];
 
-function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSaveBranch, hqPermissions, priceData = {}, onBackfill, canEditControls = false, onSaveControls = null, hqManaged = null, onBack }) {
+function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSaveBranch, hqPermissions, priceData = {}, onBackfill, canEditControls = false, onSaveControls = null, hqManaged = null, limitsByHq = false, onBack }) {
   const [newRecovery, setNewRecovery] = useState("");
+  const [uiLangSel, setUiLangSel] = useState(readUiLang);
   const [fees, setFees] = useState(() => ({ ...DEFAULT_CARD_FEES, ...(settings.cardFees || {}) }));
   const [margins, setMargins] = useState(() => ({ ...DEFAULT_MARGINS, ...(settings.marginByKarat || {}) }));
   const [adj, setAdj] = useState(() => ({ ...DEFAULT_SETTINGS.priceAdjust, ...(settings.priceAdjust || {}) }));
@@ -171,7 +174,7 @@ function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSa
           كل شيء كما تركه.
         </p>
 
-        {canEditControls && <HiddenModeSettingsCard />}
+
 
         {/* ── السمة ── */}
         <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">
@@ -257,7 +260,7 @@ function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSa
             <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">
               الرقابة — الاعتماد وقفل الفترات
             </p>
-            <ControlsSettingsCard settings={settings} canEdit={canEditControls} onSave={onSaveControls} />
+            <ControlsSettingsCard settings={settings} canEdit={canEditControls} onSave={onSaveControls} limitsByHq={limitsByHq} />
           </>
         )}
 
@@ -786,9 +789,81 @@ function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSa
           </p>
         </Card>
 
-        {/* ── عمولة المدير ── */}
-        <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">عمولة المدير</p>
-        <MgrFeeSettingsCard settings={settings} onSave={onSave} />
+        {/* عمولة المدير أُلغيت نهائيًّا — والوضع الخفي أُلغي؛ القطع المعلّقة القديمة تُقرأ وتُباع كما كانت */}
+
+        {/* ── لغة الواجهة (تفضيلٌ لهذا الجهاز) ── */}
+        <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">لغة الواجهة</p>
+        <Card style={{ padding: 14, marginBottom: 16 }} data-ui-lang>
+          <div className="grid grid-cols-2 gap-2">
+            {Object.keys(UI_LANGS).map((id) => (
+              <button key={id} type="button" translate="no" data-ui-lang-opt={id} onClick={() => { setUiLang(id); setUiLangSel(id); }} className="py-2 rounded-xl text-xs font-bold"
+                style={{ background: uiLangSel === id ? "var(--accentBg)" : "var(--panel)", color: uiLangSel === id ? "var(--accent)" : "var(--text2)", border: "1px solid var(--line)" }}>
+                {UI_LANGS[id].label}
+              </button>
+            ))}
+          </div>
+          <p style={{ color: "var(--text3)" }} className="text-[11px] mt-2">الفواتير والتقارير الرسمية تبقى بالعربية.</p>
+        </Card>
+
+        {/* ── علامات «؟» على الأزرار ── */}
+        <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">شرح الأزرار</p>
+        <Card style={{ padding: 14, marginBottom: 16 }}>
+          <label className="flex items-center justify-between gap-2 text-[12px]" style={{ color: "var(--text)" }}>
+            <span>علامة «؟» على كل زرّ<span style={{ color: "var(--text3)" }} className="block text-[11px]">اضغط «؟» أو اضغط الزرّ مطوّلًا لترى ماذا يفعل — دون أن يُنفَّذ</span></span>
+            <input type="checkbox" data-help-badges-toggle checked={settings.helpBadges !== false} onChange={(e) => onSave({ ...settings, helpBadges: e.target.checked })} style={{ accentColor: "var(--accent)", width: 18, height: 18 }} />
+          </label>
+        </Card>
+
+        {/* ── جهاز الدفع (تفضيلٌ لهذا الجهاز) ── */}
+        <PayTerminalCard />
+
+        {/* ── طباعة الفواتير (مطفأة افتراضًا في الفرع) ── */}
+        <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">طباعة الفواتير</p>
+        <Card style={{ padding: 14, marginBottom: 16 }}>
+          <label className="flex items-center justify-between gap-2 text-[12px]" style={{ color: "var(--text)" }}>
+            <span>اطبع فاتورة البيع للعميل<span style={{ color: "var(--text3)" }} className="block text-[11px]">مطفأة افتراضًا — الفاتورة تُرسل بواتساب أو تُعرض</span></span>
+            <input type="checkbox" data-invoice-print checked={!!settings.invoicePrintOn} onChange={(e) => onSave({ ...settings, invoicePrintOn: e.target.checked })} style={{ accentColor: "var(--accent)", width: 18, height: 18 }} />
+          </label>
+          <label className="flex items-center justify-between gap-2 text-[12px] mt-3" style={{ color: "var(--text)" }}>
+            <span>الصيغة الرسمية للمحاسبين والجهات الرسمية<span style={{ color: "var(--text3)" }} className="block text-[11px]">سندات قبض وصرف بالمبلغ كتابةً وثلاثة توقيعات (أصل وصورة)، وإشعار دائن للمرتجع، وفاتورة ضريبية كاملة لعميلٍ له رقم ضريبي</span></span>
+            <input type="checkbox" data-official-print-toggle checked={!!settings.officialPrint} onChange={(e) => onSave({ ...settings, officialPrint: e.target.checked })} style={{ accentColor: "var(--accent)", width: 18, height: 18 }} />
+          </label>
+        </Card>
+
+        {/* ── المحاسبة: بسيطة أو مفصّلة ── */}
+        <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">المحاسبة</p>
+        <Card style={{ padding: 14, marginBottom: 16 }} data-accounting-mode>
+          <div className="grid grid-cols-2 gap-2">
+            {Object.entries(ACCOUNTING_MODES).map(([id, m]) => {
+              const on = (settings.accountingMode === "simple" ? "simple" : "detailed") === id;
+              return (
+                <button key={id} type="button" data-accounting-mode-opt={id} onClick={() => onSave({ ...settings, accountingMode: id })} className="py-2 px-2 rounded-xl text-xs font-bold text-right"
+                  style={{ background: on ? "var(--accentBg)" : "var(--panel)", color: on ? "var(--accent)" : "var(--text2)", border: "1px solid var(--line)" }}>
+                  {m.label}<span style={{ color: "var(--text3)" }} className="block text-[10px] font-normal leading-4 mt-0.5">{m.hint}</span>
+                </button>
+              );
+            })}
+          </div>
+          <p style={{ color: "var(--text3)" }} className="text-[11px] mt-2">الشاشات تُخفى فقط — القيود تُسجَّل كما هي، والعودة إلى «مفصّلة» تُظهر كل شيء.</p>
+        </Card>
+
+        {/* ── عيار الاحتساب والمكافئ الذهبي ── */}
+        <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">عيار الاحتساب</p>
+        <Card style={{ padding: 14, marginBottom: 16 }} data-base-karat>
+          <p style={{ color: "var(--text2)" }} className="text-[11px] mb-2">أساس البرنامج الربح بالذهب: كل تحويلٍ للذهب ومكافئ كل مبلغ بهذا العيار.</p>
+          <div className="grid grid-cols-2 gap-2 mb-2">
+            {[21, 24].map((k) => (
+              <button key={k} type="button" data-karat={k} onClick={() => onSave({ ...settings, baseKarat: k })} className="py-2 rounded-xl text-xs font-bold"
+                style={{ background: (Number(settings.baseKarat) === 24 ? 24 : 21) === k ? "var(--accentBg)" : "var(--panel)", color: (Number(settings.baseKarat) === 24 ? 24 : 21) === k ? "var(--accent)" : "var(--text2)", border: "1px solid var(--line)" }}>
+                عيار {k}
+              </button>
+            ))}
+          </div>
+          <label className="flex items-center gap-2 text-[11px]" style={{ color: "var(--text2)" }}>
+            <input type="checkbox" data-gold-eq-toggle checked={settings.goldEqOn !== false} onChange={(e) => onSave({ ...settings, goldEqOn: e.target.checked })} style={{ accentColor: "var(--accent)" }} />
+            اعرض بجانب كل مبلغ ما يعادله ذهبًا بسعر اليوم (بخطٍّ صغير)
+          </label>
+        </Card>
 
         {/* ── واتساب المحل ── */}
         <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">واتساب المحل</p>
@@ -873,6 +948,10 @@ function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSa
         {/* ── قارئ RFID ── */}
         <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">قارئ RFID</p>
         <RfidSettingsCard settings={settings} onSave={onSave} currency={priceData.currency} />
+
+        {/* ── الميزان ── */}
+        <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">الميزان</p>
+        <ScaleSettingsCard />
 
         {/* ── ترحيل القيود ── */}
         {onBackfill && (

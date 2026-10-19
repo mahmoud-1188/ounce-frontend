@@ -16,7 +16,7 @@ function EntityRow({ label = "", acts = [], onOpen, onMore, onAct, children, sty
   const up = () => clearTimeout(timer.current);
   return (
     <div className={`ons-row flex items-center gap-1 ${className}`} style={style}
-      onPointerDown={down} onPointerUp={up} onPointerLeave={up} onPointerCancel={up}
+      data-own-press={onMore ? "" : undefined} onPointerDown={down} onPointerUp={up} onPointerLeave={up} onPointerCancel={up}
       onContextMenu={(e) => { if (onMore) e.preventDefault(); }}>
       <button type="button" className={innerClass} onClick={() => { if (fired.current) { fired.current = false; return; } onOpen?.(); }}>
         {children}

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { UI_LANGS, readUiLang } from "../domain/i18n.js";
 import { AlertTriangle, Banknote, ChevronRight, ChevronUp, FileText, Handshake, Loader2, Lock, LogOut, Menu, Mic, Package, PackageMinus, Plus, Printer, Receipt, RotateCcw, Scale, Search, ShoppingCart, Truck, Wrench, X } from "lucide-react";
 import { CHART_OF_ACCOUNTS, POSTING_RULES } from "../core/chart.js";
 import { AUTO_WORKDAY, APP_MODES, CATEGORY_STATE, DEFAULT_APP_MODE, DEFAULT_CATEGORIES, DEFAULT_INTEGRATION, DEFAULT_OPENING_BALANCE, DEFAULT_PRINTER, DEFAULT_SETTINGS, DEFAULT_STORE, DEFAULT_USERS, EXPENSE_CATEGORIES, ISSUE_REASONS, MIGRATION_FLAG, PARTNER_REQUIRED, PUBLISH_CAP, REVIEW_VERDICTS, RFID_DEFAULTS, ROLES, TRUST_MOVES } from "../core/constants.js";
@@ -52,7 +53,16 @@ const API_ERROR_MESSAGES = {
   proposal_not_pending: "قُرِّرت هذه المسودّة سلفًا",
   proposal_unbalanced: "المسودّة غير متوازنة — لا تُرحَّل",
   invalid_account: "حسابٌ غير صالح في المسودّة",
-  branch_locked: "الفرع مقفلٌ من الإدارة",
+  branch_locked: "النظام غير متاح حاليًا — حاول مرة أخرى لاحقًا",
+  approval_limits_by_hq: "حدود الاعتماد تحدّدها الإدارة المركزية",
+  ledger_setup: "فترة التجهيز — لا بيع ولا حركة نقد قبل «بدء التشغيل»",
+  item_at_hq: "القطعة ما زالت عند الإدارة في دورة التكويد — تُباع بعد أن ترسلها",
+  code_old_stock_first: "كوّد بضاعة المحل القديمة أوّلًا — أو علّم «لا بضاعة قديمة» في الرصيد الافتتاحي",
+  opening_balance_first: "أدخل الرصيد الافتتاحي واحفظه أوّلًا",
+  go_live_pending: "طلب بدء التشغيل عند الإدارة",
+  already_reversed: "عُكس هذا التحويل من قبل",
+  already_live: "الفرع يعمل فعلًا",
+  staff_by_hq: "إضافة الموظفين وصلاحياتهم من الإدارة المركزية",
   approval_not_found: "طلب الاعتماد غير موجود",
   approval_already_executed: "نُفِّذ هذا الطلب سلفًا",
   approval_not_approved: "الطلب لم يُعتمد بعد",
@@ -86,6 +96,9 @@ const API_ERROR_MESSAGES = {
   store_suspended: "اشتراك المحل موقوف — تواصل مع مزوّد البرنامج",
   store_expired: "انتهى اشتراك المحل — تواصل مع مزوّد البرنامج لتجديده",
   insufficient_stock: "الكمية غير متوفرة",
+  unit_not_available: "القطعة الممسوحة لم تعد متاحة — بِيعت أو أُخرجت",
+  invalid_line_part: "القطع المختارة للمرتجع غير صالحة — أُرجعت سلفًا أو أكثر مما بقي",
+  unit_codes_mismatch: "عدد القطع لا يطابق ما مُسح — امسح القطع من جديد",
   // أجزاء الأطقم وبقاياها (migration 066)
   item_is_set_remnant: "بقايا طقم — تُكوَّد قطعًا قبل بيعها",
   part_weight_not_less_than_set: "الجزء أقلّ من الطقم — بيع الطقم كلّه من فاتورة جديدة",
@@ -329,7 +342,7 @@ import { PostSaleSheet } from "../modals/PostSaleSheet.jsx";
 import { HqRequestsPage } from "../screens/HqRequestsPage.jsx";
 import { StartHereCard, branchStartSteps } from "../ui/StartHereCard.jsx";
 import { GlossaryPage } from "../screens/GlossaryPage.jsx";
-import { ACCOUNTING_PAGES } from "../core/storePackage.js";
+import { ACCOUNTING_PAGES, SIMPLE_ACCOUNTING_HIDDEN } from "../core/storePackage.js";
 import { entityActionsSpec } from "../domain/entities.js";
 import { BudgetsPage } from "../screens/BudgetsPage.jsx";
 import { VatReturnPage } from "../screens/VatReturnPage.jsx";
@@ -374,6 +387,12 @@ import { IssueOutPage } from "../screens/IssueOutPage.jsx";
 import { ItemEditPage } from "../screens/ItemEditPage.jsx";
 import { NavCustomizePage } from "../screens/NavCustomizePage.jsx";
 import { OpeningBalancePage } from "../screens/OpeningBalancePage.jsx";
+import { SetupGoLivePanel } from "../ui/SetupGoLivePanel.jsx";
+import { SetupExitSheet } from "../ui/SetupExitSheet.jsx";
+import { setGoldEqContext } from "../ui/GoldEq.jsx";
+import { NetWeightCard } from "../ui/NetWeightCard.jsx";
+import { netWeightPosition } from "../domain/netWeight.js";
+import { CHART_OF_ACCOUNTS as NW_CHART } from "../core/chart.js";
 import { HomeScreen } from "../ui/HomeScreen.jsx";
 import { OpeningComparePage } from "../screens/OpeningComparePage.jsx";
 import { PartnersPage } from "../screens/PartnersPage.jsx";
@@ -398,6 +417,7 @@ import { ReorderPage } from "../screens/ReorderPage.jsx";
 import { BranchTransfersPage } from "../screens/BranchTransfersPage.jsx";
 import { GiftCardsPage } from "../screens/GiftCardsPage.jsx";
 import { PieceInquiryPage } from "../screens/PieceInquiryPage.jsx";
+import { WorkshopPage } from "../screens/WorkshopPage.jsx";
 import { CodingReportPage } from "../screens/CodingReportPage.jsx";
 import { QueryBuilderPage } from "../screens/QueryBuilderPage.jsx";
 import { FullStatementsPage } from "../screens/FullStatementsPage.jsx";
@@ -450,6 +470,8 @@ import { NavBtn } from "../ui/NavBtn.js";
 import { PriceLoginScreen } from "../ui/PriceLoginScreen.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 import { Toast } from "../ui/Toast.jsx";
+import { ButtonHelpSheet } from "../ui/ButtonHelpSheet.jsx";
+import { installButtonHelp } from "../domain/buttonHelp.js";
 
 export default function GoldInventoryApp() {
   // ⚠ شاشة الهبوط بحسب الدور.
@@ -520,6 +542,17 @@ export default function GoldInventoryApp() {
   const [bankTx, setBankTx] = useState([]);
   const [journal, setJournal] = useState([]);
   const [roleTamper, setRoleTamper] = useState(null);
+  // شرح الأزرار «؟»: المستمع يُركَّب مرّةً ويقرأ الشاشة الحالية من المرجع الحيّ لحظة الضغط
+  const [helpTopic, setHelpTopic] = useState(null);
+  const buttonHelpRef = useRef({});
+  buttonHelpRef.current = { screen: morePage || tab, open: (t) => setHelpTopic(t) };
+  useEffect(() => installButtonHelp(() => buttonHelpRef.current), []);
+  useEffect(() => {
+    const root = document.documentElement;
+    if (currentUser) root.dataset.helpBadges = appSettings.helpBadges === false ? "off" : "on";
+    else delete root.dataset.helpBadges;
+    return () => { delete root.dataset.helpBadges; };
+  }, [currentUser, appSettings.helpBadges]);
   const [auditLog, setAuditLog] = useState([]);
   const [fixedAssets, setFixedAssets] = useState([]);
   const [depreciations, setDepreciations] = useState([]);
@@ -528,6 +561,18 @@ export default function GoldInventoryApp() {
   const [isHq, setIsHq] = useState(false);
   // باقة المحل (migration 070): "full" أو "no_accounting"
   const [storePackage, setStorePackage] = useState("full");
+  const [hqControl, setHqControl] = useState({ linked: false, full: false, noApprovals: false });
+  // فترة التجهيز (migration 073): { ledgerState, codedPieces, noOldStock, openingSaved, linked, request }
+  const [setupInfo, setSetupInfo] = useState(null);
+  const refreshSetup = () => api.setupApi.state().then(setSetupInfo).catch(() => {});
+  // المصروفات الثابتة المستحقّة غير المسجّلة — تدخل الالتزامات في «صافي الفرع بالوزن»
+  const [fixedDue, setFixedDue] = useState([]);
+  const refreshFixedDue = () => api.fixedExpensesApi.list().then((r) => {
+    const ym = new Date().toISOString().slice(0, 7), d = new Date().getDate();
+    setFixedDue((r.fixed || []).filter((f) => f.active && f.lastPosted !== ym && d >= f.day));
+  }).catch(() => setFixedDue([]));
+  // الفرع المرتبط بالإدارة: حدوده وموظفوه بيدها ما لم تفوّضه كاملًا
+  const hqOwnsStaff = hqControl.linked && !hqControl.full;
   const [costCenters, setCostCenters] = useState([]);
   const [budgets, setBudgets] = useState([]);
   const [periodCloses, setPeriodCloses] = useState([]);
@@ -1019,10 +1064,17 @@ export default function GoldInventoryApp() {
     })();
   }, []);
 
-  const flashToast = (msg) => {
+  // flashToast(msg, { actions: [{ label, go }] }) — «الخطوة التالية» بعد العملية: يبقى أطول (7 ثوانٍ) والضغط يُغلق ثم يفعل
+  const toastTimer = useRef(0);
+  const [toastActs, setToastActs] = useState([]);
+  const flashToast = (msg, opts = {}) => {
+    const acts = Array.isArray(opts?.actions) ? opts.actions.filter((a) => a && a.label && a.go).slice(0, 2) : [];
     setToast(msg);
-    setTimeout(() => setToast(""), 1800);
+    setToastActs(acts);
+    clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => { setToast(""); setToastActs([]); }, acts.length ? 7000 : 1800);
   };
+  const closeToast = () => { clearTimeout(toastTimer.current); setToast(""); setToastActs([]); };
 
   // ── نافذة أخرى مفتوحة ──
   //
@@ -1456,6 +1508,16 @@ export default function GoldInventoryApp() {
     window.addEventListener("ons-glossary", open);
     return () => window.removeEventListener("ons-glossary", open);
   }, []);
+  // المسار السريع: ما دام للفرع طلبٌ معلّق يُسأل الخادم كل ثوانٍ — فيصل قرار الإدارة فورًا لا بعد دقيقة
+  const hasPendingApproval = approvals.some((a) => a.status === "pending");
+  useEffect(() => {
+    if (!currentUser || !hasPendingApproval) return undefined;
+    const t = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      api.controlApi.approvals().then((r) => { if (Array.isArray(r?.approvals)) setApprovals(r.approvals); }).catch(() => {});
+    }, 8000);
+    return () => clearInterval(t);
+  }, [currentUser, hasPendingApproval]);
   const canManageDayNow = !!ROLES[role]?.canManageDay;
   useEffect(() => {
     if (!currentUser || !canManageDayNow || openDay) { setDayAsks([]); return undefined; }
@@ -1552,19 +1614,19 @@ export default function GoldInventoryApp() {
   };
 
   // ⚠ العميل على الخادم (migration 055) — كان يُضاف في المتصفح وحده فلا تعرفه الفاتورة الآجلة ولا الحجز
-  const handleAddCustomer = async (name, phone, note, idNumber = "") => {
+  const handleAddCustomer = async (name, phone, note, idNumber = "", extra = {}) => {
     if (nameExists(customers, name)) {
       flashToast("يوجد عميل بهذا الاسم");
       return null;
     }
     try {
-      const r = await api.modulesApi.addCustomer({ name, phone, note, idNumber });
+      const r = await api.modulesApi.addCustomer({ name, phone, note, idNumber, ...(extra.vatNumber ? { vatNumber: extra.vatNumber, address: extra.address || "" } : {}) });
       const c = { ...r.customer, createdBy: currentUser?.name || "" };
       setCustomers((prev) => [c, ...prev]);
       flashToast(`تمت إضافة العميل ${c.ref}`);
       return c;
     } catch (err) {
-      flashToast(err?.body?.error === "invalid_id_number" ? "رقم الهوية غير صالح" : apiErrorMessage(err, "تعذّر إضافة العميل"));
+      flashToast(err?.body?.error === "invalid_id_number" ? "رقم الهوية غير صالح" : err?.body?.error === "invalid_vat_number" ? "الرقم الضريبي 15 رقمًا يبدأ وينتهي بـ3" : apiErrorMessage(err, "تعذّر إضافة العميل"));
       return null;
     }
   };
@@ -1628,6 +1690,7 @@ export default function GoldInventoryApp() {
     try {
       const res = await api.returnsApi.createFull(req.saleId, {
         lineIndexes: req.lineIndexes,
+        lineParts: req.lineParts || undefined,
         reasonId: req.reasonId,
         refundTarget: req.refundTarget,
         note: req.note || null,
@@ -1717,6 +1780,7 @@ export default function GoldInventoryApp() {
     try {
       const res = await api.returnsApi.exchange(req.saleId, {
         lineIndexes: req.lineIndexes,
+        lineParts: req.lineParts || undefined,
         reasonId: req.reasonId,
         settle: req.settle,
         note: req.note || null,
@@ -1755,6 +1819,69 @@ export default function GoldInventoryApp() {
 
   /// تنفيذ طلبٍ معتمد — تُعاد العملية نفسها بحمولتها ومعها approvalId،
   /// والخادم يختم التنفيذ في معاملتها: مرّةً واحدة وبالمبلغ نفسه.
+  // موافقات إعادة الطباعة المنفَّذة: رموزٌ مسموحٌ لها مرّةً واحدة بلا طلبٍ جديد
+  const reprintPass = useRef(new Map());   // code → action
+  const handleReprintGate = async (codes, action) => {
+    const ups = codes.map((c) => String(c).toUpperCase());
+    if (ups.every((c) => reprintPass.current.get(c) === action)) { ups.forEach((c) => reprintPass.current.delete(c)); return true; }
+    try {
+      const res = await api.labelReprint({ codes, action });
+      if (res?.approvalPending) {
+        notePendingApproval(res.approvalPending);
+        flashToast(`أُرسل طلب ${action === "replace" ? "استبدال الرقاقة" : "إعادة الطباعة"} ${res.approvalPending.ref} — يُطبع حين يُعتمد`);
+        return false;
+      }
+      return !!res?.ok;
+    } catch (err) { flashToast(apiErrorMessage(err, "تعذّر طلب إعادة الطباعة")); return false; }
+  };
+  const UNCODE_ERRORS = {
+    unit_not_available: "القطعة مباعة أو مصروفة أو معلّقة", unit_in_transfer: "القطعة في تحويلٍ لم يُستلم",
+    not_from_lot: "ليست من دفعة شراء — لا يعود وزنها لدفعة", item_reserved: "القطعة محجوزة لعميل",
+    lot_closed: "دفعتها مقفلة وفرقها مرحَّل — لا يعود إليها وزن", lot_at_hq: "دفعتها عند الإدارة للتكويد",
+    opening_posted: "قطعة رصيدٍ افتتاحي رُحِّل — تُلغى في فترة التجهيز وحدها", weight_adjusted: "عُدّل وزنها بإصلاحٍ أو تسوية",
+    unit_in_stocktake: "القطعة في فرق جرد", stocktake_locked: "المخزون مقفل للجرد", reason_required: "اكتب سبب إلغاء التكويد",
+  };
+  const handleUncodeUnits = async (codes, reason, approvalId = null) => {
+    try {
+      const res = await api.uncodeUnits({ codes, reason, ...(approvalId ? { approvalId } : {}) });
+      if (res?.approvalPending) {
+        notePendingApproval(res.approvalPending);
+        flashToast(`أُرسل طلب إلغاء التكويد ${res.approvalPending.ref} — يُنفَّذ حين يُعتمد`);
+        return false;
+      }
+      const one = res.pieces === 1 ? res.codes[0] : `${res.pieces} قطع`;
+      flashToast(`أُلغي تكويد ${one} — ${fmtW(res.weight)} جم عادت لـ${(res.lots || []).join("، ") || "دفعتها"}${res.printed ? " · انزع ملصقها القديم" : ""}`,
+        { actions: [{ label: "كوّدها الآن", go: () => openPage("addGoods") }] });
+      loadBootstrap(currentUser).catch(() => {});
+      return true;
+    } catch (err) {
+      const code = err?.body?.error || err?.code;
+      flashToast(UNCODE_ERRORS[code] ? `${err?.body?.code ? `${err.body.code}: ` : ""}${UNCODE_ERRORS[code]}` : apiErrorMessage(err, "تعذّر إلغاء التكويد"));
+      return false;
+    }
+  };
+  const handleGoLive = async (approvalId = null) => {
+    try {
+      const res = await api.setupApi.goLive({ startDate: new Date().toISOString().slice(0, 10), ...(approvalId ? { approvalId } : {}) });
+      if (res?.approvalPending) { notePendingApproval(res.approvalPending); flashToast(`أُرسل طلب بدء التشغيل ${res.approvalPending.ref} للإدارة`); }
+      else if (res?.live) { flashToast("✓ بدأ التشغيل — الحسابات تعمل الآن", { actions: [{ label: "افتح يوم العمل", go: () => openPage("workday") }] }); loadBootstrap(currentUser).catch(() => {}); }
+    } catch (err) { flashToast(apiErrorMessage(err, "تعذّر بدء التشغيل")); }
+    refreshSetup();
+  };
+  const SETUP_EXIT_ERRORS = { unit_not_found: "ليست في المخزون", unit_not_available: "خرجت سلفًا", not_opening_stock: "ليست من البضاعة القديمة المكوَّدة في التجهيز", already_live: "بدأ التشغيل — استعمل شاشة البيع" };
+  const handleSetupExit = async (codes, note) => {
+    try {
+      const r = await api.setupApi.exitUnits(codes, note);
+      flashToast(`أُخرجت ${r.count} قطعة · ${fmtW(r.weight)} جم — بيعٌ بلا سعر (${r.ref})`);
+      loadBootstrap(currentUser).catch(() => {});
+      refreshSetup();
+      return true;
+    } catch (err) {
+      const code = err?.body?.error;
+      flashToast(SETUP_EXIT_ERRORS[code] ? `${err.body.code ? `${err.body.code}: ` : ""}${SETUP_EXIT_ERRORS[code]} — لم يُخرج شيء` : apiErrorMessage(err, "تعذّر الإخراج"));
+      return false;
+    }
+  };
   const executeApproval = async (ap) => {
     const p = { ...(ap.payload || {}), approvalId: ap.id };
     try {
@@ -1778,6 +1905,14 @@ export default function GoldInventoryApp() {
         const res = body.sellWeight ? await api.createPartialSale(body) : body.partLabel ? await api.sellSetPart(body) : await api.createSale(body);
         if (res?.approvalPending) { notePendingApproval(res.approvalPending); return false; }
       } else if (ap.kind === "safe_audit") await api.safe.audit(p);
+      else if (ap.kind === "go_live") { await api.setupApi.goLive({ ...(ap.payload || {}), approvalId: ap.id }); refreshSetup(); }
+      else if (ap.kind === "workshop_wastage") { const { jobId, ...body } = ap.payload || {}; await api.workshopApi.receive(jobId, { ...body, approvalId: ap.id }); }
+      else if (ap.kind === "item_uncode") { if (!(await handleUncodeUnits(ap.payload?.codes || [], ap.payload?.reason || "", ap.id))) return false; }
+      else if (ap.kind === "label_reprint") {
+        const r = await api.labelReprint({ ...(ap.payload || {}), approvalId: ap.id });
+        (r.codes || []).forEach((c) => reprintPass.current.set(String(c).toUpperCase(), r.action));
+        flashToast("اعتُمدت — اطبعها الآن من «إعادة الطباعة»");
+      }
       else {
         flashToast("نوع طلبٍ لا يُنفَّذ من هنا");
         return false;
@@ -2668,14 +2803,19 @@ export default function GoldInventoryApp() {
     }
   };
   const persistOpeningBalance = (next) => persist(OPENING_BALANCE_KEY, next, setOpeningBalance);
-  const handleSaveOpeningBalance = (next) => {
+  const handleSaveOpeningBalance = async (next, opts = {}) => {
+    // في التجهيز يُحفظ على الخادم مسوّدةً بلا قيد — شرطًا لبدء التشغيل، ويُرفض قبل التكويد إلا بعلَم «لا بضاعة قديمة»
+    if (setupInfo?.ledgerState === "setup") {
+      try { setSetupInfo({ ...(await api.setupApi.saveOpening(next, !!opts.noOldStock)), linked: setupInfo.linked }); }
+      catch (err) { flashToast(apiErrorMessage(err, "تعذّر حفظ الرصيد الافتتاحي")); return false; }
+    }
     // ⚠ يُجمَّد المركز الذهبي هنا أيضًا: أول سنةٍ لا إقفال سابقًا لها،
     // فبلا هذا لا افتتاحي يُقاس منه ربح أول سنة بالجرام.
     persistOpeningBalance(normalizeOpeningBalance({
       ...next, date: openingBalance.date || new Date().toISOString(),
       goldPosition: { ...goldPosition, frozenAt: new Date().toISOString() },
     }));
-    flashToast("تم حفظ الرصيد الافتتاحي");
+    flashToast("تم حفظ الرصيد الافتتاحي", setupInfo?.ledgerState === "setup" ? { actions: [{ label: "بدء التشغيل", go: () => { setMorePage(null); setTab("home"); } }] } : {});
   };
   const persistFiscalClosures = (next) => persist(FISCAL_CLOSURES_KEY, next, setFiscalClosures);
   // Closes the current fiscal period: computes this period's net profit
@@ -2806,6 +2946,8 @@ export default function GoldInventoryApp() {
     }
     // الفواتير المعلّقة وعروض الأسعار تتبع البيع: من يبيع يعلّق ويستأنف (الخادم يحرسها بصفحة البيع)
     if (tabs.includes("sales") && !more.includes("saleDrafts")) more.push("saleDrafts");
+    // الورشة تتبع عهدة الكسر (والخادم يحرسها بالصفحة نفسها)
+    if (more.includes("scrapCustody") && !more.includes("workshop")) more.push("workshop");
     // مسرد المصطلحات للجميع
     if (!more.includes("glossary")) more.push("glossary");
     // طلباتي للإدارة تتبع الاعتمادات: من يرى الاعتمادات يرى ما رُفع منها للإدارة
@@ -2815,6 +2957,11 @@ export default function GoldInventoryApp() {
     if (storePackage === "no_accounting") {
       tabs = tabs.filter((id) => !ACCOUNTING_PAGES.includes(id));
       more = more.filter((id) => !ACCOUNTING_PAGES.includes(id));
+    }
+    // المحاسبة البسيطة (الإعدادات): الدفاتر التفصيلية تُخفى من القوائم، والقيود تبقى كما هي
+    if (appSettings?.accountingMode === "simple") {
+      tabs = tabs.filter((id) => !SIMPLE_ACCOUNTING_HIDDEN.includes(id));
+      more = more.filter((id) => !SIMPLE_ACCOUNTING_HIDDEN.includes(id));
     }
     return { ...base, allowedTabs: [...tabs, "more"], allowedMore: more };
   };
@@ -2831,7 +2978,54 @@ export default function GoldInventoryApp() {
       return next;
     });
   };
+  // ══ الرجوع مثل الجوال: زرّ الجهاز والمتصفّح (popstate) · السحب من الحافّة · Escape — خطوةٌ واحدة كل مرّة ══
+  const navStack = useRef([]);
+  const navRef = useRef({ tab, morePage });
+  navRef.current = { tab, morePage };
+  const goBack = () => {
+    const prev = navStack.current.pop();
+    if (prev) { setTab(prev.tab); setMorePage(prev.morePage); return true; }
+    if (navRef.current.morePage) { setMorePage(null); return true; }
+    if (navRef.current.tab !== "home") { setTab("home"); return true; }
+    return false;
+  };
+  const goBackRef = useRef(goBack);
+  goBackRef.current = goBack;
+  useEffect(() => {
+    const onPop = () => { goBackRef.current(); };
+    const onKey = (e) => {
+      if (e.key !== "Escape") return;
+      const t = e.target;
+      if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) && String(t.value || "") !== "") return;
+      // نافذةٌ مفتوحة تُغلق نفسها أوّلًا
+      if (document.querySelector(".fixed.inset-0.z-50")) return;
+      goBackRef.current();
+    };
+    let sx = null, sy = 0;
+    const onStart = (e) => { const x = e.touches?.[0]?.clientX ?? 0; sx = x < 24 || x > window.innerWidth - 24 ? x : null; sy = e.touches?.[0]?.clientY ?? 0; };
+    const onEnd = (e) => {
+      if (sx == null) return;
+      const t = e.changedTouches?.[0];
+      const dx = Math.abs((t?.clientX ?? sx) - sx), dy = Math.abs((t?.clientY ?? sy) - sy);
+      sx = null;
+      if (dx > 70 && dy < 50 && !document.querySelector(".fixed.inset-0.z-50")) goBackRef.current();
+    };
+    window.addEventListener("popstate", onPop);
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("touchstart", onStart, { passive: true });
+    window.addEventListener("touchend", onEnd, { passive: true });
+    return () => {
+      window.removeEventListener("popstate", onPop); window.removeEventListener("keydown", onKey);
+      window.removeEventListener("touchstart", onStart); window.removeEventListener("touchend", onEnd);
+    };
+  }, []);
   const openPage = (id) => {
+    // كل فتحٍ خطوةٌ في سجلّ الرجوع، وسطرٌ في سجلّ المتصفّح فيعمل زرّ الجهاز
+    const cur = navRef.current;
+    if ((TAB_KIND_IDS.includes(id) ? cur.tab !== id || cur.morePage : cur.morePage !== id)) {
+      navStack.current = [...navStack.current.slice(-30), { tab: cur.tab, morePage: cur.morePage }];
+      try { window.history.pushState({ ons: navStack.current.length }, ""); } catch { /* لا تاريخ */ }
+    }
     // ⚠ نعدّ من أين جئت لا ما فتحت وحده: «اليومية» تُفتح من التقارير
     // ومن البحث، وخلطهما يجعل ضغطة المخزون المطوّلة تفتح اليومية.
     notePageOpen(morePage || tab, id);
@@ -3042,6 +3236,26 @@ export default function GoldInventoryApp() {
   // أو cash_tx + قيد يومية settle_office_cash (وضع cash)، بمعاملة واحدة
   // على السيرفر، مقيَّد بصلاحية المدير (requireManager) لا الفرونت إند
   // وحده.
+  const OFFICE_HOLD_ERRORS = { insufficient_holding: "أكثر من ذهبنا المحفوظ عند المكتب", insufficient_pool_balance: "رصيد الخزنة لا يكفي" };
+  const handleOfficeHold = async (officeId, f) => {
+    const off = (taskirOffices || []).find((o) => o.id === officeId);
+    const body = f.action === "buy" ? { karat: f.karat, weight: Number(f.weight), pricePerGram: Number(f.price), source: f.source }
+      : { karat: f.karat, weight: Number(f.weight), ...(f.action === "to_supplier" ? { supplierId: f.supplierId } : {}) };
+    try {
+      const r = await api.taskirApi.officeHold(officeId, f.action, body);
+      const officeTxRes = await api.taskirApi.officeTx(officeId);
+      setTaskirOfficeTx((prev) => [...normalizeTaskirOfficeTx(officeTxRes.officeTx || []), ...prev.filter((t) => t.officeId !== officeId)]);
+      const w = `${fmtW(Number(f.weight))} جم عيار ${f.karat}`;
+      flashToast(f.action === "buy" ? `أُودع ${w} عند ${off?.name || "المكتب"} — ${fmtMoney(r.cost)}`
+        : f.action === "withdraw" ? `سُحب ${w} من ${off?.name || "المكتب"} إلى الخزنة` : `سُدّد المورد ${w} من ذهبنا عند ${off?.name || "المكتب"}`);
+      loadBootstrap(currentUser).catch(() => {});
+      return true;
+    } catch (err) {
+      const code = err?.body?.error;
+      flashToast(OFFICE_HOLD_ERRORS[code] || apiErrorMessage(err, "تعذّر تنفيذ الحركة"));
+      return false;
+    }
+  };
   const handleSettleOffice = async (officeId, form) => {
     const off = (taskirOffices || []).find((o) => o.id === officeId);
     if (!off) return null;
@@ -3969,11 +4183,16 @@ export default function GoldInventoryApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [morePage]);
   // طباعة الفاتورة من موضعٍ واحد: نافذة الفاتورة وفعل «طباعة الفاتورة» على صفّها
+  // ⚠ طباعة الفواتير معطّلةٌ في الفرع افتراضًا (قرار المالك) — تُفعَّل من الإعدادات؛ والحارس هنا فكل الطرق تمرّ منه
+  const invoicePrintOn = !!appSettings?.invoicePrintOn;
   const printSale = (sl) => {
+    if (!invoicePrintOn) { flashToast("طباعة الفواتير مطفأة في هذا الفرع — فعّلها من الإعدادات"); return; }
     const info = { ...(branchProvision?.profile || {}), name: branchIdentity?.name || "" };
     const withAttrs = { ...sl, lines: (sl.lines || []).map((l) => { const it = items.find((x) => x.id === l.itemId); return { ...l, itemName: it ? `${categoryLabel(l.category)} ع${l.karatSnapshot}` : undefined, gem: it?.gem || null, watch: it?.watch || null }; }) };
     const einvoice = appSettings.serverModules?.zatca?.on ? api.einvoiceApi.of("sales", withAttrs.id).then((r) => r.einvoice) : null;
-    if (!printSaleInvoice(withAttrs, { info, currency: priceData.currency || "ر.س", modules: appSettings.serverModules || {}, einvoice })) flashToast("اسمح بالنوافذ المنبثقة للطباعة");
+    // الصيغة الرسمية: عميلٌ له رقمٌ ضريبي يأخذ فاتورةً ضريبية كاملة (بيانات المشتري وضريبة كل سطر والمبلغ كتابةً)
+    const buyer = appSettings?.officialPrint ? customers.find((c) => c.id === sl.customerId && c.vatNumber) || null : null;
+    if (!printSaleInvoice(withAttrs, { info, currency: priceData.currency || "ر.س", modules: appSettings.serverModules || {}, einvoice, buyer })) flashToast("اسمح بالنوافذ المنبثقة للطباعة");
   };
   const runEntityAction = (actionId, r, kind) => {
     const a = entityActionsFor(kind, r).find((x) => x.id === actionId);
@@ -4806,6 +5025,7 @@ export default function GoldInventoryApp() {
     setGoldLedger(n.goldLedger);
     setIsHq(n.isHq);
     setStorePackage(n.storePackage);
+    if (n.hqControl) setHqControl(n.hqControl);
     if (n.appSettings) {
       // ⚠ دمج لا استبدال: appSettings يحمل أيضًا تفضيلات محلية بحتة
       // (الثيم، طباعة، requirePin...) لا وجود لها في الباك إند بعد —
@@ -4835,6 +5055,8 @@ export default function GoldInventoryApp() {
     const boot = await api.fetchBootstrap();
     applyBootstrap(boot);
     api.setCachedBootstrap(boot, user);
+    refreshSetup();
+    refreshFixedDue();
   };
 
   /// الدخول باختيار المستخدم مباشرة — حين تكون الحماية مطفأة.
@@ -6199,7 +6421,9 @@ export default function GoldInventoryApp() {
       kycName: draft.kycName || undefined,
       kycIdNumber: draft.kycIdNumber || undefined,
       giftAmount: Number(draft.giftAmount) || 0,
-      lines: draft.lines.map((l) => ({ itemId: l.itemId, quantity: l.quantity, unitPrice: l.unitPrice })),
+      // الرموز الممسوحة تُرسل فتُباع القطع التي في اليد بعينها
+      lines: draft.lines.map((l) => ({ itemId: l.itemId, quantity: l.quantity, unitPrice: l.unitPrice, ...(Array.isArray(l.unitCodes) && l.unitCodes.length ? { unitCodes: l.unitCodes } : {}) })),
+      ...(draft.cardAuth ? { cardAuth: draft.cardAuth } : {}),
       taxApplicable: !!draft.taxApplicable,
       cashPart: Number(draft.cashPart) || 0,
       networkPart: Number(draft.networkPart) || 0,
@@ -6232,7 +6456,7 @@ export default function GoldInventoryApp() {
     if (Number(srvSale.depositApplied) > 0 || Number(srvSale.giftApplied) > 0 || draft.customOrderId) {
       setShowNewSale(false); setResumeDraft(null);
       setQuickSaleItemId(null); setQuickSaleCustomerId(null);
-      flashToast(`تم إنشاء الفاتورة — خُصم ${Number(srvSale.depositApplied) > 0 ? `عربون ${fmtMoney(srvSale.depositApplied)}` : ""}${Number(srvSale.giftApplied) > 0 ? ` بطاقة ${fmtMoney(srvSale.giftApplied)}` : ""} والمقبوض ${fmtMoney(srvSale.payable)}${srvSale.pointsEarned ? ` · +${srvSale.pointsEarned} نقطة` : ""}`);
+      flashToast(`تم إنشاء الفاتورة — خُصم ${Number(srvSale.depositApplied) > 0 ? `عربون ${fmtMoney(srvSale.depositApplied)}` : ""}${Number(srvSale.giftApplied) > 0 ? ` بطاقة ${fmtMoney(srvSale.giftApplied)}` : ""} والمقبوض ${fmtMoney(srvSale.payable)}${srvSale.pointsEarned ? ` · +${srvSale.pointsEarned} نقطة` : ""}`, { actions: [{ label: "بيع جديد", go: () => { setQuickSaleItemId(null); setQuickSaleCustomerId(null); setShowNewSale(true); } }] });
       loadBootstrap(currentUser).catch(() => {});
       return;
     }
@@ -6330,7 +6554,7 @@ export default function GoldInventoryApp() {
 
     setShowNewSale(false); setResumeDraft(null);
     setQuickSaleItemId(null); setQuickSaleCustomerId(null);
-    flashToast("تم إنشاء الفاتورة");
+    flashToast("تم إنشاء الفاتورة", { actions: [{ label: "بيع جديد", go: () => { setQuickSaleItemId(null); setQuickSaleCustomerId(null); setShowNewSale(true); } }, { label: "مرتجع", go: () => openPage("salesReturn") }] });
     if (appSettings.postSaleSheet) setPostSale(sale);
   };
 
@@ -6604,6 +6828,25 @@ export default function GoldInventoryApp() {
       return null;
     }
   };
+  // التحويل بين نقد الخزنة وشبكتها (1110 ↔ 1120) وعكسه
+  const handleSafeNetTransfer = async (direction, amount, note) => {
+    const amt = Number(amount);
+    if (!(amt > 0)) return null;
+    try {
+      const res = await api.safe.cashNetwork({ direction, amount: amt, note: note || null });
+      setSafeTx((prev) => [normalizeCashTxRow(res.inTx), normalizeCashTxRow(res.outTx), ...prev]);
+      flashToast(direction === "to_network" ? "حُوِّل من النقد إلى الشبكة" : "حُوِّل من الشبكة إلى النقد");
+      return res;
+    } catch (err) { flashToast(apiErrorMessage(err, "تعذّر التحويل")); return null; }
+  };
+  const handleReverseSafeNet = async (id) => {
+    try {
+      const res = await api.safe.reverseCashNetwork(id);
+      setSafeTx((prev) => [normalizeCashTxRow(res.inTx), normalizeCashTxRow(res.outTx), ...prev]);
+      flashToast("عُكس التحويل");
+      return res;
+    } catch (err) { flashToast(apiErrorMessage(err, "تعذّر العكس")); return null; }
+  };
   // ⚠ حُوِّلت للباك إند: POST /safe/cash (حركة نقد يدوية مباشرة بالخزنة).
   const handleAddSafeTx = async (type, amount, note, method, category) => {
     const amt = Number(amount);
@@ -6804,6 +7047,8 @@ export default function GoldInventoryApp() {
         periodMonth: isPayroll ? entry.periodMonth || new Date().toISOString().slice(0, 7) : null,
         installments: entry.category === "advance" ? Number(entry.installments) || 1 : undefined,
         nameId: entry.nameId || null,
+        // مصروفٌ من قالبٍ ثابت: الخادم يعلّم شهره مسجَّلًا بعد نجاح القيد
+        ...(entry.fixedId ? { fixedId: entry.fixedId } : {}),
       });
       if (res.approvalPending) { notePendingApproval(res.approvalPending); return null; }
       const record = {
@@ -6821,7 +7066,7 @@ export default function GoldInventoryApp() {
         if (res.cashTx.pool === "safe") setSafeTx((prev) => [cashEntry, ...prev]);
         else setCashTx((prev) => [cashEntry, ...prev]);
       }
-      flashToast("تم تسجيل المصروف");
+      flashToast("تم تسجيل المصروف", { actions: [{ label: "مصروف آخر", go: () => openPage("expenses") }] });
       return record;
     } catch (err) {
       flashToast(apiErrorMessage(err, "تعذّر تسجيل المصروف"));
@@ -7600,6 +7845,8 @@ export default function GoldInventoryApp() {
       return { ...it, units };
     });
     persistItems(next);
+    // العلامة تُحفظ على الخادم — التحويل يرفض قطعةً بلا ملصقٍ مطبوع
+    api.setUnitsPrinted(codes, !!printedValue).catch(() => flashToast("لم تُحفظ علامة الطباعة على الخادم — أعد المحاولة"));
   };
 
   // Replaces a damaged tag's identifier with a brand-new unique code (used when the
@@ -7637,17 +7884,16 @@ export default function GoldInventoryApp() {
       if (!(e instanceof api.ApiError && e.status === 423)) setBranchLock(null);
     }
   };
+  // المكافئ الذهبي بجانب المبالغ: سعر اليوم وعيار الاحتساب من الإعدادات (21 افتراضًا)
+  setGoldEqContext({ price24: Number(priceData.current) || 0, karat: Number(appSettings?.baseKarat) === 24 ? 24 : 21, on: appSettings?.goldEqOn !== false });
   const lockOverlay = branchLock ? (
     <div className="fixed inset-0 flex items-center justify-center px-6" dir="rtl" style={{ background: "rgba(10,9,8,.96)", zIndex: 9998 }}>
       <Card style={{ padding: 18, maxWidth: 360, width: "100%", border: "1px solid var(--badLine)" }}>
-        <p style={{ color: "var(--bad)" }} className="text-base font-bold mb-2">الفرع موقوف من الإدارة المركزية</p>
-        <p style={{ color: "var(--text2)" }} className="text-xs mb-3">
-          {branchLock.reason ? `السبب: ${branchLock.reason}` : "لا بيعَ ولا حركةَ حتى تفكّ الإدارة القفل."}
-          {branchLock.lockedAt ? ` · منذ ${new Date(branchLock.lockedAt).toLocaleString("en-GB")}` : ""}
-          {branchLock.lockedBy ? ` · ${branchLock.lockedBy}` : ""}
-        </p>
+        {/* الإيقاف الصامت: نصٌّ محايد بلا جهةٍ ولا سببٍ ولا وقت */}
+        <p style={{ color: "var(--text)" }} className="text-base font-bold mb-2" data-branch-unavailable>النظام غير متاح حاليًا</p>
+        <p style={{ color: "var(--text2)" }} className="text-xs mb-3">تعذّر فتح النظام الآن. حاول مرة أخرى لاحقًا.</p>
         <button onClick={checkBranchLock} className="w-full py-2.5 rounded-xl text-xs font-bold" style={{ background: "var(--accentBg)", color: "var(--accent)", border: "1px solid var(--accentLine)" }}>
-          {currentUser ? "تحقّق الآن من الإدارة" : "حسنًا"}
+          {currentUser ? "حاول مرة أخرى" : "حسنًا"}
         </button>
         {currentUser && (
           <button onClick={() => { setBranchLock(null); handleLogout(); }} className="w-full mt-2 py-2 rounded-xl text-[11px]" style={{ background: "var(--panel)", color: "var(--text2)", border: "1px solid var(--line)" }}>خروج</button>
@@ -7721,13 +7967,13 @@ export default function GoldInventoryApp() {
           <EnrollClaimSheet branchName={branchLink?.branchName || ""} onClaim={handleClaimEnroll} onClose={() => setClaiming(false)} />
         )}
         {lockOverlay}
-        <Toast message={toast} />
+        <Toast message={toast} actions={toastActs} onClose={closeToast} />
       </>
     );
   }
 
   return (
-    <div dir="rtl" className="ons-root" style={{ background: "var(--bg)", minHeight: "100vh", fontFamily: "'Cairo','Tajawal',system-ui,sans-serif" }}>
+    <div dir={UI_LANGS[readUiLang()].dir} className="ons-root" style={{ background: "var(--bg)", minHeight: "100vh", fontFamily: "'Cairo','Tajawal',system-ui,sans-serif" }}>
       {lockOverlay}
       {currentUser && <div style={showSideNav ? { marginInlineStart: SIDE_NAV_W } : undefined}><ConnectivityBar /></div>}
       {currentUser?.mustChangePin && (
@@ -8109,7 +8355,8 @@ export default function GoldInventoryApp() {
               && !moduleHiddenPages.includes(id) && (id !== "bankRecon" || !!appSettings.bankReconEnabled)}
             onOpen={openPage} />
         )}
-        {morePage === null && tab === "home" && role === "manager" && (
+        {/* في فترة التجهيز لوحة «بدء التشغيل» تحلّ محلّ «ابدأ هنا» — لا يومَ ولا بيعَ قبلها */}
+        {morePage === null && tab === "home" && role === "manager" && setupInfo?.ledgerState !== "setup" && (
           <StartHereCard
             steps={branchStartSteps({
               storeName: branchIdentity?.name || appSettings?.storeName || branchLink?.branchName || "", price24: priceData.current || 0,
@@ -8120,6 +8367,20 @@ export default function GoldInventoryApp() {
             })}
             onGo={(id) => (id === "price" ? setShowPrice(true) : openPage(id))}
           />
+        )}
+        {morePage === null && tab === "home" && setupInfo?.ledgerState !== "setup" && storePackage !== "no_accounting" && ["manager", "accountant"].includes(role) && (
+          <NetWeightCard currency={priceData.currency || "ر.س"} onOpen={openPage}
+            pos={netWeightPosition({
+              journal, price24: Number(priceData.current) || 0, fixedDue, baseKarat: appSettings?.baseKarat || 21,
+              goldOwned24: (combinedGold.physical.inventory || 0) + (combinedGold.physical.scrap || 0) - (combinedGold.goldOwed.total || 0),
+              accountName: (c) => NW_CHART.find((a) => a.code === c)?.name || c,
+            })} />
+        )}
+        {morePage === null && tab === "home" && setupInfo?.ledgerState === "setup" && (
+          <SetupGoLivePanel setup={setupInfo} canStart={role === "manager"}
+            onOpenCoding={() => openPage("addGoods")} onOpenOpening={() => openPage("openingBalance")}
+            onExit={() => { setQuickSaleItemId(null); setQuickSaleCustomerId(null); setShowNewSale(true); }}
+            onGoLive={() => handleGoLive(setupInfo.request?.status === "approved" ? setupInfo.request.id : null)} />
         )}
         {morePage === null && tab === "home" && (
           <HomeScreen
@@ -8244,6 +8505,8 @@ export default function GoldInventoryApp() {
             onCashOut={() => setCashModalType("out")}
             onTransferToSafe={handleTransferToSafe}
             onTransferSafeToDaily={handleTransferSafeToDaily}
+            onSafeNetTransfer={handleSafeNetTransfer}
+            onReverseSafeNet={handleReverseSafeNet}
             dailyCustody={dailyCustody}
             openCustodySession={openCustodySession}
             onOpenCustody={handleOpenDailyCustody}
@@ -8337,6 +8600,7 @@ export default function GoldInventoryApp() {
             printerCfg={printerCfg}
             onSavePrinter={handleSavePrinter}
             onBindEpc={bindEpcForPrint}
+            onUncode={handleUncodeUnits}
             onSendLotToHq={async (lot) => {
               if (!window.confirm(`إرسال الدفعة ${lot.ref || ""} للإدارة لتكوّدها؟ تبقى ملكك حتى تعود قطعًا.`)) return;
               try {
@@ -8364,6 +8628,7 @@ export default function GoldInventoryApp() {
         {morePage === "printing" && (
           <PrintingPage
             activeItems={activeItems}
+            onReprintGate={handleReprintGate}
             onSetPrinted={handleSetPrinted}
             onReplaceCode={handleReplaceUnitCode}
             printerCfg={printerCfg}
@@ -8519,6 +8784,7 @@ export default function GoldInventoryApp() {
         {morePage === "access" && (
           <AccessSettingsPage
             users={users}
+            staffByHq={hqOwnsStaff}
             navRegistry={NAV_REGISTRY.filter((n) => n.id !== "home")}
             roles={ROLES}
             onAddUser={handleAddUser}
@@ -8544,7 +8810,7 @@ export default function GoldInventoryApp() {
             priceData={priceData}
             settings={appSettings} onSave={handleUpdateSettings} branchIdentity={branchIdentity} onSaveBranch={handleSaveBranchIdentity} hqPermissions={hqPermissions}
             canEditControls={role === "manager"} onSaveControls={handleSaveControls}
-            hqManaged={branchProvision?.locked ? { by: branchProvision.by, at: branchProvision.at } : null}
+            hqManaged={branchProvision?.locked ? { by: branchProvision.by, at: branchProvision.at } : null} limitsByHq={hqOwnsStaff}
             onBack={() => setMorePage(null)} />
         )}
         {morePage === "openingCompare" && (
@@ -8718,6 +8984,7 @@ export default function GoldInventoryApp() {
             branchName={branchIdentity?.name}
             canManage={role === "manager"}
             onSettle={handleSettleOffice}
+            onHold={handleOfficeHold}
             onAddOffice={handleAddTaskirOffice}
             onBack={() => setMorePage(null)}
             flashToast={flashToast}
@@ -8801,6 +9068,7 @@ export default function GoldInventoryApp() {
         {morePage === "reorder" && <ReorderPage onBack={() => setMorePage(null)} onOpenModules={role === "manager" ? () => setMorePage("modules") : null} />}
         {morePage === "branchTransfers" && (
           <BranchTransfersPage currency={priceData.currency || "ر.س"} canMove={["manager", "assistant"].includes(role)} isManager={role === "manager"}
+            items={items} printerCfg={printerCfg} onSavePrinter={handleSavePrinter} onBindEpc={bindEpcForPrint} onSetPrinted={handleSetPrinted} price24={priceData.current || 0}
             onChanged={() => loadBootstrap(currentUser).catch(() => {})} onBack={() => setMorePage(null)} />
         )}
         {morePage === "giftCards" && (
@@ -9153,7 +9421,7 @@ export default function GoldInventoryApp() {
           />
         )}
         {morePage === "pieceInquiry" && (
-          <PieceInquiryPage price24={priceData.current || 0} currency={priceData.currency} canManageHeld={role === "manager"} flashToast={flashToast} onBack={() => setMorePage(null)} />
+          <PieceInquiryPage price24={priceData.current || 0} currency={priceData.currency} canManageHeld={role === "manager"} flashToast={flashToast} onBack={() => setMorePage(null)} settings={appSettings} />
         )}
         {morePage === "hqDocs" && (
           <HqTransactionsPage
@@ -9194,6 +9462,10 @@ export default function GoldInventoryApp() {
             onBack={() => setMorePage(null)}
             flashToast={flashToast}
           />
+        )}
+        {morePage === "workshop" && (
+          <WorkshopPage settings={appSettings} price24={Number(priceData.current) || 0} currency={priceData.currency} flashToast={flashToast}
+            onPending={notePendingApproval} onBack={() => setMorePage(null)} />
         )}
         {morePage === "scrapCustody" && (
           <ScrapCustodyPage
@@ -9472,7 +9744,9 @@ export default function GoldInventoryApp() {
             <div className="px-4 pt-3 pb-6">
               <DocumentsArchive
                 docs={documentIndex({ sales, returns: returns.map((r) => ({ ...r, saleRef: r.saleRef || sales.find((x) => x.id === r.saleId)?.ref || "" })), lots, taskirEntries, taskirOfficeTx, scrapEntries, receipts, expenses, payrollRuns, suppliers, customers, taskirOffices })}
-                currency={priceData.currency} branchName={branchIdentity?.name || ""} onBlocked={flashToast} />
+                currency={priceData.currency} branchName={branchIdentity?.name || ""} onBlocked={flashToast}
+                official={!!appSettings?.officialPrint} info={{ ...(branchProvision?.profile || {}), name: branchIdentity?.name || "" }}
+                salesById={new Map(sales.map((x) => [x.id, x]))} />
             </div>
           </div>
         )}
@@ -9480,6 +9754,8 @@ export default function GoldInventoryApp() {
           <OpeningBalancePage
             openingBalance={openingBalance}
             onSave={handleSaveOpeningBalance}
+            setupMode={setupInfo?.ledgerState === "setup"}
+            noOldStockInit={!!setupInfo?.noOldStock}
             openingMode={!!appSettings.openingMode}
             openingFinishedAt={appSettings.openingFinishedAt || null}
             openingStats={openingStats}
@@ -9804,13 +10080,20 @@ export default function GoldInventoryApp() {
           customer={customers.find((c) => c.id === postSale.customerId) || null}
           currency={priceData.currency || "ر.س"}
           storeName={branchIdentity?.name || ""}
-          onPrint={() => printSale(postSale)}
+          onPrint={invoicePrintOn ? () => printSale(postSale) : null}
           onNew={() => { setPostSale(null); setQuickSaleItemId(null); setQuickSaleCustomerId(null); setShowNewSale(true); }}
           onClose={() => setPostSale(null)}
         />
       )}
-      {showNewSale && (
+      {showNewSale && setupInfo?.ledgerState === "setup" && (
+        <SetupExitSheet items={items} exited={setupInfo.exited} onExit={handleSetupExit} onClose={() => setShowNewSale(false)} />
+      )}
+      {showNewSale && setupInfo?.ledgerState !== "setup" && (
         <NewSaleModal
+            sellerCommission={commissions?.[currentUser?.id] ? {
+              rule: commissions[currentUser.id],
+              monthSales: sales.filter((x) => !x.voided && x.sellerId === currentUser.id && String(x.date).slice(0, 7) === new Date().toISOString().slice(0, 7)),
+            } : null}
             settings={appSettings}
             role={role}
           customers={customers}
@@ -9847,7 +10130,7 @@ export default function GoldInventoryApp() {
           suppliers={suppliers}
           canReturn={(permsNow.allowedMore || []).includes("salesReturn")}
           onReturn={(saleId, mode) => { setReturnPreset({ saleId, mode }); setViewingSale(null); openPage("salesReturn"); }}
-          onPrint={printSale}
+          onPrint={invoicePrintOn ? printSale : null}
           onClose={() => setViewingSale(null)}
         />
       )}
@@ -9968,7 +10251,9 @@ export default function GoldInventoryApp() {
         <AddPurchaseModal suppliers={suppliers} offices={taskirOffices} onClose={() => setShowAddPurchase(false)} onSave={handleAddPurchase} />
       )}
 
-      <Toast message={toast} />
+      <Toast message={toast} actions={toastActs} onClose={closeToast} />
+      <ButtonHelpSheet topic={helpTopic} onClose={() => setHelpTopic(null)}
+        onBadges={role === "manager" ? () => { setHelpTopic(null); handleUpdateSettings({ ...appSettings, helpBadges: false }); } : null} />
     </div>
   );
 }

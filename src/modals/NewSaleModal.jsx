@@ -1,8 +1,12 @@
-import React, { useState } from "react";
-import { ArrowDownLeft, ArrowUpRight, Check, Lock, Minus, Plus, X } from "lucide-react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowDownLeft, ArrowUpRight, Check, Lock, Minus, Plus, RadioTower, X } from "lucide-react";
 import { KARATS, PURITY, fine24, fmt, fmtMoney, fmtW, fromHalalas, halalas, pricePerGram, roundW } from "../core/money.js";
 import { CARD_NETWORKS, PAYMENT_METHODS } from "../core/money-rules.js";
-import { cardFeeOf, categoryLabel, inputStyle, isPartial, itemLabel, onlineBlockReason, remainingQty, unitCurrentValue } from "../domain/helpers.js";
+import { cardFeeOf, categoryLabel, epcHexToCode, inputStyle, isPartial, itemLabel, onlineBlockReason, readPlateEpc, remainingQty, rfidSettingsFor, unitCurrentValue, useNhrReader } from "../domain/helpers.js";
+import { RFID_DEFAULTS } from "../core/constants.js";
+import { SaleTotalsBar } from "../ui/SaleTotalsBar.jsx";
+import { payTerminalBrandLabel, payTerminalCfg, payTerminalCharge, payTerminalRequest, sanitizeCardAuth } from "../domain/payTerminal.js";
+import { computeCommission } from "../domain/computeCommission.js";
 import { sanitizeNumeric } from "../domain/sanitizeNumeric.js";
 import { tradeInValue } from "../domain/tradeInValue.js";
 import { BindEpcSheet } from "./BindEpcSheet.jsx";
@@ -14,10 +18,12 @@ import { NumericInput } from "../ui/NumericInput.jsx";
 import { ScanField } from "../ui/ScanField.jsx";
 import * as api from "../core/api.js";
 
+const SALE_AUTO_ADD_MS = 300;
+
 function NewSaleModal({ activeItems, priceData,
   // ⚠ العملة كانت غائبة عن التوقيع: البدل يستخدمها فيسقط بـ
   // «currency is not defined» — والنافذة تُفرَغ بلا رسالة.
-  currency = "ر.س", initialItemId, initialCustomerId = null, initialDraft = null, onHold = null, taxEnabled, taxRate, settings = {}, role, customers = [], onAddCustomer = null, customOrder = null, reservations = [], dailyCash = null, onClose, onConfirm, onBindEpc }) {
+  currency = "ر.س", initialItemId, initialCustomerId = null, initialDraft = null, onHold = null, taxEnabled, taxRate, settings = {}, role, customers = [], onAddCustomer = null, customOrder = null, reservations = [], dailyCash = null, onClose, onConfirm, onBindEpc, sellerCommission = null }) {
   const [customerId, setCustomerId] = useState(customOrder?.customerId || initialCustomerId || initialDraft?.payload?.customerId || "");
   // منتقي العميل: بحثٌ بالاسم أو الجوال، و«+ عميل جديد» يُضاف ويُختار دون مغادرة الفاتورة
   const [custQuery, setCustQuery] = useState("");
@@ -100,6 +106,8 @@ function NewSaleModal({ activeItems, priceData,
       const next = { ...prev };
       if (next[item.id]) {
         delete next[item.id];
+        const { [item.id]: _gone, ...rest } = scannedRef.current;
+        scannedRef.current = rest;
       } else {
         const suggested = unitCurrentValue(item, priceData.current);
         next[item.id] = { qty: 1, unitPrice: suggested.toFixed(2) };
@@ -108,6 +116,18 @@ function NewSaleModal({ activeItems, priceData,
     });
   };
   const updateQty = (item, delta) => {
+    // صنفٌ قطعه ممسوحة: الزيادة بمسح القطعة التالية، والإنقاص يُخرج آخر ما مُسح
+    const codes = scannedRef.current[item.id] || [];
+    if (codes.length) {
+      if (delta > 0) { setScanMsg("امسح القطعة التالية لتُضاف — العدد لا يُزاد باليد"); return; }
+      const next = codes.slice(0, -1);
+      scannedRef.current = { ...scannedRef.current, [item.id]: next };
+      setSelection((prev) => {
+        if (!next.length) { const n = { ...prev }; delete n[item.id]; return n; }
+        return { ...prev, [item.id]: { ...prev[item.id], qty: next.length } };
+      });
+      return;
+    }
     setSelection((prev) => {
       const cur = prev[item.id];
       if (!cur) return prev;
@@ -147,12 +167,30 @@ function NewSaleModal({ activeItems, priceData,
   const amlNeeded = amlTh > 0 && cashDue >= amlTh && !(amlCustomer && amlCustomer.idNumber);
   const selectedCount = Object.keys(selection).length;
 
+  // جهاز الدفع (إن ضُبط في هذا الجهاز): يُطلب منه مبلغ الشبكة ويُحفظ اعتماده على الفاتورة، أو يُكتب رقم الاعتماد من إيصاله باليد
+  const termCfg = useMemo(() => payTerminalCfg(), []);
+  const [term, setTerm] = useState({ status: "idle", result: null, why: "" });
+  const [manualAuth, setManualAuth] = useState("");
+  const termAbort = useRef(null);
+  const cardPay = splitPay || paymentMethod === "card";
+  const networkAmount = splitPay ? Math.max(0, total - (Number(cashPart) || 0)) : dueNow;
+  const termOk = term.status === "ok" && !!term.result && term.result.amountMinor === Math.round(networkAmount * 100);
+  const cardAuth = !cardPay ? null : termOk ? term.result
+    : manualAuth.trim() ? { approvalCode: manualAuth.trim().slice(0, 12), manual: true, amountMinor: Math.round(networkAmount * 100), provider: termCfg?.brand || "", at: new Date().toISOString() } : null;
+  const askTerminal = async () => {
+    if (!termCfg || !(networkAmount > 0)) return;
+    termAbort.current?.abort(); termAbort.current = new AbortController();
+    setTerm({ status: "waiting", result: null, why: "" });
+    const r = await payTerminalCharge(termCfg, payTerminalRequest(termCfg, { amount: networkAmount, ref: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}` }), { signal: termAbort.current.signal });
+    if (r.ok) { setTerm({ status: "ok", result: r, why: "" }); if (r.network && CARD_NETWORKS.some((n) => n.id === r.network)) setCardNetwork(r.network); }
+    else setTerm({ status: "fail", result: null, why: r.why });
+  };
+  useEffect(() => () => termAbort.current?.abort(), []);
+  const termBlock = cardPay && ((termCfg?.require && !cardAuth) || term.status === "waiting");
+
   const handleConfirm = () => {
-    const lines = Object.entries(selection).map(([itemId, v]) => ({
-      itemId,
-      quantity: v.qty,
-      unitPrice: Number(v.unitPrice) || 0,
-    }));
+    if (termBlock) return;
+    const lines = linesOf();
     // الدفع المقسّم: جزء نقدي وجزء شبكة. المتبقي بعد النقدي يذهب للشبكة
     // بعمولتها — الجمع اليدوي للجزأين يفتح باب خطأ لا يُكتشف.
     const cashAmt = splitPay ? Math.min(Number(cashPart) || 0, total) : 0;
@@ -177,16 +215,196 @@ function NewSaleModal({ activeItems, priceData,
       frozenPrice,
       frozenAt,
       draftId: initialDraft?.id || undefined,
+      cardAuth: sanitizeCardAuth(cardAuth),
     });
   };
   // ⏸ تعليق الفاتورة أو حفظها عرض سعر — لا حركة ولا قيد، تُستأنف من «الفواتير المعلّقة»
+  // ── إدخال القطعة: الرقاقة أو الباركود أو الكتابة — مسارٌ واحد بحرّاسٍ واحدة ──
+  // الرموز الممسوحة لكل صنف تُرسل مع السطر، فتُباع القطعة التي في اليد بعينها
+  const scannedRef = useRef((() => {
+    const saved = initialDraft?.payload?.unitCodes || {};
+    return Object.fromEntries(Object.entries(saved).filter(([id, c]) => selection[id] && Array.isArray(c) && c.length));
+  })());
+  const matchUnit = (raw) => {
+    const upper = String(raw || "").trim().toUpperCase();
+    if (!upper) return null;
+    // الرمز كما هو، ثم رمز اللوحة، ثم الرمز المكتوب نصًّا في الرقاقة
+    const plate = readPlateEpc(upper);
+    const hex = /^[0-9A-F]{8,}$/.test(upper);
+    const tries = [...new Set([upper, plate.ok ? String(plate.code).toUpperCase() : "", hex ? epcHexToCode(upper).toUpperCase() : ""].filter(Boolean))];
+    for (const it of activeItems) {
+      for (const u of it.units || []) {
+        if (u.sold) continue;
+        if (tries.includes(String(u.code || "").toUpperCase()) || (u.epc && String(u.epc).toUpperCase() === upper)) return { item: it, unit: u };
+      }
+    }
+    return null;
+  };
+  const addByCode = (raw, source = "manual") => {
+    clearTimeout(autoAddRef.current);
+    const code = String(raw || "").trim();
+    if (!code) return false;
+    const upper = code.toUpperCase();
+    const m = matchUnit(code);
+    if (!m) {
+      // ⚠ بطاقة RFID غير مربوطة بقطعة — تُعرض للربط حين جاءت من قارئ أو كاميرا لا من كتابة
+      if (source !== "manual" && source !== "typed" && /^[0-9A-F]{8,}$/i.test(code)) { setBindFor(upper); setScanCode(""); return false; }
+      setScanMsg(`لا قطعة متاحة بالرمز ${code} — تأكّد من الرمز أو امسح الملصق ثانيةً`);
+      setScanCode("");
+      return false;
+    }
+    const hit = m.item;
+    const unitCode = m.unit.code;
+    const codes = scannedRef.current[hit.id] || [];
+    if (codes.includes(unitCode)) { setScanMsg(`القطعة ${unitCode} في الفاتورة سلفًا`); setScanCode(""); return false; }
+    if (hit.reservedFor) {
+      // ⚠ المحجوزة تُباع لصاحب حجزها وحده — ويُخصم عربونه (الخادم يفرض الشيء نفسه)
+      const rsv = reservations.find((r) => r.id === hit.reservedFor && r.status === "open");
+      if (!rsv || !rsv.customerId) { setScanMsg("هذه القطعة محجوزة"); setScanCode(""); return false; }
+      if (customerId && customerId !== rsv.customerId) { setScanMsg("هذه القطعة محجوزة لعميل آخر"); setScanCode(""); return false; }
+      if (!customerId) setCustomerId(rsv.customerId);
+      setDepositFrom(rsv.id);
+    }
+    // حارس المتجر: القطعة الملتزَم بها أونلاين لا تُباع في المحل
+    const onlineBlock = onlineBlockReason(hit, unitCode);
+    if (onlineBlock) { setScanMsg(onlineBlock); setScanCode(""); return false; }
+    const next = [...codes, unitCode];
+    scannedRef.current = { ...scannedRef.current, [hit.id]: next };
+    setSelection((prev) => ({ ...prev, [hit.id]: { ...(prev[hit.id] || { unitPrice: "" }), qty: next.length } }));
+    setOrder((p) => [hit.id, ...p.filter((x) => x !== hit.id)]);
+    // ⚠ الرقاقة تسحب العيار والوزن والمصنعية والسعر المحسوب دفعة واحدة — لا إدخال يدوي لأيٍّ منها
+    const purity = PURITY[hit.karat] || hit.karat / 24;
+    const goldPart = (Number(hit.weight) || 0) * purity * frozenPrice;
+    const wmPart = Number(hit.lotWorkmanshipShare) || 0;
+    setScanHit({ itemId: hit.id, code: unitCode });
+    setScanMsg(
+      `أُضيفت: ${categoryLabel(hit.categoryId)} · عيار ${hit.karat} · ${fmtW(hit.weight)} جم` +
+        (hit.stonesWeight > 0 ? ` (فصوص ${fmt(hit.stonesWeight)})` : "") +
+        ` — معدن ${fmtMoney(goldPart)}` +
+        (wmPart > 0 ? ` + مصنعية ${fmtMoney(wmPart)}` : "")
+    );
+    setScanCode("");
+    return true;
+  };
+  const addRef = useRef(addByCode);
+  addRef.current = addByCode;
+  // القراءة تضيف وحدها بلا زرّ: حين يطابق ما في الخانة رمز قطعةٍ متاحة يُضاف بعد مهلةٍ قصيرة من آخر حرف،
+  // فلا يُضاف رمزٌ قصير هو بداية رمزٍ أطول ما دام صاحبه يكتب. والرمز المجهول ينتظر Enter ليُقال سببه.
+  const autoAddRef = useRef(0);
+  useEffect(() => () => clearTimeout(autoAddRef.current), []);
+  const onCodeChange = (v) => {
+    setScanCode(v); setScanMsg(""); setScanHit(null);
+    clearTimeout(autoAddRef.current);
+    if (String(v).trim().length < 4) return;
+    const m = matchUnit(v);
+    if (m && !(scannedRef.current[m.item.id] || []).includes(m.unit.code)) {
+      autoAddRef.current = setTimeout(() => addRef.current(v, "typed"), SALE_AUTO_ADD_MS);
+    }
+  };
+
+  // ── قارئ RFID بالبلوتوث بإعداد «البيع» ──
+  const rfidCfg = useMemo(() => {
+    const base = { ...RFID_DEFAULTS, ...(settings?.rfid || {}) };
+    return { ...rfidSettingsFor("sales", settings), profile: base.profile, q: base.q, session: base.session, target: base.target };
+  }, [settings]);
+  const [rfidOn, setRfidOn] = useState(false);
+  const [rfidLinking, setRfidLinking] = useState(false);
+  const rfidOnRef = useRef(false);
+  rfidOnRef.current = rfidOn;
+  // القارئ يُرسل الرقاقة نفسها عشرات المرات في الثانية، فما قُرئ سلفًا يُتجاهل بصمت
+  const seenTags = useRef(new Set());
+  const tagQueue = useRef([]);
+  const [tagTick, setTagTick] = useState(0);
+  const rfid = useNhrReader({
+    config: rfidCfg,
+    onTags: (list) => {
+      if (!rfidOnRef.current) return;
+      let fresh = 0;
+      for (const t of list || []) {
+        const epc = String(t && t.epc != null ? t.epc : t || "").trim().toUpperCase();
+        if (!epc || seenTags.current.has(epc)) continue;
+        seenTags.current.add(epc);
+        tagQueue.current.push(epc);
+        fresh += 1;
+      }
+      if (fresh) setTagTick((n) => n + 1);
+    },
+  });
+  // كل رقاقة تُضاف بعد سابقتها — الإطار الواحد قد يحمل قطعتين من صنف واحد
+  useEffect(() => {
+    while (tagQueue.current.length) addRef.current(tagQueue.current.shift(), "rfid");
+  }, [tagTick]);
+  const toggleRfid = async () => {
+    if (rfidOn) { setRfidOn(false); return; }
+    if (!rfid.device) {
+      if (!rfid.supported) { setScanMsg("⚠ هذا المتصفّح لا يتّصل بقارئ RFID بالبلوتوث — امسح بقارئٍ يعمل كلوحة مفاتيح أو اكتب الرمز"); return; }
+      setRfidLinking(true);
+      const linked = await rfid.connect();
+      setRfidLinking(false);
+      if (!linked) { setScanMsg("⚠ تعذّر الاتصال بقارئ RFID — شغّله وقرّبه ثم اضغط زرّه ثانيةً"); return; }
+    }
+    setRfidOn(true);
+  };
+  useEffect(() => {
+    if (!rfidOn) return undefined;
+    seenTags.current = new Set();
+    const fail = () => { setScanMsg("⚠ قارئ RFID لم يبدأ القراءة — أعد تشغيله ثم اضغط زرّه ثانيةً"); setRfidOn(false); };
+    try {
+      const r = rfid.startLive?.();
+      if (r && typeof r.then === "function") r.then((ok) => { if (ok === false) fail(); }, fail);
+    } catch { fail(); }
+    // ⚠ يُوقَف عند الإغلاق: قارئٌ يبقى يعمل بعد الفاتورة يُضيف لفاتورةٍ أُغلقت
+    return () => { try { rfid.stop?.(); } catch { /* لا تحكّم */ } };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rfidOn]);
+
+  // الأحدث أعلى: البائع يرى ما مسحه للتوّ
+  const [order, setOrder] = useState([]);
+  const shown = useMemo(() => {
+    const ids = order.filter((id) => selection[id]);
+    for (const id of Object.keys(selection)) if (!ids.includes(id)) ids.push(id);
+    return ids.map((id) => activeItems.find((i) => i.id === id)).filter(Boolean);
+  }, [order, selection, activeItems]);
+  const totals = useMemo(() => {
+    let pieces = 0, weight = 0, unpriced = 0;
+    const byK = new Map();
+    for (const [id, v] of Object.entries(selection)) {
+      const it = activeItems.find((i) => i.id === id);
+      if (!it) continue;
+      const q = Number(v.qty) || 1;
+      const w = (Number(it.weight) || 0) * q;
+      pieces += q; weight += w;
+      byK.set(it.karat, (byK.get(it.karat) || 0) + w);
+      if (!(Number(v.unitPrice) > 0)) unpriced += q;
+    }
+    return { pieces, weight: roundW(weight), byKarat: [...byK].map(([karat, w]) => ({ karat, weight: roundW(w) })), total, unpricedPieces: unpriced };
+  }, [selection, activeItems, total]);
+  // عمولة البائع لحظيًّا: من هذه الفاتورة، ورصيد الشهر، وما بقي للهدف — بقاعدة تقرير البائعين نفسها
+  const commission = useMemo(() => {
+    if (!sellerCommission?.rule || settings?.posCommission === false) return null;
+    const rule = sellerCommission.rule, month = sellerCommission.monthSales || [];
+    const lines = Object.entries(selection).map(([id, v]) => {
+      const it = activeItems.find((i) => i.id === id) || {};
+      return { unitPrice: Number(v.unitPrice) || 0, quantity: Number(v.qty) || 1, costPerGramSnapshot: Number(it.costPerGram) || 0, weightSnapshot: Number(it.weight) || 0, workmanshipSnapshot: Number(it.workmanship) || 0 };
+    });
+    const before = computeCommission(rule, month, frozenPrice);
+    const after = computeCommission(rule, [...month, { total, lines }], frozenPrice);
+    const target = Number(rule.target) || 0;
+    return { show: true, invoice: Math.max(0, Math.round((after.commission - before.commission) * 100) / 100), month: Math.round(before.commission * 100) / 100,
+      count: before.count, target, metTarget: after.metTarget, toTarget: Math.max(0, Math.round((target - after.salesTotal) * 100) / 100) };
+  }, [sellerCommission, settings?.posCommission, selection, activeItems, total, frozenPrice]);
+  const linesOf = () => Object.entries(selection).map(([itemId, v]) => {
+    const codes = scannedRef.current[itemId] || [];
+    return { itemId, quantity: v.qty, unitPrice: Number(v.unitPrice) || 0, ...(codes.length && codes.length === v.qty ? { unitCodes: codes } : {}) };
+  });
+
   const hold = (kind) => onHold?.(kind, {
-    selection, customerId: customerId || null, paymentMethod,
-    lines: Object.entries(selection).map(([itemId, v]) => ({ itemId, quantity: v.qty, unitPrice: Number(v.unitPrice) || 0 })),
+    selection, customerId: customerId || null, paymentMethod, unitCodes: scannedRef.current,
+    lines: linesOf(),
   }, total);
 
   return (
-    <ModalShell title="فاتورة بيع جديدة" onClose={onClose}>
+    <ModalShell title="بيع" onClose={onClose}>
       {/* شريط السعر المجمّد */}
       <Card style={{ padding: 10, marginBottom: 12, border: `1px solid ${Math.abs(priceDrift) > 0.01 ? "var(--accentLine)" : "var(--line)"}` }}>
         <div className="flex items-center justify-between">
@@ -235,84 +453,29 @@ function NewSaleModal({ activeItems, priceData,
           سابقًا: بطاقة RFID تحمل EPC مختلفًا عن الكود المطبوع غالبًا،
           فمسحها كان يفشل بصمت («لا توجد قطعة بهذا الكود») رغم أنها
           مربوطة فعليًا بقطعة حقيقية. */}
-      <Field label="مسح الرقاقة">
-        <ScanField
-          value={scanCode}
-          onChange={(v) => { setScanCode(v); setScanMsg(""); setScanHit(null); }}
-          onSubmit={(raw, source) => {
-            const code = String(raw || "").trim();
-            if (!code) return;
-            const upper = code.toUpperCase();
-            const hit = activeItems.find((it) => (it.units || []).some((u) => !u.sold &&
-              (u.code === code || (u.epc && u.epc.toUpperCase() === upper))));
-            if (!hit) {
-              // ⚠ بطاقة RFID فعلية غير مربوطة بأي قطعة بعد — تُعرض فقط حين
-              // جاءت من قارئ/كاميرا، لا من كتابة يدوية (طباعة خاطئة لا تفتح
-              // شاشة ربط بلا داعٍ).
-              if (source !== "manual" && /^[0-9A-F]{8,}$/i.test(code)) {
-                setBindFor(upper);
-                setScanCode("");
-                return;
-              }
-              setScanMsg("لا توجد قطعة متاحة بهذا الكود");
-              setScanCode("");
-              return;
-            }
-            if (hit.reservedFor) {
-              // ⚠ المحجوزة تُباع لصاحب حجزها وحده — ويُخصم عربونه (الخادم يفرض الشيء نفسه)
-              const rsv = reservations.find((r) => r.id === hit.reservedFor && r.status === "open");
-              if (!rsv || !rsv.customerId) {
-                setScanMsg("هذه القطعة محجوزة");
-                setScanCode("");
-                return;
-              }
-              if (customerId && customerId !== rsv.customerId) {
-                setScanMsg("هذه القطعة محجوزة لعميل آخر");
-                setScanCode("");
-                return;
-              }
-              if (!customerId) setCustomerId(rsv.customerId);
-              setDepositFrom(rsv.id);
-            }
-            const matchedUnit = (hit.units || []).find((u) => !u.sold &&
-              (u.code === code || (u.epc && u.epc.toUpperCase() === upper)));
-            // حارس المتجر: القطعة الملتزَم بها أونلاين لا تُباع في المحل.
-            const onlineBlock = onlineBlockReason(hit, matchedUnit?.code || code);
-            if (onlineBlock) {
-              setScanMsg(onlineBlock);
-              setScanCode("");
-              return;
-            }
-            const avail = (hit.units || []).filter((u) => !u.sold).length;
-            const cur = selection[hit.id];
-            if (cur && cur.qty >= avail) {
-              setScanMsg("لا توجد كمية إضافية من هذا الصنف");
-              setScanCode("");
-              return;
-            }
-            setSelection((prev) => ({
-              ...prev,
-              [hit.id]: cur
-                ? { ...cur, qty: cur.qty + 1 }
-                : { qty: 1, unitPrice: "" },
-            }));
-            // ⚠ الرقاقة تسحب العيار والوزن والمصنعية والسعر المحسوب دفعة
-            // واحدة — لا إدخال يدوي لأي منها.
-            const purity = PURITY[hit.karat] || hit.karat / 24;
-            const goldPart = (Number(hit.weight) || 0) * purity * frozenPrice;
-            const wmPart = Number(hit.lotWorkmanshipShare) || 0;
-            setScanHit({ itemId: hit.id, code: matchedUnit?.code || code });
-            setScanMsg(
-              `أُضيفت: ${categoryLabel(hit.categoryId)} · عيار ${hit.karat} · ${fmtW(hit.weight)} جم` +
-                (hit.stonesWeight > 0 ? ` (فصوص ${fmt(hit.stonesWeight)})` : "") +
-                ` — معدن ${fmtMoney(goldPart)}` +
-                (wmPart > 0 ? ` + مصنعية ${fmtMoney(wmPart)}` : "")
-            );
-            setScanCode("");
-          }}
-          placeholder="امسح الرقاقة أو اكتب الكود ثم Enter"
-        />
+      <Field label="مسح القطعة">
+        <div className="flex gap-2 items-start">
+          <div className="flex-1 min-w-0">
+            <ScanField
+              value={scanCode}
+              onChange={onCodeChange}
+              onSubmit={(raw, source) => addByCode(raw, source)}
+              placeholder="امسح الرقاقة أو الباركود أو اكتب الرمز — تُضاف وحدها"
+            />
+          </div>
+          {/* قارئ RFID بالبلوتوث: يتّصل ثم يقرأ، وكل رقاقة تُضاف مرّة واحدة */}
+          {rfidCfg.enabled && (
+            <button type="button" onClick={toggleRfid} disabled={rfidLinking} aria-pressed={rfidOn} data-sale-rfid
+              aria-label={rfidOn ? "أوقف قارئ RFID" : "شغّل قارئ RFID"} title={rfidOn ? "أوقف قارئ RFID" : "شغّل قارئ RFID"}
+              style={{ minWidth: 44, minHeight: 44, borderRadius: 12, display: "grid", placeItems: "center",
+                background: rfidOn ? "var(--accentBg)" : "var(--field)", border: `1px solid ${rfidOn ? "var(--accentLine)" : "var(--line)"}` }}>
+              <RadioTower size={18} color={rfidOn ? "var(--accent)" : "var(--text2)"} />
+            </button>
+          )}
+        </div>
       </Field>
+      {rfidLinking && <p style={{ color: "var(--text2)" }} className="text-[11px] mb-3">يتّصل بقارئ RFID — اختره من قائمة البلوتوث</p>}
+      {rfidOn && <p style={{ color: "var(--accent)" }} className="text-[11px] mb-3" data-rfid-live>القارئ يقرأ — مرّر القطع عليه وتُضاف كلٌّ مرّة واحدة</p>}
       {scanMsg && (
         <p style={{ color: scanMsg.startsWith("أُضيفت") ? "var(--goodSolid)" : "var(--bad)" }} className="text-[11px] mb-3">
           {scanMsg}
@@ -459,16 +622,20 @@ function NewSaleModal({ activeItems, priceData,
             : "اختر العميل — البيع الآجل بلا عميل مبلغ لا يمكن تحصيله لاحقًا."}
         </p>
       )}
-      <p style={{ color: "var(--text2)" }} className="text-xs mb-2">
-        اختر الأصناف المباعة
-      </p>
-      <div className="flex flex-col gap-2 mb-4" style={{ maxHeight: 260, overflowY: "auto" }}>
-        {activeItems.length === 0 && (
-          <p style={{ color: "var(--text3)" }} className="text-xs">
-            لا يوجد أصناف متاحة في المخزون
-          </p>
+      {/* تُعرض القطع المُدخلة وحدها لا المخزون كلّه: قائمة ألف قطعة لا تُقرأ ويُضغط فيها الخطأ */}
+      <div className="flex flex-col gap-2 mb-4">
+        {shown.length === 0 && (
+          <Card style={{ padding: 13 }} data-sale-empty>
+            <p style={{ color: "var(--text3)", margin: 0, lineHeight: 2 }} className="text-[11px]">
+              ⚠ <b>لا قطعةَ بعد.</b> أضفها بإحدى ثلاث:
+              <br />① <b>امسح الرقاقة</b> بقارئ RFID — عدّة قطعٍ دفعةً واحدة
+              <br />② <b>امسح الباركود أو QR</b> بالكاميرا أو بقارئ الباركود
+              <br />③ <b>اكتب الرمز</b> في الخانة أعلاه — يُضاف وحده حين يكتمل (أو اضغط Enter)
+              <br />قطع المخزون لا تُعرض هنا — تظهر القطعة حين تُدخلها.
+            </p>
+          </Card>
         )}
-        {activeItems.map((item) => {
+        {shown.map((item) => {
           const selected = selection[item.id];
           const max = remainingQty(item);
           return (
@@ -582,6 +749,8 @@ function NewSaleModal({ activeItems, priceData,
           );
         })}
       </div>
+
+      <SaleTotalsBar totals={totals} currency={currency} taxIncluded={taxApplicable} commission={commission} />
 
       {/* ── كسر البدل ── */}
       {paymentMethod === "scrap" && !splitPay && (() => {
@@ -839,6 +1008,21 @@ function NewSaleModal({ activeItems, priceData,
         </Field>
       )}
 
+      {cardPay && termCfg && (
+        <div data-pay-terminal className="mb-3 p-3 rounded-xl" style={{ border: "1px solid var(--accentLine)", background: "var(--accentBg)" }}>
+          <button type="button" data-pay-terminal-charge onClick={term.status === "waiting" ? () => termAbort.current?.abort() : askTerminal} disabled={!(networkAmount > 0) || termOk}
+            className="w-full py-2.5 rounded-xl text-xs font-bold" style={{ background: termOk ? "var(--panel)" : "linear-gradient(135deg,var(--gradFrom),var(--gradTo))", color: termOk ? "var(--good)" : "var(--panel)" }}>
+            {termOk ? `✓ اعتُمد ${term.result.approvalCode || term.result.intentId}${term.result.last4 ? ` · •••• ${term.result.last4}` : ""}`
+              : term.status === "waiting" ? "ينتظر البطاقة على الجهاز… (اضغط للإلغاء)" : `اطلب ${fmtMoney(networkAmount)} من ${payTerminalBrandLabel(termCfg.brand)}`}
+          </button>
+          {term.status === "fail" && <p data-pay-terminal-fail style={{ color: "var(--bad)" }} className="text-[11px] mt-1">✗ {term.why}</p>}
+          {!termOk && (
+            <input style={{ ...inputStyle, marginTop: 8, marginBottom: 0 }} value={manualAuth} onChange={(e) => setManualAuth(e.target.value.replace(/[^\w-]/g, ""))}
+              placeholder={termCfg.require ? "أو رقم الاعتماد من إيصال الجهاز (إلزامي)" : "أو رقم الاعتماد من إيصال الجهاز (اختياري)"} data-pay-terminal-manual />
+          )}
+        </div>
+      )}
+
       {/* اختيار الضريبة للمدير وحده — البائع يبيع بالإعداد الافتراضي
           ولا يقرر إعفاء فاتورة من الضريبة. */}
       {taxEnabled && role === "manager" && (
@@ -963,7 +1147,7 @@ function NewSaleModal({ activeItems, priceData,
         const tradeOk =
           paymentMethod !== "scrap" || splitPay || tradeLines.length > 0;
         const canConfirm =
-          selectedCount > 0 && allPriced && tradeOk &&
+          selectedCount > 0 && allPriced && tradeOk && !termBlock &&
           !(paymentMethod === "credit" && !customerId);
         return (
           <>

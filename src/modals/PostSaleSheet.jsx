@@ -33,10 +33,12 @@ function PostSaleSheet({ sale, customer = null, currency = "ر.س", storeName = 
           {sale.paymentMethod === "credit" && sale.downPayment ? ` · مدفوع ${fmtMoney(sale.downPayment)} والباقي على حسابه` : ""}
         </p>
         <div className="flex flex-col gap-2">
-          <button type="button" onClick={onPrint} className="w-full flex items-center justify-center gap-2 text-sm font-bold"
-            style={{ ...big, background: "var(--panel)", color: "var(--text)", border: "1px solid var(--line)" }}>
-            <Printer size={18} /> اطبع الفاتورة
-          </button>
+          {onPrint && (
+            <button type="button" onClick={onPrint} className="w-full flex items-center justify-center gap-2 text-sm font-bold"
+              style={{ ...big, background: "var(--panel)", color: "var(--text)", border: "1px solid var(--line)" }}>
+              <Printer size={18} /> اطبع الفاتورة
+            </button>
+          )}
           <button type="button" onClick={() => openWhatsApp(phone, saleWhatsAppText(sale, { currency, storeName }))}
             className="w-full flex items-center justify-center gap-2 text-sm font-bold"
             style={{ ...big, background: "var(--goodBg)", color: "var(--good)", border: "1px solid var(--goodLine)" }}>

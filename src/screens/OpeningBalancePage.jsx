@@ -12,6 +12,8 @@ function OpeningBalancePage({
   openingBalance,
   onSave,
   openingMode = false,
+  setupMode = false,
+  noOldStockInit = false,
   openingFinishedAt = null,
   openingStats = null,
   canFinishOpening = false,
@@ -37,6 +39,8 @@ function OpeningBalancePage({
 }) {
   const [tab, setTab] = useState("opening"); // 'opening' | 'closing'
   const [confirmSave, setConfirmSave] = useState(false);
+  // فترة التجهيز: محلٌّ جديد بلا بضاعة قديمة يحفظ رصيده بلا تكويد
+  const [noOldStock, setNoOldStock] = useState(noOldStockInit);
   const [confirmFinish, setConfirmFinish] = useState(false);
   const [openingBusy, setOpeningBusy] = useState(false);
   const runOpening = async (fn) => { setOpeningBusy(true); try { await fn(); } finally { setOpeningBusy(false); setConfirmFinish(false); } };
@@ -385,6 +389,12 @@ function OpeningBalancePage({
             <p style={{ color: "var(--bad)" }} className="text-xs font-bold mb-2 flex items-center gap-1">
               <AlertTriangle size={13} /> تأكيد الرصيد الافتتاحي
             </p>
+            {setupMode && (
+              <label className="flex items-center gap-2 mb-2 text-[11px]" style={{ color: "var(--text2)" }}>
+                <input type="checkbox" data-ob-no-old-stock checked={noOldStock} onChange={(e) => setNoOldStock(e.target.checked)} style={{ accentColor: "var(--accent)" }} />
+                محلٌّ جديد — لا توجد بضاعة قديمة لتُكوَّد
+              </label>
+            )}
             <p style={{ color: "var(--text2)" }} className="text-[11px] mb-3">
               هذا الرقم هو نقطة الأساس التي تُقاس عليها كل أرباحك وتقاريرك لاحقًا.
               راجع الأرقام قبل التأكيد — تعديله بعد تسجيل حركات يغيّر كل المقارنات التاريخية.
@@ -396,7 +406,7 @@ function OpeningBalancePage({
               </button>
               <button
                 onClick={() => {
-                  onSave(normalizeForm(form));
+                  onSave(normalizeForm(form), { noOldStock });
                   setConfirmSave(false);
                 }}
                 className="py-2.5 rounded-xl text-xs font-bold"

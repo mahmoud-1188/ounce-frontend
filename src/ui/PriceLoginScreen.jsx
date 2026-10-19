@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { UI_LANGS, readUiLang } from "../domain/i18n.js";
 import { Check, ChevronLeft, Delete, RefreshCw, X } from "lucide-react";
 import { ROLES } from "../core/constants.js";
 import { GRAMS_PER_OUNCE, KARATS, fmt, pricePerGram } from "../core/money.js";
@@ -92,7 +93,7 @@ function PriceLoginScreen({ priceData, autoUpdating, autoError, lastAutoFetch, o
   };
 
   return (
-    <div dir="rtl" className="ons-root" style={{ background: "var(--bg)", minHeight: "100vh", fontFamily: "'Cairo','Tajawal',system-ui,sans-serif" }}>
+    <div dir={UI_LANGS[readUiLang()].dir} className="ons-root" style={{ background: "var(--bg)", minHeight: "100vh", fontFamily: "'Cairo','Tajawal',system-ui,sans-serif" }}>
       <style>{`
         @keyframes shakeX { 0%,100%{transform:translateX(0);} 25%{transform:translateX(-8px);} 75%{transform:translateX(8px);} }
         @keyframes chartPulseRing { 0% { r: 4; opacity: 0.55; } 100% { r: 15; opacity: 0; } }

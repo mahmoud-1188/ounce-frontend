@@ -1,3 +1,4 @@
+import { returnLinesOf } from "./returnParts.js";
 import { fine24, fromHalalas, halalas, roundW } from "../core/money.js";
 
 /// قيمة المرتجع بأسعار الفاتورة الأصل — نسخة العرض المطابقة للخادم
@@ -7,9 +8,12 @@ import { fine24, fromHalalas, halalas, roundW } from "../core/money.js";
 ///   مستخرجة منه. فالمرتجع يُردّ بقيمة أسطره كما دُفعت، والضريبة جزءٌ
 ///   منها بنسبة الفاتورة الفعلية — لا تُضاف فوقها (كانت تُضاف فيُعرض ردٌّ
 ///   أكبر مما دفع العميل).
-function computeReturnAmounts(sale, lineIndexes) {
+function computeReturnAmounts(sale, lineIndexes, { returns = null, lineParts = {} } = {}) {
   const lines = sale.lines || [];
-  const picked = (lineIndexes || []).map((i) => lines[i]).filter(Boolean);
+  // بالمرتجعات السابقة والأجزاء: السطر بعدده المرتجع فعلًا (قطعةً قطعة)
+  const picked = returns
+    ? returnLinesOf(sale, returns, lineIndexes, lineParts)
+    : (lineIndexes || []).map((i) => lines[i]).filter(Boolean);
   const lineH = (l) => halalas((Number(l.unitPrice) || 0) * (Number(l.quantity) || 1));
 
   const gross = picked.reduce((a, l) => a + lineH(l), 0);

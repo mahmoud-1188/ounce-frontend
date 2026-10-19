@@ -8,9 +8,10 @@ function findSoldUnit(query, { sales = [], items = [] }) {
     const lines = sale.lines || [];
     for (let i = 0; i < lines.length; i++) {
       const l = lines[i];
-      const codes = [l.unitCode, l.code, l.barcode, l.sku, l.tagId].filter(Boolean);
-      if (codes.some((c) => norm(c) === norm(q))) {
-        return { found: true, sale, lineIndex: i, line: l, by: "code" };
+      const codes = [l.unitCode, l.code, l.barcode, l.sku, l.tagId, ...(l.unitCodes || [])].filter(Boolean);
+      const unitCode = codes.find((c) => norm(c) === norm(q));
+      if (unitCode) {
+        return { found: true, sale, lineIndex: i, line: l, unitCode, by: "code" };
       }
     }
   }

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { GoldEq } from "../ui/GoldEq.jsx";
 import { ArrowDownCircle, ArrowUpCircle, Lock } from "lucide-react";
 import { PURITY, fine24, fmt, fmtW } from "../core/money.js";
 import { METHOD_LABELS } from "../core/money-rules.js";
@@ -26,6 +27,8 @@ function CashTab({
   onCashOut,
   onTransferToSafe,
   onTransferSafeToDaily,
+  onSafeNetTransfer = null,
+  onReverseSafeNet = null,
   dailyCustody,
   openCustodySession,
   onOpenCustody,
@@ -105,7 +108,7 @@ function CashTab({
             </p>
             <p style={{ fontFamily: "'Cairo', sans-serif", color: dailyBalance.total >= 0 ? "var(--accent)" : "var(--bad)" }} className="text-3xl font-extrabold">
               {currency}
-              {fmt(dailyBalance.total, 0)}
+              {fmt(dailyBalance.total, 0)}<GoldEq v={dailyBalance.total} />
             </p>
             <div className="grid grid-cols-2 gap-2 mt-3">
               <div className="px-2 py-2 rounded-xl" style={{ background: "var(--panel)", border: "1px solid var(--line)" }}>
@@ -277,7 +280,7 @@ function CashTab({
             </p>
             <p style={{ fontFamily: "'Cairo', sans-serif", color: safeBalance.total >= 0 ? "var(--accent)" : "var(--bad)" }} className="text-3xl font-extrabold">
               {currency}
-              {fmt(safeBalance.total, 0)}
+              {fmt(safeBalance.total, 0)}<GoldEq v={safeBalance.total} />
             </p>
             <div className="grid grid-cols-2 gap-3 mt-3">
               <div className="px-3 py-2 rounded-xl" style={{ background: "var(--panel)", border: "1px solid var(--line)" }}>
@@ -329,6 +332,45 @@ function CashTab({
           {showSafeForm === "out" && (
             <SimpleAmountForm withMethod direction="out" onCancel={() => setShowSafeForm(null)} onSubmit={async (a, n, m, c) => { const res = await onSafeOut(a, n, m, c); if (res) setShowSafeForm(null); }} submitLabel="سحب" />
           )}
+          {/* التحويل بين نقد الخزنة وشبكتها بالاتجاهين — وكل تحويلٍ يُعكس بضغطة */}
+          {onSafeNetTransfer && (
+            <div className="grid grid-cols-2 gap-2 mt-2">
+              <button data-safe-net="to_network" onClick={() => setShowSafeForm(showSafeForm === "toNetwork" ? null : "toNetwork")}
+                className="py-2 rounded-xl text-xs font-bold" style={{ background: "var(--panel)", color: "var(--accentText)", border: "1px solid var(--line)" }}>
+                من النقد إلى الشبكة
+              </button>
+              <button data-safe-net="to_cash" onClick={() => setShowSafeForm(showSafeForm === "toCash" ? null : "toCash")}
+                className="py-2 rounded-xl text-xs font-bold" style={{ background: "var(--panel)", color: "var(--accentText)", border: "1px solid var(--line)" }}>
+                من الشبكة إلى النقد
+              </button>
+            </div>
+          )}
+          {(showSafeForm === "toNetwork" || showSafeForm === "toCash") && (
+            <SimpleAmountForm hideCategory onCancel={() => setShowSafeForm(null)}
+              onSubmit={async (a, n) => { const res = await onSafeNetTransfer(showSafeForm === "toNetwork" ? "to_network" : "to_cash", a, n); if (res) setShowSafeForm(null); }}
+              submitLabel={showSafeForm === "toNetwork" ? "حوّل إلى الشبكة" : "حوّل إلى النقد"} />
+          )}
+          {onSafeNetTransfer && (() => {
+            const reversed = new Set((safeTx || []).filter((t) => t.category === "safe_net_reverse" && t.refId).map((t) => t.refId));
+            const list = (safeTx || []).filter((t) => t.category === "safe_net_transfer" && t.type === "out").slice(0, 8);
+            if (!list.length) return null;
+            return (
+              <Card style={{ padding: 12, marginTop: 10 }} data-safe-net-list>
+                <p style={{ color: "var(--text2)" }} className="text-xs font-bold mb-1">التحويلات بين النقد والشبكة</p>
+                {list.map((t) => (
+                  <div key={t.id} className="flex items-center justify-between py-1" style={{ borderTop: "1px solid var(--line)" }}>
+                    <span style={{ color: "var(--text2)" }} className="text-[11px]">
+                      {t.method === "cash" ? "نقد ← شبكة" : "شبكة ← نقد"} · {currency}{fmt(t.amount, 0)} · {new Date(t.date).toLocaleDateString("en-GB")}
+                    </span>
+                    {reversed.has(t.id)
+                      ? <span style={{ color: "var(--text3)" }} className="text-[11px]">عُكس</span>
+                      : onReverseSafeNet && <button data-safe-net-reverse={t.id} onClick={() => onReverseSafeNet(t.id)} className="text-[11px] px-2 py-1 rounded-full font-bold"
+                          style={{ background: "var(--panel)", color: "var(--bad)", border: "1px solid var(--line)" }}>عكس</button>}
+                  </div>
+                ))}
+              </Card>
+            );
+          })()}
           {showSafeForm === "toDaily" && (
             <SimpleAmountForm
               withMethod

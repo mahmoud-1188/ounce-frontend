@@ -432,6 +432,8 @@ const scrap = {
 const safe = {
   transferToSafe: (payload) => apiFetch("/safe/transfer-to-safe", { method: "POST", body: payload }),
   transferToDaily: (payload) => apiFetch("/safe/transfer-to-daily", { method: "POST", body: payload }),
+  cashNetwork: (payload) => apiFetch("/safe/cash-network", { method: "POST", body: payload }),
+  reverseCashNetwork: (id) => apiFetch(`/safe/cash-network/${id}/reverse`, { method: "POST", body: {} }),
   fundCustody: (payload) => apiFetch("/safe/fund-custody", { method: "POST", body: payload }),
   cash: (payload) => apiFetch("/safe/cash", { method: "POST", body: payload }),
   gold: (payload) => apiFetch("/safe/gold", { method: "POST", body: payload }),
@@ -495,6 +497,9 @@ const taskirApi = {
   officeTx: (officeId) => apiFetch(`/taskir-offices/${officeId}/tx`),
   settleOffice: (officeId, payload) =>
     apiFetch(`/taskir-offices/${officeId}/settle`, { method: "POST", body: payload }),
+  // ذهبنا المحفوظ عند المكتب (migration 080): buy · withdraw · to-supplier
+  officeHold: (officeId, action, payload) =>
+    apiFetch(`/taskir-offices/${officeId}/hold/${action === "to_supplier" ? "to-supplier" : action}`, { method: "POST", body: payload }),
 };
 
 // ── إخراج بضاعة من النظام ──
@@ -699,6 +704,7 @@ const hqTransactionsApi = {
   list: () => apiFetch("/branch/hq-transactions"),
   create: (payload) => apiFetch("/branch/hq-transactions", { method: "POST", body: payload }),
   receive: (id) => apiFetch(`/branch/hq-transactions/${id}/receive`, { method: "POST" }),
+  decideCapitalDraw: (id, decision, note = "") => apiFetch(`/branch/hq-transactions/${id}/capital-draw`, { method: "POST", body: { decision, note } }),
 };
 
 // ── قسم المحاسب والرقابة (migration 037) ──
@@ -792,3 +798,35 @@ export {
   priceFixApi,
   hqTransactionsApi,
 };
+
+// علامة طباعة الملصق على القطع (migration 071)
+export const setUnitsPrinted = (codes, printed = true) => apiFetch("/items/units/printed", { method: "POST", body: { codes, printed } });
+
+// فترة التجهيز وبدء التشغيل (migration 073)
+export const setupApi = {
+  state: () => apiFetch("/setup/state"),
+  saveOpening: (balance, noOldStock = false) => apiFetch("/setup/opening-balance", { method: "POST", body: { balance, noOldStock } }),
+  goLive: (body = {}) => apiFetch("/setup/go-live", { method: "POST", body }),
+  // بيعٌ بلا سعر قبل التشغيل: القطع تخرج بلا فاتورةٍ ولا قيد
+  exitUnits: (codes, note = "") => apiFetch("/setup/exit-units", { method: "POST", body: { codes, note } }),
+};
+
+// قوالب المصروفات الثابتة (migration 074)
+export const fixedExpensesApi = {
+  list: () => apiFetch("/fixed-expenses"),
+  create: (b) => apiFetch("/fixed-expenses", { method: "POST", body: b }),
+  update: (id, b) => apiFetch(`/fixed-expenses/${id}`, { method: "PATCH", body: b }),
+};
+
+// إعادة طباعة ملصق أو استبدال رقاقة بموافقة (migration 076)
+// الورشة ونسبة الهدر (migration 084)
+export const workshopApi = {
+  list: () => apiFetch("/workshop/jobs"),
+  issue: (body) => apiFetch("/workshop/jobs", { method: "POST", body }),
+  receive: (id, body) => apiFetch(`/workshop/jobs/${id}/receive`, { method: "POST", body }),
+};
+// مراقبة الأعطال (migration 082): بلاغ العطل يصل الإدارة — بلا انتظارٍ ولا رسالة خطأ إن فشل
+export const reportClientError = (body) => (authToken ? fetchApi("/client-errors", { method: "POST", body }).catch(() => null) : Promise.resolve(null));
+export const labelReprint = (body) => apiFetch("/items/units/reprint", { method: "POST", body });
+// إلغاء تكويد قطع: وزنها يعود لدفعتها المفتوحة (أو يخرج من الافتتاحي في فترة التجهيز) — باعتمادٍ وسبب
+export const uncodeUnits = (body) => apiFetch("/items/units/uncode", { method: "POST", body });

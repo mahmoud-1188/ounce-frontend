@@ -16,7 +16,10 @@ import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 // بطاقة كل موظف: u.pin لم يعد موجودًا في الحالة المحلية إطلاقًا — كان
 // ‌`{"•".repeat(u.pin.length)}` سيرمي خطأ فورًا (u.pin === undefined)، فصار
 // عرضًا ثابتًا بلا اعتماد على طول فعلي.
-function AccessSettingsPage({ users, navRegistry = [], roles = {}, currentUserId = null, onAddUser, onRenameUser, onToggleAi, onSetPermissions, onRemoveUser, onEnroll = null, onFetchLog = null, onBack }) {
+function AccessSettingsPage({ users, navRegistry = [], roles = {}, currentUserId = null, onAddUser, onRenameUser, onToggleAi, onSetPermissions: setPermsRaw, onRemoveUser, onEnroll = null, onFetchLog = null, onBack, staffByHq = false }) {
+  // ⚠ فرعٌ مرتبطٌ بالإدارة لا يمنح صلاحيات ولا يضيف موظفين ولا يحذفهم — الإدارة تفعل (والخادم يرفض)
+  const STAFF_BY_HQ_MSG = "إضافة الموظفين وصلاحياتهم وحذفهم من الإدارة المركزية — اطلبها منها.";
+  const onSetPermissions = (...a) => { if (staffByHq) { setGuardMsg(STAFF_BY_HQ_MSG); return; } setPermsRaw(...a); };
   const [showAdd, setShowAdd] = useState(false);
   const [name, setName] = useState("");
   const [pin, setPin] = useState("");
@@ -53,6 +56,7 @@ function AccessSettingsPage({ users, navRegistry = [], roles = {}, currentUserId
   const toggleAi = (u) => onToggleAi(u.id, !u.canUseAi);
 
   const remove = (id) => {
+    if (staffByHq) { setGuardMsg(STAFF_BY_HQ_MSG); return; }
     if (users.filter((u) => u.role === "manager").length <= 1 && users.find((u) => u.id === id)?.role === "manager") return;
     onRemoveUser(id);
   };
@@ -222,7 +226,11 @@ function AccessSettingsPage({ users, navRegistry = [], roles = {}, currentUserId
           كل موظف برقم سري خاص. كل عملية يقوم بها تُحفظ باسمه — البيع والشراء والصرف والجرد.
         </p>
 
-        {!showAdd ? (
+        {staffByHq ? (
+          <Card style={{ padding: 12, marginBottom: 16, border: "1px solid var(--accentLine)" }} data-staff-by-hq>
+            <p style={{ color: "var(--accentText)", margin: 0 }} className="text-[12px] font-bold">🔒 {STAFF_BY_HQ_MSG}</p>
+          </Card>
+        ) : !showAdd ? (
           <button
             onClick={() => setShowAdd(true)}
             className="w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 mb-4"

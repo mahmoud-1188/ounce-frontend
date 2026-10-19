@@ -1,4 +1,6 @@
 import React, { useState } from "react";
+import { GoldEq } from "../ui/GoldEq.jsx";
+import { FixedExpensesCard } from "../ui/FixedExpensesCard.jsx";
 import { FileMinus, FileSpreadsheet, FileText, Plus } from "lucide-react";
 import * as XLSX from "xlsx";
 import { CATEGORY_TO_ACCOUNT } from "../core/chart.js";
@@ -151,6 +153,8 @@ function ExpensesTab({ expenseNames = [], users = [], onAddExpenseName, onDelete
         المصروفات
       </h1>
 
+      <FixedExpensesCard currency={currency} onAdd={onAdd} flashToast={flashToast} />
+
       <div className="grid grid-cols-3 gap-2 mb-3">
         {[
           { id: "today", label: "اليوم" },
@@ -174,7 +178,7 @@ function ExpensesTab({ expenseNames = [], users = [], onAddExpenseName, onDelete
         </p>
         <p style={{ fontFamily: "'Cairo', sans-serif", color: "var(--bad)" }} className="text-2xl font-extrabold">
           {currency}
-          {fmtMoney(periodTotal)}
+          {fmtMoney(periodTotal)}<GoldEq v={periodTotal} />
         </p>
         <p style={{ color: "var(--text3)" }} className="text-[11px] mt-1">
           {filtered.length} عملية · ثابتة {currency}

@@ -84,6 +84,8 @@ function normalizeSales(saleRows, saleLineRows) {
       workmanshipSnapshot: toMoney(l.workmanship_snapshot),
       // «خاتم من طقم ‹رمز›» — سطر جزء الطقم (migration 066)
       partLabel: l.part_label || null,
+      // رموز قطع السطر التي ما زالت عند العميل — المرتجع يجد السطر بمسح إحداها
+      unitCodes: Array.isArray(l.unit_codes) ? l.unit_codes : [],
     });
     linesBySale.set(l.sale_id, list);
   }
@@ -98,6 +100,7 @@ function normalizeSales(saleRows, saleLineRows) {
     price24Snapshot: s.price24_snapshot == null ? null : Number(s.price24_snapshot),
     priceFrozenAt: s.price_frozen_at,
     cardNetwork: s.card_network,
+    cardAuth: s.card_auth || null,
     cashPart: toMoney(s.cash_part),
     networkPart: toMoney(s.network_part),
     networkFeePct: s.network_fee_pct == null ? 0 : Number(s.network_fee_pct),
@@ -204,7 +207,7 @@ function normalizeSafeAudits(rows) {
 
 function normalizeCustomers(rows) {
   return rows.map((c) => ({ id: c.id, ref: c.ref, name: c.name, phone: c.phone, idNumber: c.id_number || "", note: c.note || "", createdBy: c.created_by, createdAt: c.created_at,
-    creditLimit: c.credit_limit != null ? Number(c.credit_limit) : null }));
+    creditLimit: c.credit_limit != null ? Number(c.credit_limit) : null, vatNumber: c.vat_number || "", address: c.address || "" }));
 }
 
 function normalizeSuppliers(rows) {
@@ -782,6 +785,8 @@ function normalizeBootstrap(boot) {
     // هنا فقط: isHq يقرّر ظهور تبويب "تقرير الفروع" من عدمه.
     isHq: !!boot.branch?.is_hq,
     storePackage: boot.storePackage === "no_accounting" ? "no_accounting" : "full",
+    // تحكّم الإدارة (migration 072): حدود الاعتماد والموظفين لها ما لم تفوّض الفرع
+    hqControl: { linked: !!boot.hqControl?.linked, full: !!boot.hqControl?.full, noApprovals: !!boot.hqControl?.noApprovals },
   };
 }
 

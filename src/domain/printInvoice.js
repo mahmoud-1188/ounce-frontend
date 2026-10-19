@@ -1,6 +1,7 @@
 import { fmt, fmtMoney, fmtW } from "../core/money.js";
 import { categoryLabel } from "./helpers.js";
 import { qrSvg } from "./qrBig.js";
+import { arabicAmountWords } from "./officialDocs.js";
 
 /// الفاتورة المطبوعة (المرجع 5.2.0: printSaleInvoice) — A4 أو إيصالٌ حراري 80مم (وحدة thermalReceipt)،
 /// وبلغتين (bilingualInvoice)، ورمز QR الضريبي للمرحلة الأولى (zatca) على الفاتورة الضريبية المبسّطة.
@@ -19,14 +20,17 @@ function zatcaTlv(fields) {
 const zatcaQr = ({ sellerName, vatNumber, issuedAt, total, vat }) =>
   zatcaTlv([[1, sellerName], [2, vatNumber], [3, issuedAt], [4, Number(total || 0).toFixed(2)], [5, Number(vat || 0).toFixed(2)]]);
 
-function invoiceHtml(sale, { info = {}, currency = "ر.س", modules = {}, einv = null } = {}) {
+function invoiceHtml(sale, { info = {}, currency = "ر.س", modules = {}, einv = null, buyer = null } = {}) {
   const cur = esc(currency);
   const on = (id) => !!modules?.[id]?.on;
   const thermal = on("thermalReceipt"), bi = on("bilingualInvoice");
   const L = (ar, en) => (bi ? `${ar} <span class="en">${en}</span>` : ar);
   const money = (v) => fmtMoney(v || 0);
   const taxed = !!sale.taxApplicable && Number(sale.taxAmount) > 0;
-  const title = taxed ? L("فاتورة ضريبية مبسّطة", "Simplified Tax Invoice") : L("فاتورة", "Invoice");
+  // فاتورة ضريبية كاملة (بين منشأتين): مشترٍ برقمٍ ضريبي — بياناته وضريبة كل سطرٍ والمبلغ كتابةً
+  const full = taxed && !!buyer?.vatNumber;
+  const rate = Number(sale.taxRate) || 0;
+  const title = full ? L("فاتورة ضريبية", "Tax Invoice") : taxed ? L("فاتورة ضريبية مبسّطة", "Simplified Tax Invoice") : L("فاتورة", "Invoice");
   const seller = info.legalName || info.storeName || info.name || "";
   // مستندٌ صدر في سلسلة الفوترة (migration 067): رمزه بتجزئته كما صدر — وإلا رمز المرحلة الأولى
   const qr = einv?.qr ? einv.qr : taxed && on("zatca") && info.vatNumber
@@ -37,8 +41,10 @@ function invoiceHtml(sale, { info = {}, currency = "ر.س", modules = {}, einv =
       l.gem ? `${esc(l.gem.carat || "")} ${L("قيراط", "ct")} · ${esc(l.gem.color || "")} · ${esc(l.gem.clarity || "")} · ${esc(l.gem.cut || "")}${l.gem.certNo ? ` · ${esc(l.gem.lab || "")} ${esc(l.gem.certNo)}` : ""}` : "",
       l.watch ? `${esc(l.watch.brand || "")} ${esc(l.watch.model || "")} · ${L("رقم", "S/N")} ${esc(l.watch.serial || "")}${l.watch.warrantyMonths ? ` · ${L("ضمان", "Warranty")} ${esc(l.watch.warrantyMonths)} ${L("شهرًا", "mo")}` : ""}` : "",
     ].filter(Boolean).join("<br>");
+    const gross = (Number(l.unitPrice) || 0) * (Number(l.quantity) || 1);
+    const net = rate > 0 ? gross / (1 + rate) : gross;
     return `<tr><td class="r">${esc(l.partLabel || l.itemName || `${categoryLabel(l.category)} ع${l.karatSnapshot || ""}`)}${extra ? `<div class="x">${extra}</div>` : ""}</td>
-      <td>${esc(l.karatSnapshot || "")}</td><td>${fmtW(l.weightSnapshot || 0)}</td><td>${esc(l.quantity || 1)}</td><td>${money((Number(l.unitPrice) || 0) * (Number(l.quantity) || 1))}</td></tr>`;
+      <td>${esc(l.karatSnapshot || "")}</td><td>${fmtW(l.weightSnapshot || 0)}</td><td>${esc(l.quantity || 1)}</td>${full ? `<td>${money(net)}</td><td>${money(gross - net)}</td>` : ""}<td>${money(gross)}</td></tr>`;
   }).join("");
   const w = thermal ? "72mm" : "190mm";
   const logo = info.logo && /^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(info.logo) ? `<img class="logo" src="${esc(info.logo)}">` : "";
@@ -51,6 +57,7 @@ function invoiceHtml(sale, { info = {}, currency = "ر.س", modules = {}, einv =
   th { border-bottom:1.5px solid #000; } td.r { text-align:right; } .x { color:#444; font-size:.85em; }
   .tot div { display:flex; justify-content:space-between; padding:2px 0; } .tot .g { font-weight:800; font-size:1.2em; border-top:1.5px solid #000; }
   .qr { text-align:center; margin:8px 0; } .foot { text-align:center; color:#444; font-size:.85em; margin-top:6px; }
+  .buyer { border:1px solid #999; border-radius:4px; padding:4px 6px; margin:6px 0; font-size:.95em; } .words { color:#333; font-size:.9em; padding-top:3px; }
   img.logo { width:${thermal ? "46px" : "64px"}; display:block; margin:0 auto; }
 </style></head><body><div class="w">
 ${logo}
@@ -58,7 +65,8 @@ ${logo}
 <div class="meta">${[info.vatNumber ? `${L("الرقم الضريبي", "VAT No.")} ${esc(info.vatNumber)}` : "", info.crNumber ? `${L("س.ت", "CR")} ${esc(info.crNumber)}` : "", esc(info.address || ""), esc(info.phone || "")].filter(Boolean).join(" · ")}</div>
 <h1>${title}</h1>
 <div class="meta">${L("رقم", "No.")} ${esc(sale.ref)} · ${esc(new Date(sale.date).toLocaleString("en-GB"))}${sale.customerName ? ` · ${L("العميل", "Customer")}: ${esc(sale.customerName)}` : ""}</div>
-<table><thead><tr><th class="r">${L("الصنف", "Item")}</th><th>${L("العيار", "Karat")}</th><th>${L("الوزن", "Wt")}</th><th>${L("الكمّية", "Qty")}</th><th>${L("المبلغ", "Amount")}</th></tr></thead><tbody>${rows}</tbody></table>
+${full ? `<div class="buyer"><b>${L("المشتري", "Buyer")}:</b> ${esc(buyer.name || "")} · ${L("الرقم الضريبي", "VAT No.")} ${esc(buyer.vatNumber)}${buyer.address ? ` · ${esc(buyer.address)}` : ""}</div>` : ""}
+<table><thead><tr><th class="r">${L("الصنف", "Item")}</th><th>${L("العيار", "Karat")}</th><th>${L("الوزن", "Wt")}</th><th>${L("الكمّية", "Qty")}</th>${full ? `<th>${L("قبل الضريبة", "Net")}</th><th>${L("الضريبة", "VAT")}</th>` : ""}<th>${L("المبلغ", "Amount")}</th></tr></thead><tbody>${rows}</tbody></table>
 <div class="tot">
   ${taxed ? `<div><span>${L("الإجمالي قبل الضريبة", "Total excl. VAT")}</span><span>${money(sale.netAmount)} ${cur}</span></div>
   <div><span>${L("ضريبة القيمة المضافة", "VAT")} ${fmt((Number(sale.taxRate) || 0) * 100, 0)}٪</span><span>${money(sale.taxAmount)} ${cur}</span></div>` : ""}
@@ -66,6 +74,8 @@ ${logo}
   ${Number(sale.giftPart) > 0 ? `<div><span>${L("مدفوعٌ ببطاقة هدية", "Paid by gift card")}</span><span>${money(sale.giftPart)} ${cur}</span></div>` : ""}
   <div class="g"><span>${L("الإجمالي", "Total")}${taxed ? ` ${L("شامل الضريبة", "incl. VAT")}` : ""}</span><span>${money(sale.total)} ${cur}</span></div>
   <div><span>${L("الدفع", "Payment")}</span><span>${pay}</span></div>
+  ${sale.cardAuth?.approvalCode ? `<div><span>${L("اعتماد الشبكة", "Card auth")}</span><span>${esc(sale.cardAuth.approvalCode)}${sale.cardAuth.last4 ? ` · •••• ${esc(sale.cardAuth.last4)}` : ""}</span></div>` : ""}
+  ${full ? `<div class="words">${esc(arabicAmountWords(sale.total))}</div>` : ""}
 </div>
 ${qr ? `<div class="qr">${qrSvg(qr, thermal ? 120 : 140)}</div>` : ""}
 <div class="foot">${sale.sellerName ? `${L("البائع", "Seller")}: ${esc(sale.sellerName)}` : ""}</div>

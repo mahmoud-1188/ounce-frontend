@@ -2,9 +2,11 @@ import React, { useState } from "react";
 import { DOC_KINDS } from "../core/constants.js";
 import { fmtMoney } from "../core/money.js";
 import { inputStyle, printDocumentPdf } from "../domain/helpers.js";
+import { OFFICIAL_KINDS, printOfficialDoc } from "../domain/officialDocs.js";
 import { Card } from "./Card.jsx";
 
-function DocumentsArchive({ docs = [], currency = "ر.س", branchName = "", onOpenAttachment = null, onBlocked, compact = false }) {
+// official: الصيغة الرسمية من الإعدادات — السندات والإشعار الدائن بترويسةٍ ومبلغٍ كتابةً وتوقيعات (أصل وصورة)
+function DocumentsArchive({ docs = [], currency = "ر.س", branchName = "", onOpenAttachment = null, onBlocked, compact = false, official = false, info = {}, salesById = null }) {
   const [kind, setKind] = useState("all");
   const [q, setQ] = useState("");
   const [from, setFrom] = useState("");
@@ -41,6 +43,12 @@ function DocumentsArchive({ docs = [], currency = "ر.س", branchName = "", onOp
             <div className="flex gap-1.5 mt-1.5">
               <button onClick={() => printDocumentPdf(d, { currency, branchName, onBlocked })} className="text-[11px] px-2.5 py-1 rounded-full font-bold"
                 style={{ background: "var(--accentBg)", color: "var(--accent)", border: "1px solid var(--accentLine)" }}>عرض / طباعة PDF</button>
+              {official && OFFICIAL_KINDS.has(d.kind) && (
+                <button data-official-print={d.kind} onClick={() => { if (!printOfficialDoc(d, { currency, info: { ...info, name: info.name || branchName }, sale: salesById?.get(d.rec?.saleId) || null })) onBlocked?.("اسمح بالنوافذ المنبثقة للطباعة"); }}
+                  className="text-[11px] px-2.5 py-1 rounded-full font-bold" style={{ background: "var(--panel)", color: "var(--text)", border: "1px solid var(--line)" }}>
+                  {d.kind === "ret" ? "إشعار دائن رسمي" : "سند رسمي"}
+                </button>
+              )}
               {d.attachId && onOpenAttachment && (
                 <button onClick={() => onOpenAttachment(d.attachId, d.attachFallback)} className="text-[11px] px-2.5 py-1 rounded-full"
                   style={{ background: "var(--panel)", color: "var(--text2)", border: "1px solid var(--line)" }}>فاتورة المورد المرفقة</button>

@@ -3044,7 +3044,9 @@ function goldProfit(opening, closing) {
 // لعمولة المدير — نسخة العميل الأصلية كانت تقرأ عمولة المدير من
 // taxEnabled/taxRate نفسيهما، وهو خلطٌ يُفسد الضريبة والعمولة معًا لو
 // نُقل كما هو. راجع core/constants.js: DEFAULT_SETTINGS.mgrFeeEnabled/mgrFeeRate.
-const mgrFeeEnabled = (settings) => settings?.mgrFeeEnabled === true;
+// ⚠ أُلغيت عمولة المدير نهائيًّا (قرار المالك) — تبقى الدالّة للنداءات القديمة وتعود دائمًا «مطفأة».
+//   عمولات البائعين باقية ولا تُمسّ.
+const mgrFeeEnabled = () => false;
 
 const mgrFeeRate = (settings) => {
   const v = Number(settings?.mgrFeeRate);

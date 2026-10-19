@@ -22,14 +22,14 @@ function SellPage({ onNew, onPartialSale, onSetPart = null, onReturns = null }) 
         بيع
       </h1>
       <p style={{ color: "var(--text2)" }} className="text-sm text-center mb-8 px-6">
-        ابدأ فاتورة بيع جديدة واختر الأصناف من المخزون
+        امسح رقاقة القطعة أو باركودها أو اكتب رمزها — تُضاف إلى الفاتورة فور قراءتها
       </p>
       <button
         onClick={onNew}
         className="w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 text-base"
         style={{ background: "linear-gradient(135deg,var(--gradFrom),var(--gradTo))", color: "var(--panel)" }}
       >
-        <Plus size={20} /> فاتورة بيع جديدة
+        <Plus size={20} /> بيع
       </button>
       {onPartialSale && (
         <button

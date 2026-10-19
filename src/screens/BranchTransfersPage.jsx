@@ -5,10 +5,12 @@ import * as api from "../core/api.js";
 import { inputStyle } from "../domain/helpers.js";
 import { Card } from "../ui/Card.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
+import { UnprintedLabelsCard } from "../ui/UnprintedLabelsCard.jsx";
 
 /// التحويل بين الفروع (وحدة branchTransfer · migration 051) — إرسالٌ برمز شحنة واستلامٌ هناك
 /// الحلقة المغلقة (migration 069): المستلِم يعدّ ما وصل — الناقص يبقى «في الطريق» عند المرسِل حتى يقرّر مديره
-function BranchTransfersPage({ currency = "ر.س", canMove = false, isManager = false, onChanged, onBack }) {
+function BranchTransfersPage({ currency = "ر.س", canMove = false, isManager = false, onChanged, onBack,
+  items = [], printerCfg = null, onSavePrinter = null, onBindEpc = null, onSetPrinted = null, price24 = 0 }) {
   const [d, setD] = useState(null);
   const [to, setTo] = useState("");
   const [codes, setCodes] = useState("");
@@ -26,6 +28,15 @@ function BranchTransfersPage({ currency = "ر.س", canMove = false, isManager = 
     transfer_cancelled: "أُلغي التحويل", invalid_counted_weight: "وزن العدّ غير صالح",
   };
   const err = (e, f) => e?.body?.errors?.[0] || ERR[e?.body?.error] || f;
+  // القطع المكتوبة التي لم يُطبع ملصقها — زرّ الإرسال معطّلٌ حتى تُطبع
+  const unprinted = (() => {
+    const want = new Set(codes.split(/[\s,،;]+/).map((c) => c.trim().toUpperCase()).filter(Boolean));
+    const out = [];
+    for (const it of items) for (const u of it.units || []) {
+      if (want.has(String(u.code).toUpperCase()) && !u.sold && !u.printed) out.push({ item: it, code: u.code });
+    }
+    return out;
+  })();
   const send = async () => {
     setBusy("send"); setMsg(null);
     try {
@@ -80,8 +91,10 @@ function BranchTransfersPage({ currency = "ر.س", canMove = false, isManager = 
             <textarea rows={3} value={codes} onChange={(e) => setCodes(e.target.value)} placeholder="امسح رموز القطع أو الصقها"
               style={{ ...inputStyle, marginTop: 6, resize: "none" }} />
             <input style={{ ...inputStyle, marginTop: 6 }} value={note} onChange={(e) => setNote(e.target.value)} placeholder="ملاحظة (اختياري)" />
-            <button onClick={send} disabled={busy === "send" || !codes.trim() || !to} className="w-full mt-2 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1"
-              style={{ background: "linear-gradient(135deg,var(--gradFrom),var(--gradTo))", color: "var(--panel)", opacity: !codes.trim() ? 0.5 : 1 }}>
+            <UnprintedLabelsCard units={unprinted} where="التحويل" printerCfg={printerCfg} onSavePrinter={onSavePrinter} onBindEpc={onBindEpc}
+              onSetPrinted={onSetPrinted} currency={currency} price24={price24} />
+            <button onClick={send} disabled={busy === "send" || !codes.trim() || !to || unprinted.length > 0} className="w-full mt-2 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1"
+              style={{ background: "linear-gradient(135deg,var(--gradFrom),var(--gradTo))", color: "var(--panel)", opacity: !codes.trim() || unprinted.length ? 0.5 : 1 }}>
               {busy === "send" ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />} أرسل
             </button>
             <p className="text-[10px] mt-1.5" style={{ color: "var(--text3)" }}>تخرج القطع من الرفّ «في الطريق» حتى يعدّها الفرع ويستلمها — والتكلفة تنتقل معها (1350 ↔ 2140)، وما نقص يبقى في الطريق حتى قرار المدير.</p>

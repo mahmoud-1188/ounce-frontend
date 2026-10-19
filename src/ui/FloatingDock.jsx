@@ -100,6 +100,7 @@ function FloatingDock({ pos, onPosChange, collapsed, onToggle, actions = [], res
           <button
             key={a.id}
             onClick={a.onPress}
+            data-own-press={a.onLongPress ? "" : undefined}
             onContextMenu={a.onLongPress ? (e) => { e.preventDefault(); a.onLongPress(); } : undefined}
             onTouchStart={a.onLongPress ? () => { holdRef.current[a.id] = setTimeout(a.onLongPress, 450); } : undefined}
             onTouchEnd={a.onLongPress ? () => clearTimeout(holdRef.current[a.id]) : undefined}
