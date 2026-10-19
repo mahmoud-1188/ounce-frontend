@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Check, Coins, Link2, Printer, Puzzle, Settings2, ShieldCheck } from "lucide-react";
 import { APP_MODES, DEFAULT_APP_MODE, DEFAULT_SETTINGS } from "../core/constants.js";
+import { UI_LANGS, readUiLang, setUiLang } from "../domain/i18n.js";
 import { KARATS, fmt, pricePerGram } from "../core/money.js";
 import { CARD_NETWORKS, DEFAULT_CARD_FEES, DEFAULT_MARGINS } from "../core/money-rules.js";
 import { THEMES, THEME_DESIGNS, applyTheme, designOfTheme, effectiveTheme, isDarkTheme } from "../core/theme.js";
@@ -35,6 +36,7 @@ const SETTINGS_ROWS = [
 
 function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSaveBranch, hqPermissions, priceData = {}, onBackfill, canEditControls = false, onSaveControls = null, hqManaged = null, limitsByHq = false, onBack }) {
   const [newRecovery, setNewRecovery] = useState("");
+  const [uiLangSel, setUiLangSel] = useState(readUiLang);
   const [fees, setFees] = useState(() => ({ ...DEFAULT_CARD_FEES, ...(settings.cardFees || {}) }));
   const [margins, setMargins] = useState(() => ({ ...DEFAULT_MARGINS, ...(settings.marginByKarat || {}) }));
   const [adj, setAdj] = useState(() => ({ ...DEFAULT_SETTINGS.priceAdjust, ...(settings.priceAdjust || {}) }));
@@ -786,6 +788,20 @@ function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSa
         </Card>
 
         {/* عمولة المدير أُلغيت نهائيًّا — والوضع الخفي أُلغي؛ القطع المعلّقة القديمة تُقرأ وتُباع كما كانت */}
+
+        {/* ── لغة الواجهة (تفضيلٌ لهذا الجهاز) ── */}
+        <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">لغة الواجهة</p>
+        <Card style={{ padding: 14, marginBottom: 16 }} data-ui-lang>
+          <div className="grid grid-cols-2 gap-2">
+            {Object.keys(UI_LANGS).map((id) => (
+              <button key={id} type="button" translate="no" data-ui-lang-opt={id} onClick={() => { setUiLang(id); setUiLangSel(id); }} className="py-2 rounded-xl text-xs font-bold"
+                style={{ background: uiLangSel === id ? "var(--accentBg)" : "var(--panel)", color: uiLangSel === id ? "var(--accent)" : "var(--text2)", border: "1px solid var(--line)" }}>
+                {UI_LANGS[id].label}
+              </button>
+            ))}
+          </div>
+          <p style={{ color: "var(--text3)" }} className="text-[11px] mt-2">الفواتير والتقارير الرسمية تبقى بالعربية.</p>
+        </Card>
 
         {/* ── طباعة الفواتير (مطفأة افتراضًا في الفرع) ── */}
         <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">طباعة الفواتير</p>

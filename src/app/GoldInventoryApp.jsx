@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { UI_LANGS, readUiLang } from "../domain/i18n.js";
 import { AlertTriangle, Banknote, ChevronRight, ChevronUp, FileText, Handshake, Loader2, Lock, LogOut, Menu, Mic, Package, PackageMinus, Plus, Printer, Receipt, RotateCcw, Scale, Search, ShoppingCart, Truck, Wrench, X } from "lucide-react";
 import { CHART_OF_ACCOUNTS, POSTING_RULES } from "../core/chart.js";
 import { AUTO_WORKDAY, APP_MODES, CATEGORY_STATE, DEFAULT_APP_MODE, DEFAULT_CATEGORIES, DEFAULT_INTEGRATION, DEFAULT_OPENING_BALANCE, DEFAULT_PRINTER, DEFAULT_SETTINGS, DEFAULT_STORE, DEFAULT_USERS, EXPENSE_CATEGORIES, ISSUE_REASONS, MIGRATION_FLAG, PARTNER_REQUIRED, PUBLISH_CAP, REVIEW_VERDICTS, RFID_DEFAULTS, ROLES, TRUST_MOVES } from "../core/constants.js";
@@ -7883,7 +7884,7 @@ export default function GoldInventoryApp() {
   }
 
   return (
-    <div dir="rtl" className="ons-root" style={{ background: "var(--bg)", minHeight: "100vh", fontFamily: "'Cairo','Tajawal',system-ui,sans-serif" }}>
+    <div dir={UI_LANGS[readUiLang()].dir} className="ons-root" style={{ background: "var(--bg)", minHeight: "100vh", fontFamily: "'Cairo','Tajawal',system-ui,sans-serif" }}>
       {lockOverlay}
       {currentUser && <div style={showSideNav ? { marginInlineStart: SIDE_NAV_W } : undefined}><ConnectivityBar /></div>}
       {currentUser?.mustChangePin && (
