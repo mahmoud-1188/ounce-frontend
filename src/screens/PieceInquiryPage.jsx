@@ -1,9 +1,12 @@
-import React, { useEffect, useRef, useState } from "react";
-import { Gem, Search, X } from "lucide-react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Camera, Gem, Radio, Search, X } from "lucide-react";
 import * as api from "../core/api.js";
 import { fmtMoney, fmtW, roundW } from "../core/money.js";
 import { HeldUnitsCard } from "../ui/HeldUnitsCard.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
+import { CameraScanner } from "../ui/CameraScanner.jsx";
+import { RFID_DEFAULTS } from "../core/constants.js";
+import { epcHexToCode, readPlateEpc, rfidSettingsFor, useNhrReader } from "../domain/helpers.js";
 
 /// استعلام القطع (المرجع 5.2.0) — امسح أو اكتب أو الصق عدّة رموز فتظهر لكل قطعةٍ
 /// بطاقتها من الخادم: الصنف والوزن والعيار وبعيار 24، والمورد ودفعة الشراء، ومن
@@ -19,7 +22,15 @@ const STATUS = {
 const splitCodes = (t) => String(t || "").split(/[\s,،;]+/).map((x) => x.trim().toUpperCase()).filter(Boolean);
 const dt = (v) => (v ? String(v).slice(0, 10) : "—");
 
-function PieceInquiryPage({ price24 = 0, currency = "ر.س", canManageHeld = false, flashToast = null, onBack }) {
+// الرقاقة تُقرأ رمزَها: رمز اللوحة، أو الرمز المكتوب نصًّا فيها، أو تبقى كما هي فيطابقها الخادم بـepc المربوط
+const tagToCode = (raw) => {
+  const upper = String(raw || "").trim().toUpperCase();
+  const plate = readPlateEpc(upper);
+  if (plate.ok) return String(plate.code).toUpperCase();
+  return /^[0-9A-F]{8,}$/.test(upper) ? (epcHexToCode(upper) || upper).toUpperCase() : upper;
+};
+
+function PieceInquiryPage({ price24 = 0, currency = "ر.س", canManageHeld = false, flashToast = null, onBack, settings = null }) {
   const [input, setInput] = useState("");
   const [cards, setCards] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -28,10 +39,10 @@ function PieceInquiryPage({ price24 = 0, currency = "ر.س", canManageHeld = fal
   const inputRef = useRef(null);
   useEffect(() => { const t = setTimeout(() => inputRef.current?.focus(), 200); return () => clearTimeout(t); }, []);
 
-  const add = async () => {
-    const more = splitCodes(input).filter((c) => !cards.some((x) => x.asked === c));
-    setInput("");
-    inputRef.current?.focus();
+  const cardsRef = useRef(cards);
+  cardsRef.current = cards;
+  const query = async (codes) => {
+    const more = [...new Set(codes)].filter((c) => !cardsRef.current.some((x) => x.asked === c));
     if (!more.length) return;
     setBusy(true); setErr("");
     try {
@@ -41,6 +52,49 @@ function PieceInquiryPage({ price24 = 0, currency = "ر.س", canManageHeld = fal
       setErr("تعذّر الاستعلام — تحقّق من الاتصال");
     } finally { setBusy(false); }
   };
+  const add = () => { const list = splitCodes(input); setInput(""); inputRef.current?.focus(); query(list); };
+
+  // ── الكاميرا: باركود أو QR الملصق ──
+  const [cam, setCam] = useState(false);
+  // ── قارئ RFID بالبلوتوث بإعداد «الجرد»: كل رقاقةٍ جديدة تُستعلم مرّة ──
+  const rfidCfg = useMemo(() => {
+    const base = { ...RFID_DEFAULTS, ...(settings?.rfid || {}) };
+    return { ...rfidSettingsFor("stocktake", settings || {}), profile: base.profile, q: base.q, session: base.session, target: base.target };
+  }, [settings]);
+  const [rfidOn, setRfidOn] = useState(false);
+  const rfidOnRef = useRef(false);
+  rfidOnRef.current = rfidOn;
+  const seenTags = useRef(new Set());
+  const rfid = useNhrReader({
+    config: rfidCfg,
+    onTags: (list) => {
+      if (!rfidOnRef.current) return;
+      const fresh = [];
+      for (const t of list || []) {
+        const epc = String(t && t.epc != null ? t.epc : t || "").trim().toUpperCase();
+        if (!epc || seenTags.current.has(epc)) continue;
+        seenTags.current.add(epc);
+        fresh.push(tagToCode(epc));
+      }
+      if (fresh.length) query(fresh);
+    },
+  });
+  const toggleRfid = async () => {
+    if (rfidOn) { setRfidOn(false); return; }
+    if (!rfid.device) {
+      if (!rfid.supported) { setErr("هذا المتصفّح لا يتّصل بقارئ RFID بالبلوتوث — امسح بقارئٍ يعمل كلوحة مفاتيح أو اكتب الرمز"); return; }
+      if (!(await rfid.connect())) { setErr("تعذّر الاتصال بقارئ RFID — شغّله وقرّبه ثم اضغط زرّه ثانيةً"); return; }
+    }
+    setErr(""); setRfidOn(true);
+  };
+  useEffect(() => {
+    if (!rfidOn) return undefined;
+    seenTags.current = new Set();
+    try { const r = rfid.startLive?.(); if (r && typeof r.then === "function") r.then((ok) => { if (ok === false) setRfidOn(false); }, () => setRfidOn(false)); }
+    catch { setRfidOn(false); }
+    return () => { try { rfid.stop?.(); } catch { /* لا تحكّم */ } };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rfidOn]);
 
   const found = cards.filter((c) => c.found);
   const totW = roundW(found.reduce((a, c) => a + (c.weight || 0), 0));
@@ -69,6 +123,17 @@ function PieceInquiryPage({ price24 = 0, currency = "ر.س", canManageHeld = fal
             <Search size={14} /> {busy ? "…" : "استعلم"}
           </button>
         </div>
+        <div className="grid grid-cols-2 gap-2 mt-2">
+          <button type="button" data-inquiry-camera onClick={() => setCam((v) => !v)} className="py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5"
+            style={{ background: cam ? "var(--accentBg)" : "var(--panel)", color: cam ? "var(--accent)" : "var(--text2)", border: "1px solid var(--line)" }}>
+            <Camera size={14} /> {cam ? "إيقاف الكاميرا" : "الكاميرا"}
+          </button>
+          <button type="button" data-inquiry-rfid onClick={toggleRfid} className="py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5"
+            style={{ background: rfidOn ? "var(--accentBg)" : "var(--panel)", color: rfidOn ? "var(--accent)" : "var(--text2)", border: "1px solid var(--line)" }}>
+            <Radio size={14} /> {rfidOn ? "القارئ يقرأ — أوقفه" : "قارئ الرقاقات"}
+          </button>
+        </div>
+        {cam && <div className="mt-2"><CameraScanner onScan={(code) => query(splitCodes(code))} onClose={() => setCam(false)} /></div>}
         {err && <p style={{ color: "var(--bad)" }} className="text-[11px] mt-2">{err}</p>}
         {cards.length > 0 && (
           <div className="flex items-center gap-2 mt-3">

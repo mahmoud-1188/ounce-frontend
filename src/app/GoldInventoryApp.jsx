@@ -9410,7 +9410,7 @@ export default function GoldInventoryApp() {
           />
         )}
         {morePage === "pieceInquiry" && (
-          <PieceInquiryPage price24={priceData.current || 0} currency={priceData.currency} canManageHeld={role === "manager"} flashToast={flashToast} onBack={() => setMorePage(null)} />
+          <PieceInquiryPage price24={priceData.current || 0} currency={priceData.currency} canManageHeld={role === "manager"} flashToast={flashToast} onBack={() => setMorePage(null)} settings={appSettings} />
         )}
         {morePage === "hqDocs" && (
           <HqTransactionsPage
