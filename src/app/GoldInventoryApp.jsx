@@ -7605,6 +7605,8 @@ export default function GoldInventoryApp() {
       return { ...it, units };
     });
     persistItems(next);
+    // العلامة تُحفظ على الخادم — التحويل يرفض قطعةً بلا ملصقٍ مطبوع
+    api.setUnitsPrinted(codes, !!printedValue).catch(() => flashToast("لم تُحفظ علامة الطباعة على الخادم — أعد المحاولة"));
   };
 
   // Replaces a damaged tag's identifier with a brand-new unique code (used when the
@@ -8806,6 +8808,7 @@ export default function GoldInventoryApp() {
         {morePage === "reorder" && <ReorderPage onBack={() => setMorePage(null)} onOpenModules={role === "manager" ? () => setMorePage("modules") : null} />}
         {morePage === "branchTransfers" && (
           <BranchTransfersPage currency={priceData.currency || "ر.س"} canMove={["manager", "assistant"].includes(role)} isManager={role === "manager"}
+            items={items} printerCfg={printerCfg} onSavePrinter={handleSavePrinter} onBindEpc={bindEpcForPrint} onSetPrinted={handleSetPrinted} price24={priceData.current || 0}
             onChanged={() => loadBootstrap(currentUser).catch(() => {})} onBack={() => setMorePage(null)} />
         )}
         {morePage === "giftCards" && (

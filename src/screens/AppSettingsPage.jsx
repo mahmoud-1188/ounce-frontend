@@ -14,6 +14,7 @@ import { Field } from "../ui/Field.jsx";
 import { MgrFeeSettingsCard } from "../ui/MgrFeeSettingsCard.jsx";
 import { NumericInput } from "../ui/NumericInput.jsx";
 import { RfidSettingsCard } from "../ui/RfidSettingsCard.jsx";
+import { ScaleSettingsCard } from "../ui/ScaleSettingsCard.jsx";
 import { HiddenModeSettingsCard } from "../ui/HiddenModeSettingsCard.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 import { InstallAppCard } from "../ui/InstallAppCard.jsx";
@@ -26,7 +27,7 @@ const SETTINGS_ROWS = [
     screens: [["access", "الصلاحيات"]], status: (s) => `الرقم السري ${s.requirePin ? "مفعّل" : "مطفأ"} · الاعتماد ${s.approvalsEnabled ? "مفعّل" : "مطفأ"}` },
   { id: "money", label: "المال والضريبة", icon: Coins, keys: ["الضريبه", "هوامش", "هامش", "عمولات", "مطابقة البنك", "الزكاه", "فحص الكسر", "حد الاجل", "بعد البيع", "واتساب", "البيع اثناء الجرد", "عرض السعر"],
     screens: [], status: (s) => (s.taxEnabled ? `ضريبة ${Math.round((Number(s.taxRate) || 0) * 1000) / 10}٪` : "بلا ضريبة") + ` · الزكاة ${s.zakatEnabled === false ? "مطفأة" : "مفعّلة"}` },
-  { id: "devices", label: "الأجهزة", icon: Printer, keys: ["قارئ rfid", "الطابعه"],
+  { id: "devices", label: "الأجهزة", icon: Printer, keys: ["قارئ rfid", "الطابعه", "الميزان"],
     screens: [["printerSetup", "الطابعة"], ["rfidSettings", "القارئ"]], status: () => "الطابعة وقارئ RFID" },
   { id: "links", label: "الربط", icon: Link2, keys: ["ربط الفرع", "البرنامج المركزي"],
     screens: [["integration", "الأنظمة"]], status: (s, b) => (b?.code ? `مربوطٌ بالإدارة · ${b.code}` : "غير مربوطٍ بالإدارة") },
@@ -873,6 +874,10 @@ function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSa
         {/* ── قارئ RFID ── */}
         <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">قارئ RFID</p>
         <RfidSettingsCard settings={settings} onSave={onSave} currency={priceData.currency} />
+
+        {/* ── الميزان ── */}
+        <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">الميزان</p>
+        <ScaleSettingsCard />
 
         {/* ── ترحيل القيود ── */}
         {onBackfill && (

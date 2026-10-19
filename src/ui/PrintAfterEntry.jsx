@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { LabelModelPicker } from "./LabelModelPicker.jsx";
 import { Check, Printer } from "lucide-react";
 import { itemLabel } from "../domain/helpers.js";
 import { Card } from "./Card.jsx";
@@ -83,6 +84,10 @@ function PrintAfterEntry({ newItems, supplierLabel, onSetPrinted, onDone, onExit
             ? `الطباعة على طابعة الملصقات (${printerCfg.transport === "usb" ? "USB" : printerCfg.deviceName || "بلوتوث"})`
             : "الطباعة عبر نافذة المتصفح (طابعة النظام) — لطابعة الملصقات اخترها من «إعدادات الطابعة»"}
         </p>
+        {/* نموذج الملصق يُختار هنا أيضًا — مقاسه وتخطيطه من «إعدادات الطابعة» */}
+        {isLabelPrinter(printerCfg) && onSavePrinter && (
+          <div className="mb-2"><LabelModelPicker cfg={printerCfg} onChange={onSavePrinter} compact /></div>
+        )}
         {labelStatus && (
           <p style={{ color: labelStatus.bad ? "var(--bad)" : labelStatus.ok ? "var(--good)" : "var(--accent)" }} className="text-[11px] mb-2" data-label-status>
             {labelStatus.text}

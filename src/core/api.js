@@ -792,3 +792,7 @@ export {
   priceFixApi,
   hqTransactionsApi,
 };
+
+// علامة طباعة الملصق على القطع (migration 071)
+export const setUnitsPrinted = (codes, printed = true) => apiFetch("/items/units/printed", { method: "POST", body: { codes, printed } });
+
