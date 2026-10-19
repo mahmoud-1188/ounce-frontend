@@ -1795,6 +1795,21 @@ export default function GoldInventoryApp() {
 
   /// تنفيذ طلبٍ معتمد — تُعاد العملية نفسها بحمولتها ومعها approvalId،
   /// والخادم يختم التنفيذ في معاملتها: مرّةً واحدة وبالمبلغ نفسه.
+  // موافقات إعادة الطباعة المنفَّذة: رموزٌ مسموحٌ لها مرّةً واحدة بلا طلبٍ جديد
+  const reprintPass = useRef(new Map());   // code → action
+  const handleReprintGate = async (codes, action) => {
+    const ups = codes.map((c) => String(c).toUpperCase());
+    if (ups.every((c) => reprintPass.current.get(c) === action)) { ups.forEach((c) => reprintPass.current.delete(c)); return true; }
+    try {
+      const res = await api.labelReprint({ codes, action });
+      if (res?.approvalPending) {
+        notePendingApproval(res.approvalPending);
+        flashToast(`أُرسل طلب ${action === "replace" ? "استبدال الرقاقة" : "إعادة الطباعة"} ${res.approvalPending.ref} — يُطبع حين يُعتمد`);
+        return false;
+      }
+      return !!res?.ok;
+    } catch (err) { flashToast(apiErrorMessage(err, "تعذّر طلب إعادة الطباعة")); return false; }
+  };
   const handleGoLive = async (approvalId = null) => {
     try {
       const res = await api.setupApi.goLive({ startDate: new Date().toISOString().slice(0, 10), ...(approvalId ? { approvalId } : {}) });
@@ -1827,6 +1842,11 @@ export default function GoldInventoryApp() {
         if (res?.approvalPending) { notePendingApproval(res.approvalPending); return false; }
       } else if (ap.kind === "safe_audit") await api.safe.audit(p);
       else if (ap.kind === "go_live") { await api.setupApi.goLive({ ...(ap.payload || {}), approvalId: ap.id }); refreshSetup(); }
+      else if (ap.kind === "label_reprint") {
+        const r = await api.labelReprint({ ...(ap.payload || {}), approvalId: ap.id });
+        (r.codes || []).forEach((c) => reprintPass.current.set(String(c).toUpperCase(), r.action));
+        flashToast("اعتُمدت — اطبعها الآن من «إعادة الطباعة»");
+      }
       else {
         flashToast("نوع طلبٍ لا يُنفَّذ من هنا");
         return false;
@@ -8459,6 +8479,7 @@ export default function GoldInventoryApp() {
         {morePage === "printing" && (
           <PrintingPage
             activeItems={activeItems}
+            onReprintGate={handleReprintGate}
             onSetPrinted={handleSetPrinted}
             onReplaceCode={handleReplaceUnitCode}
             printerCfg={printerCfg}

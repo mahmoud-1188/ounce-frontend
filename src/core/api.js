@@ -811,3 +811,6 @@ export const fixedExpensesApi = {
   create: (b) => apiFetch("/fixed-expenses", { method: "POST", body: b }),
   update: (id, b) => apiFetch(`/fixed-expenses/${id}`, { method: "PATCH", body: b }),
 };
+
+// إعادة طباعة ملصق أو استبدال رقاقة بموافقة (migration 076)
+export const labelReprint = (body) => apiFetch("/items/units/reprint", { method: "POST", body });
