@@ -58,6 +58,7 @@ const API_ERROR_MESSAGES = {
   code_old_stock_first: "كوّد بضاعة المحل القديمة أوّلًا — أو علّم «لا بضاعة قديمة» في الرصيد الافتتاحي",
   opening_balance_first: "أدخل الرصيد الافتتاحي واحفظه أوّلًا",
   go_live_pending: "طلب بدء التشغيل عند الإدارة",
+  already_reversed: "عُكس هذا التحويل من قبل",
   already_live: "الفرع يعمل فعلًا",
   staff_by_hq: "إضافة الموظفين وصلاحياتهم من الإدارة المركزية",
   approval_not_found: "طلب الاعتماد غير موجود",
@@ -6649,6 +6650,25 @@ export default function GoldInventoryApp() {
       return null;
     }
   };
+  // التحويل بين نقد الخزنة وشبكتها (1110 ↔ 1120) وعكسه
+  const handleSafeNetTransfer = async (direction, amount, note) => {
+    const amt = Number(amount);
+    if (!(amt > 0)) return null;
+    try {
+      const res = await api.safe.cashNetwork({ direction, amount: amt, note: note || null });
+      setSafeTx((prev) => [normalizeCashTxRow(res.inTx), normalizeCashTxRow(res.outTx), ...prev]);
+      flashToast(direction === "to_network" ? "حُوِّل من النقد إلى الشبكة" : "حُوِّل من الشبكة إلى النقد");
+      return res;
+    } catch (err) { flashToast(apiErrorMessage(err, "تعذّر التحويل")); return null; }
+  };
+  const handleReverseSafeNet = async (id) => {
+    try {
+      const res = await api.safe.reverseCashNetwork(id);
+      setSafeTx((prev) => [normalizeCashTxRow(res.inTx), normalizeCashTxRow(res.outTx), ...prev]);
+      flashToast("عُكس التحويل");
+      return res;
+    } catch (err) { flashToast(apiErrorMessage(err, "تعذّر العكس")); return null; }
+  };
   // ⚠ حُوِّلت للباك إند: POST /safe/cash (حركة نقد يدوية مباشرة بالخزنة).
   const handleAddSafeTx = async (type, amount, note, method, category) => {
     const amt = Number(amount);
@@ -8296,6 +8316,8 @@ export default function GoldInventoryApp() {
             onCashOut={() => setCashModalType("out")}
             onTransferToSafe={handleTransferToSafe}
             onTransferSafeToDaily={handleTransferSafeToDaily}
+            onSafeNetTransfer={handleSafeNetTransfer}
+            onReverseSafeNet={handleReverseSafeNet}
             dailyCustody={dailyCustody}
             openCustodySession={openCustodySession}
             onOpenCustody={handleOpenDailyCustody}
