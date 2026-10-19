@@ -39,6 +39,7 @@ const NAV_REGISTRY = [
   { id: "workday", label: "يوم العمل", icon: Sun },
   { id: "scrapIntake", label: "استلام الكسر", icon: Coins },
   { id: "scrapCustody", label: "عهدة الكسر", icon: Send },
+  { id: "workshop", label: "الورشة", icon: Hammer },
   { id: "itemEdit", label: "تعديل القطع", icon: Wrench },
   { id: "categories", label: "التصنيفات", icon: Grid },
   { id: "conversions", label: "التحويلات", icon: ArrowLeftRight },
@@ -138,7 +139,7 @@ const NAV_BUNDLES = [
     label: "الكسر",
     icon: Flame,
     hint: "الاستلام والعهدة والسجل",
-    items: ["scrapIntake", "scrapCustody", "scrap"],
+    items: ["scrapIntake", "scrapCustody", "workshop", "scrap"],
   },
   {
     id: "grp_money",

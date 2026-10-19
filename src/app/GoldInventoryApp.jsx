@@ -417,6 +417,7 @@ import { ReorderPage } from "../screens/ReorderPage.jsx";
 import { BranchTransfersPage } from "../screens/BranchTransfersPage.jsx";
 import { GiftCardsPage } from "../screens/GiftCardsPage.jsx";
 import { PieceInquiryPage } from "../screens/PieceInquiryPage.jsx";
+import { WorkshopPage } from "../screens/WorkshopPage.jsx";
 import { CodingReportPage } from "../screens/CodingReportPage.jsx";
 import { QueryBuilderPage } from "../screens/QueryBuilderPage.jsx";
 import { FullStatementsPage } from "../screens/FullStatementsPage.jsx";
@@ -1905,6 +1906,7 @@ export default function GoldInventoryApp() {
         if (res?.approvalPending) { notePendingApproval(res.approvalPending); return false; }
       } else if (ap.kind === "safe_audit") await api.safe.audit(p);
       else if (ap.kind === "go_live") { await api.setupApi.goLive({ ...(ap.payload || {}), approvalId: ap.id }); refreshSetup(); }
+      else if (ap.kind === "workshop_wastage") { const { jobId, ...body } = ap.payload || {}; await api.workshopApi.receive(jobId, { ...body, approvalId: ap.id }); }
       else if (ap.kind === "item_uncode") { if (!(await handleUncodeUnits(ap.payload?.codes || [], ap.payload?.reason || "", ap.id))) return false; }
       else if (ap.kind === "label_reprint") {
         const r = await api.labelReprint({ ...(ap.payload || {}), approvalId: ap.id });
@@ -2944,6 +2946,8 @@ export default function GoldInventoryApp() {
     }
     // الفواتير المعلّقة وعروض الأسعار تتبع البيع: من يبيع يعلّق ويستأنف (الخادم يحرسها بصفحة البيع)
     if (tabs.includes("sales") && !more.includes("saleDrafts")) more.push("saleDrafts");
+    // الورشة تتبع عهدة الكسر (والخادم يحرسها بالصفحة نفسها)
+    if (more.includes("scrapCustody") && !more.includes("workshop")) more.push("workshop");
     // مسرد المصطلحات للجميع
     if (!more.includes("glossary")) more.push("glossary");
     // طلباتي للإدارة تتبع الاعتمادات: من يرى الاعتمادات يرى ما رُفع منها للإدارة
@@ -9456,6 +9460,10 @@ export default function GoldInventoryApp() {
             onBack={() => setMorePage(null)}
             flashToast={flashToast}
           />
+        )}
+        {morePage === "workshop" && (
+          <WorkshopPage settings={appSettings} price24={Number(priceData.current) || 0} currency={priceData.currency} flashToast={flashToast}
+            onPending={notePendingApproval} onBack={() => setMorePage(null)} />
         )}
         {morePage === "scrapCustody" && (
           <ScrapCustodyPage

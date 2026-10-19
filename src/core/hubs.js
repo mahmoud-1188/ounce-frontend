@@ -19,7 +19,7 @@ const BRANCH_HUBS = [
     ] },
   { key: "scrap", title: "الكسر والموردون", icon: Flame,
     tabs: [
-      { key: "scrap", label: "الكسر", views: ["scrapIntake", "scrapCustody", "scrap"],
+      { key: "scrap", label: "الكسر", views: ["scrapIntake", "scrapCustody", "workshop", "scrap"],
         labels: { scrapIntake: "استلام", scrapCustody: "في العهدة والتكسير", scrap: "السجل" } },
       { key: "suppliers", label: "الموردون والمكاتب", views: ["suppliers", "officeLedger", "taskirat", "supplierLedger"],
         labels: { suppliers: "الموردون", officeLedger: "المكاتب", taskirat: "التسكير", supplierLedger: "دفتر الموردين" } },

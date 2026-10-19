@@ -819,6 +819,12 @@ export const fixedExpensesApi = {
 };
 
 // إعادة طباعة ملصق أو استبدال رقاقة بموافقة (migration 076)
+// الورشة ونسبة الهدر (migration 084)
+export const workshopApi = {
+  list: () => apiFetch("/workshop/jobs"),
+  issue: (body) => apiFetch("/workshop/jobs", { method: "POST", body }),
+  receive: (id, body) => apiFetch(`/workshop/jobs/${id}/receive`, { method: "POST", body }),
+};
 // مراقبة الأعطال (migration 082): بلاغ العطل يصل الإدارة — بلا انتظارٍ ولا رسالة خطأ إن فشل
 export const reportClientError = (body) => (authToken ? fetchApi("/client-errors", { method: "POST", body }).catch(() => null) : Promise.resolve(null));
 export const labelReprint = (body) => apiFetch("/items/units/reprint", { method: "POST", body });
