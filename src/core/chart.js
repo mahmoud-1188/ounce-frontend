@@ -250,6 +250,12 @@ const CHART_OF_ACCOUNTS = [
   // فرقٌ بين الدفتري والمتحصّل. خلطهما يُخفي جودة قرار الشراء.
   { code: "6810", name: "خسائر استبعاد أصول", parent: "6000", unit: "currency",
     nature: "debit", statement: "income" },
+  // حسابات الخسائر وفروق العملة (migration 075) — قيد تسويةٍ يدوي وحده
+  { code: "1380", name: "تأمينات لدى الغير", parent: "1300", unit: "currency", nature: "debit", statement: "balance" },
+  { code: "1385", name: "ضرائب مخصومة من المنبع — مستردّة", parent: "1300", unit: "currency", nature: "debit", statement: "balance" },
+  { code: "4370", name: "أرباح فروق العملة", parent: "4300", unit: "currency", nature: "credit", statement: "income" },
+  { code: "6820", name: "خسائر فروق العملة", parent: "6000", unit: "currency", nature: "debit", statement: "income" },
+  { code: "6830", name: "خسائر أخرى", parent: "6000", unit: "currency", nature: "debit", statement: "income" },
 
   { code: "7000", name: "حسابات نظامية", parent: null, unit: "both", nature: "debit", statement: "offBalance", group: true },
   { code: "7100", name: "ذهب أمانة لدى المحل", parent: "7000", unit: "gram", nature: "debit", statement: "offBalance", note: "ملك العميل — لا يدخل الميزانية" },
