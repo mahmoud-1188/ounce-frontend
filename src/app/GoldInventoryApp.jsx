@@ -9988,6 +9988,10 @@ export default function GoldInventoryApp() {
       )}
       {showNewSale && (
         <NewSaleModal
+            sellerCommission={commissions?.[currentUser?.id] ? {
+              rule: commissions[currentUser.id],
+              monthSales: sales.filter((x) => !x.voided && x.sellerId === currentUser.id && String(x.date).slice(0, 7) === new Date().toISOString().slice(0, 7)),
+            } : null}
             settings={appSettings}
             role={role}
           customers={customers}

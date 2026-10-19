@@ -5,6 +5,7 @@ import { CARD_NETWORKS, PAYMENT_METHODS } from "../core/money-rules.js";
 import { cardFeeOf, categoryLabel, epcHexToCode, inputStyle, isPartial, itemLabel, onlineBlockReason, readPlateEpc, remainingQty, rfidSettingsFor, unitCurrentValue, useNhrReader } from "../domain/helpers.js";
 import { RFID_DEFAULTS } from "../core/constants.js";
 import { SaleTotalsBar } from "../ui/SaleTotalsBar.jsx";
+import { computeCommission } from "../domain/computeCommission.js";
 import { sanitizeNumeric } from "../domain/sanitizeNumeric.js";
 import { tradeInValue } from "../domain/tradeInValue.js";
 import { BindEpcSheet } from "./BindEpcSheet.jsx";
@@ -21,7 +22,7 @@ const SALE_AUTO_ADD_MS = 300;
 function NewSaleModal({ activeItems, priceData,
   // ⚠ العملة كانت غائبة عن التوقيع: البدل يستخدمها فيسقط بـ
   // «currency is not defined» — والنافذة تُفرَغ بلا رسالة.
-  currency = "ر.س", initialItemId, initialCustomerId = null, initialDraft = null, onHold = null, taxEnabled, taxRate, settings = {}, role, customers = [], onAddCustomer = null, customOrder = null, reservations = [], dailyCash = null, onClose, onConfirm, onBindEpc }) {
+  currency = "ر.س", initialItemId, initialCustomerId = null, initialDraft = null, onHold = null, taxEnabled, taxRate, settings = {}, role, customers = [], onAddCustomer = null, customOrder = null, reservations = [], dailyCash = null, onClose, onConfirm, onBindEpc, sellerCommission = null }) {
   const [customerId, setCustomerId] = useState(customOrder?.customerId || initialCustomerId || initialDraft?.payload?.customerId || "");
   // منتقي العميل: بحثٌ بالاسم أو الجوال، و«+ عميل جديد» يُضاف ويُختار دون مغادرة الفاتورة
   const [custQuery, setCustQuery] = useState("");
@@ -354,6 +355,20 @@ function NewSaleModal({ activeItems, priceData,
     }
     return { pieces, weight: roundW(weight), byKarat: [...byK].map(([karat, w]) => ({ karat, weight: roundW(w) })), total, unpricedPieces: unpriced };
   }, [selection, activeItems, total]);
+  // عمولة البائع لحظيًّا: من هذه الفاتورة، ورصيد الشهر، وما بقي للهدف — بقاعدة تقرير البائعين نفسها
+  const commission = useMemo(() => {
+    if (!sellerCommission?.rule || settings?.posCommission === false) return null;
+    const rule = sellerCommission.rule, month = sellerCommission.monthSales || [];
+    const lines = Object.entries(selection).map(([id, v]) => {
+      const it = activeItems.find((i) => i.id === id) || {};
+      return { unitPrice: Number(v.unitPrice) || 0, quantity: Number(v.qty) || 1, costPerGramSnapshot: Number(it.costPerGram) || 0, weightSnapshot: Number(it.weight) || 0, workmanshipSnapshot: Number(it.workmanship) || 0 };
+    });
+    const before = computeCommission(rule, month, frozenPrice);
+    const after = computeCommission(rule, [...month, { total, lines }], frozenPrice);
+    const target = Number(rule.target) || 0;
+    return { show: true, invoice: Math.max(0, Math.round((after.commission - before.commission) * 100) / 100), month: Math.round(before.commission * 100) / 100,
+      count: before.count, target, metTarget: after.metTarget, toTarget: Math.max(0, Math.round((target - after.salesTotal) * 100) / 100) };
+  }, [sellerCommission, settings?.posCommission, selection, activeItems, total, frozenPrice]);
   const linesOf = () => Object.entries(selection).map(([itemId, v]) => {
     const codes = scannedRef.current[itemId] || [];
     return { itemId, quantity: v.qty, unitPrice: Number(v.unitPrice) || 0, ...(codes.length && codes.length === v.qty ? { unitCodes: codes } : {}) };
@@ -711,7 +726,7 @@ function NewSaleModal({ activeItems, priceData,
         })}
       </div>
 
-      <SaleTotalsBar totals={totals} currency={currency} taxIncluded={taxApplicable} />
+      <SaleTotalsBar totals={totals} currency={currency} taxIncluded={taxApplicable} commission={commission} />
 
       {/* ── كسر البدل ── */}
       {paymentMethod === "scrap" && !splitPay && (() => {

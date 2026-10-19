@@ -11,7 +11,7 @@ function piecesPhrase(n) {
 }
 
 /// شريط الإجمالي أسفل الفاتورة: عدد القطع ووزنها بالعيار والإجمالي — ثابتٌ أمام البائع وهو يمسح
-function SaleTotalsBar({ totals, currency = "ر.س", taxIncluded = false }) {
+function SaleTotalsBar({ totals, currency = "ر.س", taxIncluded = false, commission = null }) {
   if (!totals || !(totals.pieces > 0)) return null;
   const many = totals.byKarat.length > 1;
   const only = totals.byKarat[0];
@@ -40,6 +40,13 @@ function SaleTotalsBar({ totals, currency = "ر.س", taxIncluded = false }) {
           </p>
         </div>
       </div>
+      {commission && commission.show && (
+        <p data-sale-footer-commission style={{ color: "var(--text2)", margin: "4px 0 0" }} className="text-[11px]">
+          عمولتك من هذه الفاتورة ≈ <b style={{ color: "var(--accent)" }}>{fmtMoney(commission.invoice)} {currency}</b>
+          {" · "}هذا الشهر {fmtMoney(commission.month)} {currency} من {commission.count} فاتورة
+          {commission.target > 0 && !commission.metTarget ? ` · بقي للهدف ${fmtMoney(commission.toTarget)} ${currency}` : ""}
+        </p>
+      )}
       {totals.unpricedPieces > 0 && (
         <p data-sale-footer-unpriced style={{ color: "var(--bad)", margin: "2px 0 0" }} className="text-[11px]">
           بلا سعرٍ بعد: {piecesPhrase(totals.unpricedPieces)} — لا تدخل الإجمالي
