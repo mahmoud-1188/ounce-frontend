@@ -3227,6 +3227,26 @@ export default function GoldInventoryApp() {
   // أو cash_tx + قيد يومية settle_office_cash (وضع cash)، بمعاملة واحدة
   // على السيرفر، مقيَّد بصلاحية المدير (requireManager) لا الفرونت إند
   // وحده.
+  const OFFICE_HOLD_ERRORS = { insufficient_holding: "أكثر من ذهبنا المحفوظ عند المكتب", insufficient_pool_balance: "رصيد الخزنة لا يكفي" };
+  const handleOfficeHold = async (officeId, f) => {
+    const off = (taskirOffices || []).find((o) => o.id === officeId);
+    const body = f.action === "buy" ? { karat: f.karat, weight: Number(f.weight), pricePerGram: Number(f.price), source: f.source }
+      : { karat: f.karat, weight: Number(f.weight), ...(f.action === "to_supplier" ? { supplierId: f.supplierId } : {}) };
+    try {
+      const r = await api.taskirApi.officeHold(officeId, f.action, body);
+      const officeTxRes = await api.taskirApi.officeTx(officeId);
+      setTaskirOfficeTx((prev) => [...normalizeTaskirOfficeTx(officeTxRes.officeTx || []), ...prev.filter((t) => t.officeId !== officeId)]);
+      const w = `${fmtW(Number(f.weight))} جم عيار ${f.karat}`;
+      flashToast(f.action === "buy" ? `أُودع ${w} عند ${off?.name || "المكتب"} — ${fmtMoney(r.cost)}`
+        : f.action === "withdraw" ? `سُحب ${w} من ${off?.name || "المكتب"} إلى الخزنة` : `سُدّد المورد ${w} من ذهبنا عند ${off?.name || "المكتب"}`);
+      loadBootstrap(currentUser).catch(() => {});
+      return true;
+    } catch (err) {
+      const code = err?.body?.error;
+      flashToast(OFFICE_HOLD_ERRORS[code] || apiErrorMessage(err, "تعذّر تنفيذ الحركة"));
+      return false;
+    }
+  };
   const handleSettleOffice = async (officeId, form) => {
     const off = (taskirOffices || []).find((o) => o.id === officeId);
     if (!off) return null;
@@ -8951,6 +8971,7 @@ export default function GoldInventoryApp() {
             branchName={branchIdentity?.name}
             canManage={role === "manager"}
             onSettle={handleSettleOffice}
+            onHold={handleOfficeHold}
             onAddOffice={handleAddTaskirOffice}
             onBack={() => setMorePage(null)}
             flashToast={flashToast}

@@ -497,6 +497,9 @@ const taskirApi = {
   officeTx: (officeId) => apiFetch(`/taskir-offices/${officeId}/tx`),
   settleOffice: (officeId, payload) =>
     apiFetch(`/taskir-offices/${officeId}/settle`, { method: "POST", body: payload }),
+  // ذهبنا المحفوظ عند المكتب (migration 080): buy · withdraw · to-supplier
+  officeHold: (officeId, action, payload) =>
+    apiFetch(`/taskir-offices/${officeId}/hold/${action === "to_supplier" ? "to-supplier" : action}`, { method: "POST", body: payload }),
 };
 
 // ── إخراج بضاعة من النظام ──
