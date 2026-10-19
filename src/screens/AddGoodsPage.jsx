@@ -19,7 +19,7 @@ import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 
 function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions = [], onSetPrinted, onCreateSupplierLot, onDeleteItem, onBack, flashToast,
   openingMode = false, onCreateOpeningLot = null, currency = "ر.س", price24 = 0, modules = {},
-  codingModel = "both", onSendLotToHq = null, onRecallLot = null, printerCfg = null, onSavePrinter = null, onBindEpc = null }) {
+  codingModel = "both", onSendLotToHq = null, onRecallLot = null, printerCfg = null, onSavePrinter = null, onBindEpc = null, onUncode = null }) {
   const gemOn = !!modules?.gemstones?.on, watchOn = !!modules?.watches?.on;
   const defWarranty = Number(modules?.watches?.cfg?.warrantyMonths) || 24;
   const [detailItem, setDetailItem] = useState(null);
@@ -613,7 +613,7 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
                 <div className="flex flex-col gap-2">
                   {mine.map((it) => (
                     <Card key={it.id} style={{ padding: 10 }}>
-                      <button onClick={() => setDetailItem(it)} className="w-full text-right">
+                      <button data-coded-item={it.id} onClick={() => setDetailItem(it)} className="w-full text-right">
                         <div className="flex items-center gap-2">
                           <Hallmark karat={it.karat} size={30} />
                           <span style={{ color: "var(--text)" }} className="text-xs flex-1">
@@ -640,7 +640,8 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
         })()}
       </div>
       {detailItem && (
-        <ItemDetailModal item={detailItem} lots={lots} suppliers={suppliers} onClose={() => setDetailItem(null)} />
+        <ItemDetailModal item={detailItem} lots={lots} suppliers={suppliers} onClose={() => setDetailItem(null)}
+          onUncode={onUncode ? async (codes, reason) => { const ok = await onUncode(codes, reason); if (ok) setDetailItem(null); } : null} />
       )}
     </div>
   );

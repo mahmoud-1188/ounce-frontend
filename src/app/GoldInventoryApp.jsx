@@ -1831,6 +1831,32 @@ export default function GoldInventoryApp() {
       return !!res?.ok;
     } catch (err) { flashToast(apiErrorMessage(err, "تعذّر طلب إعادة الطباعة")); return false; }
   };
+  const UNCODE_ERRORS = {
+    unit_not_available: "القطعة مباعة أو مصروفة أو معلّقة", unit_in_transfer: "القطعة في تحويلٍ لم يُستلم",
+    not_from_lot: "ليست من دفعة شراء — لا يعود وزنها لدفعة", item_reserved: "القطعة محجوزة لعميل",
+    lot_closed: "دفعتها مقفلة وفرقها مرحَّل — لا يعود إليها وزن", lot_at_hq: "دفعتها عند الإدارة للتكويد",
+    opening_posted: "قطعة رصيدٍ افتتاحي رُحِّل — تُلغى في فترة التجهيز وحدها", weight_adjusted: "عُدّل وزنها بإصلاحٍ أو تسوية",
+    unit_in_stocktake: "القطعة في فرق جرد", stocktake_locked: "المخزون مقفل للجرد", reason_required: "اكتب سبب إلغاء التكويد",
+  };
+  const handleUncodeUnits = async (codes, reason, approvalId = null) => {
+    try {
+      const res = await api.uncodeUnits({ codes, reason, ...(approvalId ? { approvalId } : {}) });
+      if (res?.approvalPending) {
+        notePendingApproval(res.approvalPending);
+        flashToast(`أُرسل طلب إلغاء التكويد ${res.approvalPending.ref} — يُنفَّذ حين يُعتمد`);
+        return false;
+      }
+      const one = res.pieces === 1 ? res.codes[0] : `${res.pieces} قطع`;
+      flashToast(`أُلغي تكويد ${one} — ${fmtW(res.weight)} جم عادت لـ${(res.lots || []).join("، ") || "دفعتها"}${res.printed ? " · انزع ملصقها القديم" : ""}`,
+        { actions: [{ label: "كوّدها الآن", go: () => openPage("addGoods") }] });
+      loadBootstrap(currentUser).catch(() => {});
+      return true;
+    } catch (err) {
+      const code = err?.body?.error || err?.code;
+      flashToast(UNCODE_ERRORS[code] ? `${err?.body?.code ? `${err.body.code}: ` : ""}${UNCODE_ERRORS[code]}` : apiErrorMessage(err, "تعذّر إلغاء التكويد"));
+      return false;
+    }
+  };
   const handleGoLive = async (approvalId = null) => {
     try {
       const res = await api.setupApi.goLive({ startDate: new Date().toISOString().slice(0, 10), ...(approvalId ? { approvalId } : {}) });
@@ -1863,6 +1889,7 @@ export default function GoldInventoryApp() {
         if (res?.approvalPending) { notePendingApproval(res.approvalPending); return false; }
       } else if (ap.kind === "safe_audit") await api.safe.audit(p);
       else if (ap.kind === "go_live") { await api.setupApi.goLive({ ...(ap.payload || {}), approvalId: ap.id }); refreshSetup(); }
+      else if (ap.kind === "item_uncode") { if (!(await handleUncodeUnits(ap.payload?.codes || [], ap.payload?.reason || "", ap.id))) return false; }
       else if (ap.kind === "label_reprint") {
         const r = await api.labelReprint({ ...(ap.payload || {}), approvalId: ap.id });
         (r.codes || []).forEach((c) => reprintPass.current.set(String(c).toUpperCase(), r.action));
@@ -8523,6 +8550,7 @@ export default function GoldInventoryApp() {
             printerCfg={printerCfg}
             onSavePrinter={handleSavePrinter}
             onBindEpc={bindEpcForPrint}
+            onUncode={handleUncodeUnits}
             onSendLotToHq={async (lot) => {
               if (!window.confirm(`إرسال الدفعة ${lot.ref || ""} للإدارة لتكوّدها؟ تبقى ملكك حتى تعود قطعًا.`)) return;
               try {
