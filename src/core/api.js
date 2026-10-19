@@ -802,3 +802,10 @@ export const setupApi = {
   saveOpening: (balance, noOldStock = false) => apiFetch("/setup/opening-balance", { method: "POST", body: { balance, noOldStock } }),
   goLive: (body = {}) => apiFetch("/setup/go-live", { method: "POST", body }),
 };
+
+// قوالب المصروفات الثابتة (migration 074)
+export const fixedExpensesApi = {
+  list: () => apiFetch("/fixed-expenses"),
+  create: (b) => apiFetch("/fixed-expenses", { method: "POST", body: b }),
+  update: (id, b) => apiFetch(`/fixed-expenses/${id}`, { method: "PATCH", body: b }),
+};

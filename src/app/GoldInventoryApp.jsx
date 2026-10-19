@@ -6849,6 +6849,8 @@ export default function GoldInventoryApp() {
         periodMonth: isPayroll ? entry.periodMonth || new Date().toISOString().slice(0, 7) : null,
         installments: entry.category === "advance" ? Number(entry.installments) || 1 : undefined,
         nameId: entry.nameId || null,
+        // مصروفٌ من قالبٍ ثابت: الخادم يعلّم شهره مسجَّلًا بعد نجاح القيد
+        ...(entry.fixedId ? { fixedId: entry.fixedId } : {}),
       });
       if (res.approvalPending) { notePendingApproval(res.approvalPending); return null; }
       const record = {

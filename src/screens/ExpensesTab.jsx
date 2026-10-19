@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { FixedExpensesCard } from "../ui/FixedExpensesCard.jsx";
 import { FileMinus, FileSpreadsheet, FileText, Plus } from "lucide-react";
 import * as XLSX from "xlsx";
 import { CATEGORY_TO_ACCOUNT } from "../core/chart.js";
@@ -150,6 +151,8 @@ function ExpensesTab({ expenseNames = [], users = [], onAddExpenseName, onDelete
       <h1 style={{ fontFamily: "'Cairo', sans-serif", color: "var(--text)" }} className="text-2xl font-extrabold mb-3">
         المصروفات
       </h1>
+
+      <FixedExpensesCard currency={currency} onAdd={onAdd} flashToast={flashToast} />
 
       <div className="grid grid-cols-3 gap-2 mb-3">
         {[
