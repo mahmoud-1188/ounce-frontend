@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Check, Coins, Link2, Printer, Puzzle, Settings2, ShieldCheck } from "lucide-react";
 import { APP_MODES, DEFAULT_APP_MODE, DEFAULT_SETTINGS } from "../core/constants.js";
 import { UI_LANGS, readUiLang, setUiLang } from "../domain/i18n.js";
+import { ACCOUNTING_MODES } from "../core/storePackage.js";
 import { KARATS, fmt, pricePerGram } from "../core/money.js";
 import { CARD_NETWORKS, DEFAULT_CARD_FEES, DEFAULT_MARGINS } from "../core/money-rules.js";
 import { THEMES, THEME_DESIGNS, applyTheme, designOfTheme, effectiveTheme, isDarkTheme } from "../core/theme.js";
@@ -823,6 +824,23 @@ function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSa
             <span>الصيغة الرسمية للمحاسبين والجهات الرسمية<span style={{ color: "var(--text3)" }} className="block text-[11px]">سندات قبض وصرف بالمبلغ كتابةً وثلاثة توقيعات (أصل وصورة)، وإشعار دائن للمرتجع، وفاتورة ضريبية كاملة لعميلٍ له رقم ضريبي</span></span>
             <input type="checkbox" data-official-print-toggle checked={!!settings.officialPrint} onChange={(e) => onSave({ ...settings, officialPrint: e.target.checked })} style={{ accentColor: "var(--accent)", width: 18, height: 18 }} />
           </label>
+        </Card>
+
+        {/* ── المحاسبة: بسيطة أو مفصّلة ── */}
+        <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">المحاسبة</p>
+        <Card style={{ padding: 14, marginBottom: 16 }} data-accounting-mode>
+          <div className="grid grid-cols-2 gap-2">
+            {Object.entries(ACCOUNTING_MODES).map(([id, m]) => {
+              const on = (settings.accountingMode === "simple" ? "simple" : "detailed") === id;
+              return (
+                <button key={id} type="button" data-accounting-mode-opt={id} onClick={() => onSave({ ...settings, accountingMode: id })} className="py-2 px-2 rounded-xl text-xs font-bold text-right"
+                  style={{ background: on ? "var(--accentBg)" : "var(--panel)", color: on ? "var(--accent)" : "var(--text2)", border: "1px solid var(--line)" }}>
+                  {m.label}<span style={{ color: "var(--text3)" }} className="block text-[10px] font-normal leading-4 mt-0.5">{m.hint}</span>
+                </button>
+              );
+            })}
+          </div>
+          <p style={{ color: "var(--text3)" }} className="text-[11px] mt-2">الشاشات تُخفى فقط — القيود تُسجَّل كما هي، والعودة إلى «مفصّلة» تُظهر كل شيء.</p>
         </Card>
 
         {/* ── عيار الاحتساب والمكافئ الذهبي ── */}

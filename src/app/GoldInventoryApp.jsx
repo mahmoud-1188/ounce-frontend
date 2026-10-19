@@ -342,7 +342,7 @@ import { PostSaleSheet } from "../modals/PostSaleSheet.jsx";
 import { HqRequestsPage } from "../screens/HqRequestsPage.jsx";
 import { StartHereCard, branchStartSteps } from "../ui/StartHereCard.jsx";
 import { GlossaryPage } from "../screens/GlossaryPage.jsx";
-import { ACCOUNTING_PAGES } from "../core/storePackage.js";
+import { ACCOUNTING_PAGES, SIMPLE_ACCOUNTING_HIDDEN } from "../core/storePackage.js";
 import { entityActionsSpec } from "../domain/entities.js";
 import { BudgetsPage } from "../screens/BudgetsPage.jsx";
 import { VatReturnPage } from "../screens/VatReturnPage.jsx";
@@ -2953,6 +2953,11 @@ export default function GoldInventoryApp() {
     if (storePackage === "no_accounting") {
       tabs = tabs.filter((id) => !ACCOUNTING_PAGES.includes(id));
       more = more.filter((id) => !ACCOUNTING_PAGES.includes(id));
+    }
+    // المحاسبة البسيطة (الإعدادات): الدفاتر التفصيلية تُخفى من القوائم، والقيود تبقى كما هي
+    if (appSettings?.accountingMode === "simple") {
+      tabs = tabs.filter((id) => !SIMPLE_ACCOUNTING_HIDDEN.includes(id));
+      more = more.filter((id) => !SIMPLE_ACCOUNTING_HIDDEN.includes(id));
     }
     return { ...base, allowedTabs: [...tabs, "more"], allowedMore: more };
   };
