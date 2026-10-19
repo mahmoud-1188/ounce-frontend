@@ -701,6 +701,7 @@ const hqTransactionsApi = {
   list: () => apiFetch("/branch/hq-transactions"),
   create: (payload) => apiFetch("/branch/hq-transactions", { method: "POST", body: payload }),
   receive: (id) => apiFetch(`/branch/hq-transactions/${id}/receive`, { method: "POST" }),
+  decideCapitalDraw: (id, decision, note = "") => apiFetch(`/branch/hq-transactions/${id}/capital-draw`, { method: "POST", body: { decision, note } }),
 };
 
 // ── قسم المحاسب والرقابة (migration 037) ──
