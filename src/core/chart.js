@@ -44,6 +44,7 @@ const CHART_OF_ACCOUNTS = [
     nature: "debit", statement: "balance" },
   { code: "1230", name: "كسر — بانتظار التصفية", parent: "1200", unit: "both", nature: "debit", statement: "balance" },
   { code: "1240", name: "ذهب لدى مكاتب التسكير", parent: "1200", unit: "both", nature: "debit", statement: "balance" },
+  { code: "1250", name: "ذهب لدى الورشة", parent: "1200", unit: "both", nature: "debit", statement: "balance" },
 
   { code: "1300", name: "المدينون", parent: "1000", unit: "currency", nature: "debit", statement: "balance", group: true },
   { code: "1310", name: "عملاء — مبيعات آجلة", parent: "1300", unit: "currency", nature: "debit", statement: "balance" },
@@ -151,6 +152,8 @@ const CHART_OF_ACCOUNTS = [
   { code: "5310", name: "هالك تصنيع", parent: "5300", unit: "both", nature: "debit", statement: "income" },
   { code: "5320", name: "ذهب مُضاف بالإصلاح", parent: "5300", unit: "both", nature: "debit", statement: "income" },
   { code: "5330", name: "عجز بالجرد", parent: "5300", unit: "both", nature: "debit", statement: "income" },
+  { code: "5350", name: "هدر الورشة — المسموح", parent: "5300", unit: "currency", nature: "debit", statement: "income" },
+  { code: "5360", name: "هدر الورشة — الزائد المعتمد", parent: "5300", unit: "currency", nature: "debit", statement: "income" },
 
   // ═══ ٦ المصروفات التشغيلية ═══
   { code: "6000", name: "المصروفات التشغيلية", parent: null, unit: "currency", nature: "debit", statement: "income", group: true },
@@ -975,7 +978,7 @@ const JOURNALS = [
 
 /// الحسابات الوزنية المسموح بها — أي حساب خارجها في قيد وزني خطأ.
 
-const WEIGHT_ACCOUNTS = ["1210", "1220", "1230", "1240", "2110", "7100", "7200"];
+const WEIGHT_ACCOUNTS = ["1210", "1220", "1230", "1240", "1250", "2110", "7100", "7200"];
 
 /// يبني قيد الوزن من قاعدة عملية. يُعيد سطرين: خروج ودخول.
 
