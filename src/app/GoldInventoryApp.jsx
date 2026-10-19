@@ -386,6 +386,7 @@ import { ItemEditPage } from "../screens/ItemEditPage.jsx";
 import { NavCustomizePage } from "../screens/NavCustomizePage.jsx";
 import { OpeningBalancePage } from "../screens/OpeningBalancePage.jsx";
 import { SetupGoLivePanel } from "../ui/SetupGoLivePanel.jsx";
+import { setGoldEqContext } from "../ui/GoldEq.jsx";
 import { HomeScreen } from "../ui/HomeScreen.jsx";
 import { OpeningComparePage } from "../screens/OpeningComparePage.jsx";
 import { PartnersPage } from "../screens/PartnersPage.jsx";
@@ -7706,6 +7707,8 @@ export default function GoldInventoryApp() {
       if (!(e instanceof api.ApiError && e.status === 423)) setBranchLock(null);
     }
   };
+  // المكافئ الذهبي بجانب المبالغ: سعر اليوم وعيار الاحتساب من الإعدادات (21 افتراضًا)
+  setGoldEqContext({ price24: Number(priceData.current) || 0, karat: Number(appSettings?.baseKarat) === 24 ? 24 : 21, on: appSettings?.goldEqOn !== false });
   const lockOverlay = branchLock ? (
     <div className="fixed inset-0 flex items-center justify-center px-6" dir="rtl" style={{ background: "rgba(10,9,8,.96)", zIndex: 9998 }}>
       <Card style={{ padding: 18, maxWidth: 360, width: "100%", border: "1px solid var(--badLine)" }}>

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { GoldEq } from "../ui/GoldEq.jsx";
 import { FixedExpensesCard } from "../ui/FixedExpensesCard.jsx";
 import { FileMinus, FileSpreadsheet, FileText, Plus } from "lucide-react";
 import * as XLSX from "xlsx";
@@ -177,7 +178,7 @@ function ExpensesTab({ expenseNames = [], users = [], onAddExpenseName, onDelete
         </p>
         <p style={{ fontFamily: "'Cairo', sans-serif", color: "var(--bad)" }} className="text-2xl font-extrabold">
           {currency}
-          {fmtMoney(periodTotal)}
+          {fmtMoney(periodTotal)}<GoldEq v={periodTotal} />
         </p>
         <p style={{ color: "var(--text3)" }} className="text-[11px] mt-1">
           {filtered.length} عملية · ثابتة {currency}

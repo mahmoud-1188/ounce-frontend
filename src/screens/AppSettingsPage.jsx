@@ -787,6 +787,24 @@ function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSa
 
         {/* عمولة المدير أُلغيت نهائيًّا — والوضع الخفي أُلغي؛ القطع المعلّقة القديمة تُقرأ وتُباع كما كانت */}
 
+        {/* ── عيار الاحتساب والمكافئ الذهبي ── */}
+        <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">عيار الاحتساب</p>
+        <Card style={{ padding: 14, marginBottom: 16 }} data-base-karat>
+          <p style={{ color: "var(--text2)" }} className="text-[11px] mb-2">أساس البرنامج الربح بالذهب: كل تحويلٍ للذهب ومكافئ كل مبلغ بهذا العيار.</p>
+          <div className="grid grid-cols-2 gap-2 mb-2">
+            {[21, 24].map((k) => (
+              <button key={k} type="button" data-karat={k} onClick={() => onSave({ ...settings, baseKarat: k })} className="py-2 rounded-xl text-xs font-bold"
+                style={{ background: (Number(settings.baseKarat) === 24 ? 24 : 21) === k ? "var(--accentBg)" : "var(--panel)", color: (Number(settings.baseKarat) === 24 ? 24 : 21) === k ? "var(--accent)" : "var(--text2)", border: "1px solid var(--line)" }}>
+                عيار {k}
+              </button>
+            ))}
+          </div>
+          <label className="flex items-center gap-2 text-[11px]" style={{ color: "var(--text2)" }}>
+            <input type="checkbox" data-gold-eq-toggle checked={settings.goldEqOn !== false} onChange={(e) => onSave({ ...settings, goldEqOn: e.target.checked })} style={{ accentColor: "var(--accent)" }} />
+            اعرض بجانب كل مبلغ ما يعادله ذهبًا بسعر اليوم (بخطٍّ صغير)
+          </label>
+        </Card>
+
         {/* ── واتساب المحل ── */}
         <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">واتساب المحل</p>
         <Card style={{ padding: 14, marginBottom: 16 }}>

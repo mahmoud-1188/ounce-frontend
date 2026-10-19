@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { GoldEq } from "../ui/GoldEq.jsx";
 import { ArrowDownCircle, ArrowUpCircle, Lock } from "lucide-react";
 import { PURITY, fine24, fmt, fmtW } from "../core/money.js";
 import { METHOD_LABELS } from "../core/money-rules.js";
@@ -107,7 +108,7 @@ function CashTab({
             </p>
             <p style={{ fontFamily: "'Cairo', sans-serif", color: dailyBalance.total >= 0 ? "var(--accent)" : "var(--bad)" }} className="text-3xl font-extrabold">
               {currency}
-              {fmt(dailyBalance.total, 0)}
+              {fmt(dailyBalance.total, 0)}<GoldEq v={dailyBalance.total} />
             </p>
             <div className="grid grid-cols-2 gap-2 mt-3">
               <div className="px-2 py-2 rounded-xl" style={{ background: "var(--panel)", border: "1px solid var(--line)" }}>
@@ -279,7 +280,7 @@ function CashTab({
             </p>
             <p style={{ fontFamily: "'Cairo', sans-serif", color: safeBalance.total >= 0 ? "var(--accent)" : "var(--bad)" }} className="text-3xl font-extrabold">
               {currency}
-              {fmt(safeBalance.total, 0)}
+              {fmt(safeBalance.total, 0)}<GoldEq v={safeBalance.total} />
             </p>
             <div className="grid grid-cols-2 gap-3 mt-3">
               <div className="px-3 py-2 rounded-xl" style={{ background: "var(--panel)", border: "1px solid var(--line)" }}>

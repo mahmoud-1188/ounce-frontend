@@ -1,5 +1,6 @@
 import React from "react";
 import { fmtMoney, fmtW } from "../core/money.js";
+import { GoldEq } from "./GoldEq.jsx";
 
 /// «قطعة واحدة · قطعتان · 3 قطع · 11 قطعة»
 function piecesPhrase(n) {
@@ -35,7 +36,7 @@ function SaleTotalsBar({ totals, currency = "ر.س", taxIncluded = false }) {
         <div style={{ flexShrink: 0, textAlign: "end" }}>
           <p style={{ color: "var(--text2)", margin: 0 }} className="text-[11px]">{taxIncluded ? "الإجمالي شامل الضريبة" : "الإجمالي"}</p>
           <p data-sale-footer-total style={{ color: "var(--accent)", margin: 0, fontFamily: "'Cairo', sans-serif" }} className="text-lg font-extrabold whitespace-nowrap">
-            {fmtMoney(totals.total)} {currency}
+            {fmtMoney(totals.total)} {currency}<GoldEq v={totals.total} />
           </p>
         </div>
       </div>
