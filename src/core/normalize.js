@@ -605,6 +605,7 @@ function normalizeReservations(rows) {
     // «محجوز حتى» وخطّة التقسيط (migration 069)
     holdUntil: r.hold_until ? String(r.hold_until).slice(0, 10) : "",
     plan: r.plan || null,
+    unitCodes: r.unit_codes || [],
     saleId: r.sale_id || null,
     remaining: r.remaining == null ? null : toMoney(r.remaining),
     description: r.description || "",

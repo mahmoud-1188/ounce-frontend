@@ -1,7 +1,8 @@
 import React, { useState } from "react";
-import { BookmarkCheck, Plus } from "lucide-react";
+import { BookmarkCheck, Camera, Plus } from "lucide-react";
 import { fmt, fmtMoney, fromHalalas, halalas } from "../core/money.js";
 import { inputStyle, itemLabel } from "../domain/helpers.js";
+import { CameraScanner } from "../ui/CameraScanner.jsx";
 import { Card } from "../ui/Card.jsx";
 import { EmptyState } from "../ui/EmptyState.jsx";
 import { Field } from "../ui/Field.jsx";
@@ -52,10 +53,30 @@ function holdState(r, today = todayYmd()) {
   return { state: days < 0 ? "expired" : days <= 1 ? "due" : "ok", days };
 }
 
-function ReservationsPage({ reservations, customers, activeItems, currency, canManage, onAdd, onCancel, onPay, onHold, onBack }) {
+function ReservationsPage({ reservations, customers, activeItems, currency, canManage, onAdd, onCancel, onPay, onHold, onDeliver = null, onBack }) {
   const [showAdd, setShowAdd] = useState(false);
   const [customerId, setCustomerId] = useState("");
+  const [custQ, setCustQ] = useState("");
   const [itemId, setItemId] = useState("");
+  // القطعة بعينها تُمسح (أو تُختار) فتُسجَّل على الحجز برمزها
+  const [unitCode, setUnitCode] = useState("");
+  const [scan, setScan] = useState("");
+  const [scanMsg, setScanMsg] = useState("");
+  const [cam, setCam] = useState(false);
+  const freeUnits = (it) => (it?.units || []).filter((u) => !u.sold && !u.issued && !u.held);
+  const pickByCode = (raw) => {
+    const code = String(raw || "").trim().toUpperCase();
+    if (!code) return;
+    const it = activeItems.find((x) => (x.units || []).some((u) => String(u.code).toUpperCase() === code || (u.epc && String(u.epc).toUpperCase() === code)));
+    const u = it && (it.units || []).find((x) => String(x.code).toUpperCase() === code || (x.epc && String(x.epc).toUpperCase() === code));
+    if (!it || !u) { setScanMsg(`لا قطعة بالرمز ${code}`); return; }
+    if (u.sold || u.issued || u.held) { setScanMsg(`القطعة ${u.code} ليست على الرفّ`); return; }
+    if (it.reservedFor) { setScanMsg(`القطعة ${u.code} محجوزةٌ سلفًا`); return; }
+    setItemId(it.id); setUnitCode(u.code); setScan(""); setScanMsg(`✓ ${itemLabel(it)} — ${u.code}`);
+  };
+  const custList = custQ.trim()
+    ? customers.filter((c) => `${c.name} ${c.phone || ""}`.toLowerCase().includes(custQ.trim().toLowerCase()))
+    : customers;
   const [description, setDescription] = useState("");
   const [total, setTotal] = useState("");
   const [deposit, setDeposit] = useState("");
@@ -109,27 +130,56 @@ function ReservationsPage({ reservations, customers, activeItems, currency, canM
             </button>
           ) : (
             <Card style={{ padding: 14, marginBottom: 16 }}>
-              <Field label="العميل (إجباري)">
-                <select style={inputStyle} value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
+              <p style={{ color: "var(--accent)" }} className="text-[12px] font-bold mb-2">① العميل ② القطعة ③ المبلغ ④ احفظ</p>
+              <Field label="① العميل (إجباري)">
+                <input style={{ ...inputStyle, marginBottom: 6 }} value={custQ} onChange={(e) => setCustQ(e.target.value)} placeholder="ابحث بالاسم أو الجوال" aria-label="ابحث عن العميل" />
+                <select style={inputStyle} value={customerId} onChange={(e) => setCustomerId(e.target.value)} aria-label="العميل">
                   <option value="">اختر العميل...</option>
-                  {customers.map((c) => (
+                  {custList.slice(0, 300).map((c) => (
                     <option key={c.id} value={c.id}>{c.name}{c.phone ? ` — ${c.phone}` : ""}</option>
                   ))}
                 </select>
               </Field>
-              <Field label="القطعة المحجوزة (اختياري)">
-                <select style={inputStyle} value={itemId} onChange={(e) => setItemId(e.target.value)}>
+              <Field label="② القطعة — امسح رمزها (اختياري)">
+                <div className="flex gap-2">
+                  <input style={{ ...inputStyle, flex: 1 }} value={scan} onChange={(e) => { setScan(e.target.value); setScanMsg(""); }}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); pickByCode(scan); } }}
+                    placeholder="امسح الرقاقة أو اكتب الرمز ثم Enter" aria-label="رمز القطعة المحجوزة" data-rsv-scan />
+                  <button type="button" onClick={() => setCam(true)} aria-label="امسح بالكاميرا"
+                    style={{ minWidth: 44, minHeight: 44, borderRadius: 12, display: "grid", placeItems: "center", background: "var(--field)", border: "1px solid var(--line)" }}>
+                    <Camera size={18} color="var(--accent)" />
+                  </button>
+                </div>
+                {cam && <CameraScanner onScan={(c) => { setCam(false); pickByCode(c); }} onClose={() => setCam(false)} />}
+                {scanMsg && <p style={{ color: scanMsg.startsWith("✓") ? "var(--good)" : "var(--bad)", margin: "4px 0 0" }} className="text-[11px]" data-rsv-scan-msg>{scanMsg}</p>}
+              </Field>
+              <Field label="أو اخترها من القائمة">
+                <select style={inputStyle} value={itemId} onChange={(e) => { setItemId(e.target.value); setUnitCode(""); setScanMsg(""); }}>
                   <option value="">بلا قطعة محددة</option>
-                  {activeItems.slice(0, 200).map((it) => (
-                    <option key={it.id} value={it.id}>{itemLabel(it)}</option>
-                  ))}
+                  {activeItems.filter((it) => !it.reservedFor && freeUnits(it).length).slice(0, 200).map((it) => {
+                    const free = freeUnits(it);
+                    return <option key={it.id} value={it.id}>{itemLabel(it)} — {free[0].code}{free.length > 1 ? ` (+${free.length - 1})` : ""}</option>;
+                  })}
                 </select>
               </Field>
+              {(() => {
+                const it = activeItems.find((x) => x.id === itemId);
+                const free = freeUnits(it);
+                if (!it || free.length < 2) return null;
+                return (
+                  <Field label="رمز القطعة">
+                    <select style={inputStyle} value={unitCode} onChange={(e) => setUnitCode(e.target.value)}>
+                      <option value="">أوّل قطعةٍ متاحة ({free[0].code})</option>
+                      {free.map((u) => <option key={u.code} value={u.code}>{u.code}</option>)}
+                    </select>
+                  </Field>
+                );
+              })()}
               <Field label="الوصف (اختياري)">
                 <input style={inputStyle} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="مثال: طقم عيار 21 بالطلب" />
               </Field>
               <div className="grid grid-cols-2 gap-2">
-                <Field label={`السعر المتفق (${currency})`}>
+                <Field label={`③ السعر المتفق (${currency})`}>
                   <NumericInput value={total} onChange={setTotal} />
                 </Field>
                 <Field label={`العربون (${currency})`}>
@@ -184,15 +234,15 @@ function ReservationsPage({ reservations, customers, activeItems, currency, canM
                 <button
                   disabled={!valid}
                   onClick={() => {
-                    onAdd({ customerId, itemId: itemId || null, description, total: Number(total), deposit: Number(deposit), method,
+                    onAdd({ customerId, itemId: itemId || null, unitCode: itemId ? (unitCode || freeUnits(activeItems.find((x) => x.id === itemId))[0]?.code || null) : null, description, total: Number(total), deposit: Number(deposit), method,
                       holdUntil: holdUntil || null,
                       plan: usePlan ? { count: Number(planCount) || 1, firstDue: planFirst, everyDays: Number(planEvery) || 30 } : null });
-                    setCustomerId(""); setItemId(""); setDescription(""); setTotal(""); setDeposit(""); setHoldUntil(""); setUsePlan(false); setShowAdd(false);
+                    setCustomerId(""); setCustQ(""); setItemId(""); setUnitCode(""); setScan(""); setScanMsg(""); setDescription(""); setTotal(""); setDeposit(""); setHoldUntil(""); setUsePlan(false); setShowAdd(false);
                   }}
                   className="py-2 rounded-xl text-xs font-bold"
                   style={{ background: valid ? "linear-gradient(135deg,var(--gradFrom),var(--gradTo))" : "var(--accentBg)", color: valid ? "var(--panel)" : "var(--text3)" }}
                 >
-                  حفظ الحجز
+                  ④ حفظ الحجز
                 </button>
               </div>
             </Card>
@@ -217,11 +267,11 @@ function ReservationsPage({ reservations, customers, activeItems, currency, canM
                       color: r.status === "open" ? "var(--accent)" : r.status === "cancelled" ? "var(--bad)" : "var(--goodSolid)",
                     }}
                   >
-                    {r.status === "open" ? "قائم" : r.status === "cancelled" ? "ملغى" : "مُسلَّم"}
+                    {r.status === "open" ? (r.plan ? "تقسيط قائم" : "قائم") : r.status === "cancelled" ? "ملغى" : "مُسلَّم"}
                   </span>
                 </div>
                 <p style={{ color: "var(--text2)" }} className="text-[11px] mt-0.5">
-                  {r.description || "—"} · السعر {fmt(r.total, 0)} {currency} · عربون {fmt(r.deposit, 0)} {currency}
+                  {(r.unitCodes || []).length ? `القطعة ${r.unitCodes.join("، ")} · ` : ""}{r.description || "—"} · السعر {fmt(r.total, 0)} {currency} · المدفوع {fmt(r.deposit, 0)} {currency}
                 </p>
                 <p style={{ color: "var(--text3)" }} className="text-[10px] mt-0.5">
                   المتبقي {fmt(r.remaining, 0)} {currency} · {new Date(r.date).toLocaleDateString("en-GB")}
@@ -234,7 +284,7 @@ function ReservationsPage({ reservations, customers, activeItems, currency, canM
                     <>
                       {h.state !== "none" && (
                         <p style={{ color: h.state === "expired" ? "var(--bad)" : h.state === "due" ? "var(--accent)" : "var(--text3)" }} className="text-[11px] mt-0.5 font-bold">
-                          {h.state === "expired" ? `انتهت المهلة ${r.holdUntil} — تواصل مع العميل` : `محجوز حتى ${r.holdUntil}`}
+                          {h.state === "expired" ? `محجوز حتى ${r.holdUntil} — انتهت المهلة: سلّمها أو ألغِ الحجز` : h.state === "due" ? `محجوز حتى ${r.holdUntil} — تنتهي قريبًا` : `محجوز حتى ${r.holdUntil}`}
                         </p>
                       )}
                       {st && (
@@ -273,6 +323,16 @@ function ReservationsPage({ reservations, customers, activeItems, currency, canM
                       )}
                     </div>
                   )
+                )}
+                {r.status === "open" && canManage && (Number(r.total) - Number(r.deposit)) <= 0.005 && (
+                  <p style={{ color: "var(--good)" }} className="text-[11px] mt-1 font-bold" data-rsv-paid>اكتمل المبلغ — سلّم القطعة ببيع</p>
+                )}
+                {r.status === "open" && canManage && onDeliver && (
+                  <button type="button" data-rsv-deliver onClick={() => onDeliver(r)} className="w-full mt-2 rounded-xl text-[11px] font-bold"
+                    data-help="يفتح البيع باسم صاحب الحجز وبقطعته — والمدفوع يُخصم من الفاتورة تلقائيًّا."
+                    style={{ minHeight: 40, background: (Number(r.total) - Number(r.deposit)) <= 0.005 ? "linear-gradient(135deg,var(--gradFrom),var(--gradTo))" : "var(--panel)", color: (Number(r.total) - Number(r.deposit)) <= 0.005 ? "var(--panel)" : "var(--accent)", border: "1px solid var(--accentLine)" }}>
+                    سلّم ببيع
+                  </button>
                 )}
                 {r.status === "open" && canManage && (
                   <div className="grid grid-cols-2 gap-2 mt-2">

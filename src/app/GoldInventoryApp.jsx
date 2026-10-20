@@ -1375,6 +1375,7 @@ export default function GoldInventoryApp() {
         method: entry.method === "network" ? "network" : "cash",
         holdUntil: entry.holdUntil || null,
         plan: entry.plan || null,
+        unitCode: entry.unitCode || null,
       });
       const r = res.reservation;
       const rec = {
@@ -1382,7 +1383,7 @@ export default function GoldInventoryApp() {
         itemId: r.item_id, description: r.description || "", total: Number(r.total) || 0,
         deposit: Number(r.deposit) || 0, remaining: Number(r.remaining) || 0,
         status: r.status, method: r.method, date: r.created_at, createdBy: currentUser?.name || "",
-        holdUntil: r.hold_until ? String(r.hold_until).slice(0, 10) : "", plan: r.plan || null,
+        holdUntil: r.hold_until ? String(r.hold_until).slice(0, 10) : "", plan: r.plan || null, unitCodes: r.unit_codes || [],
       };
       setReservations((prev) => [rec, ...prev]);
       // عربون الحجز دائمًا من صندوق اليومي (daily_cash/daily_network) في
@@ -9349,6 +9350,7 @@ export default function GoldInventoryApp() {
             onCancel={handleCancelReservation}
             onPay={handlePayReservation}
             onHold={handleHoldReservation}
+            onDeliver={(r) => { setQuickSaleItemId(r.itemId || null); setQuickSaleCustomerId(r.customerId || null); setShowNewSale(true); }}
             onBack={() => setMorePage(null)}
           />
         )}
