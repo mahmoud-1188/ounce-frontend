@@ -9484,7 +9484,9 @@ export default function GoldInventoryApp() {
           />
         )}
         {morePage === "pieceInquiry" && (
-          <PieceInquiryPage price24={priceData.current || 0} currency={priceData.currency} canManageHeld={role === "manager"} flashToast={flashToast} onBack={() => setMorePage(null)} settings={appSettings} />
+          <PieceInquiryPage price24={priceData.current || 0} currency={priceData.currency} canManageHeld={role === "manager"} flashToast={flashToast} onBack={() => setMorePage(null)} settings={appSettings}
+            onItemActions={(itemId) => { const it = items.find((x) => x.id === itemId); if (it) setSheetEntity({ kind: "item", record: it }); else flashToast("القطعة خارج مخزون هذا الجهاز — حدّث البيانات"); }}
+            onOpenReservations={() => openPage("reservations")} />
         )}
         {morePage === "hqDocs" && (
           <HqTransactionsPage
