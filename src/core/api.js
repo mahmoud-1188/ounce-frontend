@@ -518,6 +518,8 @@ const usersApi = {
   // allowedPages: string[] لتخصيص صريح، أو null لإرجاع افتراضي الدور —
   // نفس اتفاقية null/[] الموثَّقة في migration 002 وpermissions.js.
   setPermissions: (id, allowedPages) => apiFetch(`/users/${id}/permissions`, { method: "PATCH", body: { allowedPages } }),
+  actionsMeta: () => apiFetch("/users/actions-meta"),
+  setActions: (id, grant, revoke) => apiFetch(`/users/${id}/actions`, { method: "PATCH", body: { grant, revoke } }),
   remove: (id) => apiFetch(`/users/${id}`, { method: "DELETE" }),
 };
 
@@ -642,6 +644,8 @@ const budgetsApi = {
   save: (period, lines) => apiFetch("/budgets", { method: "PUT", body: { period, lines } }),
   copy: (from, to) => apiFetch("/budgets/copy", { method: "POST", body: { from, to } }),
   vatReturn: (from, to) => apiFetch(`/vat-return?from=${from}&to=${to}`),
+  vatSettle: (from, to, source) => apiFetch("/vat-return/settle", { method: "POST", body: { from, to, source } }),
+  vatUndo: (id, reason) => apiFetch(`/vat-return/settle/${id}/undo`, { method: "POST", body: { reason } }),
 };
 
 // الوحدات الاختيارية (migrations 050–052)
@@ -827,6 +831,8 @@ export const workshopApi = {
 };
 // مراقبة الأعطال (migration 082): بلاغ العطل يصل الإدارة — بلا انتظارٍ ولا رسالة خطأ إن فشل
 export const reportClientError = (body) => (authToken ? fetchApi("/client-errors", { method: "POST", body }).catch(() => null) : Promise.resolve(null));
+// معلومات الفرع ورأس المستندات (المدير)
+export const saveBranchProfile = (profile) => apiFetch("/settings/branch-profile", { method: "POST", body: { profile } });
 export const labelReprint = (body) => apiFetch("/items/units/reprint", { method: "POST", body });
 // إلغاء تكويد قطع: وزنها يعود لدفعتها المفتوحة (أو يخرج من الافتتاحي في فترة التجهيز) — باعتمادٍ وسبب
 export const uncodeUnits = (body) => apiFetch("/items/units/uncode", { method: "POST", body });

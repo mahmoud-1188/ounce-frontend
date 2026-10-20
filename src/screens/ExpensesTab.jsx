@@ -6,12 +6,12 @@ import * as XLSX from "xlsx";
 import { CATEGORY_TO_ACCOUNT } from "../core/chart.js";
 import { EXPENSE_CATEGORIES } from "../core/constants.js";
 import { fmt, fmtMoney } from "../core/money.js";
-import { accountLabel, exportTablesPdf, fundingSourceLabel, inputStyle } from "../domain/helpers.js";
+import { accountLabel, exportTablesPdf, fundingSourceLabel, inputStyle, openAttachment } from "../domain/helpers.js";
 import { AddExpenseForm } from "../ui/AddExpenseForm.jsx";
 import { Card } from "../ui/Card.jsx";
 import { EmptyState } from "../ui/EmptyState.jsx";
 
-function ExpensesTab({ expenseNames = [], users = [], onAddExpenseName, onDeleteExpenseName, expenses, totals, currency, onAdd, flashToast }) {
+function ExpensesTab({ expenseNames = [], users = [], onAddExpenseName, onDeleteExpenseName, fixedDue = [], expenses, totals, currency, onAdd, flashToast }) {
   const [showForm, setShowForm] = useState(false);
   const [view, setView] = useState("list"); // list | byCategory | payroll
   const [period, setPeriod] = useState("month");
@@ -144,6 +144,12 @@ function ExpensesTab({ expenseNames = [], users = [], onAddExpenseName, onDelete
           {e.note}
         </p>
       )}
+      {e.attachId && (
+        <button type="button" data-expense-attach={e.id} onClick={() => openAttachment(e.attachId).then((ok) => { if (!ok) flashToast?.("الفاتورة محفوظة على الجهاز الذي سجّلها"); }).catch(() => flashToast?.("تعذّر فتح الفاتورة"))}
+          className="mt-1.5 text-[11px] font-bold px-2.5 rounded-full" style={{ minHeight: 28, color: "var(--accent)", border: "1px solid var(--accentLine)" }}>
+          📎 الفاتورة
+        </button>
+      )}
     </Card>
   );
 
@@ -250,6 +256,8 @@ function ExpensesTab({ expenseNames = [], users = [], onAddExpenseName, onDelete
           expenseNames={expenseNames}
           users={users}
           onAddExpenseName={onAddExpenseName}
+          onDeleteExpenseName={onDeleteExpenseName}
+          fixedDue={fixedDue}
           onCancel={() => setShowForm(false)}
           onSave={(entry) => {
             onAdd(entry);

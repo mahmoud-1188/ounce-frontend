@@ -3226,19 +3226,52 @@ function canvasToTsplBitmap(c, threshold = 160) {
 //  والفجوة، ثم تُثبّتهما في ذاكرتها.
 // ═══════════════════════════════════════════════════════════════════════
 
+/// صيغ أمر القياس — بعض الطابعات تفهم غير GAPDETECT، والأمر غير المفهوم يُبتلع بصمت.
+///   الأولى هي ما يُرسل منذ البداية (لم تتغيّر)، والباقي بدائل تُجرَّب إن لم تتحرّك الورقة.
+const CALIBRATE_MODES = [
+  { id: "gapdetect", label: "① GAPDETECT", hint: "المعياريّة في TSPL — الافتراضية", cmd: ["GAPDETECT", "HOME", "CLS"] },
+  { id: "autodetect", label: "② AUTODETECT", hint: "لطابعات Gainscha (مثل GA-3406T)", cmd: ["AUTODETECT"] },
+  { id: "setgap", label: "③ SET GAP AUTO", hint: "صيغةٌ أقدم", cmd: ["SET GAP AUTO"] },
+  { id: "formfeed", label: "④ تغذيةٌ واحدة", hint: "تختبر أن الطابعة تستقبل أصلًا", cmd: ["FORMFEED"] },
+];
+const clampNum = (v, def, lo, hi) => { const n = Number(v); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : def; };
+// الإزاحة تُرسل حين تكون غير صفر وحدها — فالضبط الافتراضي يبقى كما كان حرفًا بحرف
+const tsplOffsetLines = (offsetMm, shiftDots) => [
+  ...(Number(offsetMm) ? [`OFFSET ${clampNum(offsetMm, 0, -10, 10)} mm`] : []),
+  ...(Number(shiftDots) ? [`SHIFT ${Math.round(clampNum(shiftDots, 0, -120, 120))}`] : []),
+];
+
 /// أوامر المعايرة — تُرسَل وحدها، بلا صورة.
-function tsplCalibrateBytes({ widthMm, heightMm, gapMm }) {
+function tsplCalibrateBytes({ widthMm, heightMm, gapMm, offsetMm = 0, shiftDots = 0, mode = "gapdetect" }) {
   const lines = [
     // ⚠ SIZE وGAP أولًا: المعايرة تبدأ من تقديرٍ ثم تُصحّحه بالقياس
     `SIZE ${widthMm} mm, ${heightMm} mm`,
     `GAP ${gapMm} mm, 0 mm`,
+    ...tsplOffsetLines(offsetMm, shiftDots),
     // ⚠ تُخزَّن في ذاكرة الطابعة: بلاها تُنسى عند الإطفاء وتعود المشكلة
     `SET TEAR ON`,
-    `GAPDETECT`,
-    `HOME`,
-    `CLS`,
+    ...((CALIBRATE_MODES.find((m) => m.id === mode) || CALIBRATE_MODES[0]).cmd),
   ];
   return new TextEncoder().encode(lines.join("\r\n") + "\r\n");
+}
+
+/// الإزاحة وحدها: موضع توقّف الورقة (OFFSET بالمليمتر) وإزاحة الصورة رأسيًّا (SHIFT بالنقاط)
+function tsplOffsetBytes({ widthMm, heightMm, gapMm, offsetMm = 0, shiftDots = 0 }) {
+  const lines = [
+    `SIZE ${clampNum(widthMm, 50, 5, 200)} mm, ${clampNum(heightMm, 20, 5, 200)} mm`,
+    `GAP ${clampNum(gapMm, 2, 0, 20)} mm, 0 mm`,
+    `OFFSET ${clampNum(offsetMm, 0, -10, 10)} mm`,
+    `SHIFT ${Math.round(clampNum(shiftDots, 0, -120, 120))}`,
+  ];
+  return new TextEncoder().encode(lines.join("\r\n") + "\r\n");
+}
+
+/// الإزاحة بلغة ZPL: ^LT تُحرّك الصورة رأسيًّا بالنقاط، و~TA موضع التوقّف بعد الطباعة — وتُحفظ في الطابعة (^JUS)
+function zplOffsetBytes({ offsetMm = 0, shiftDots = 0, dpi = 203 }) {
+  const dpmm = (Number(dpi) || 203) / 25.4;
+  const ta = Math.round(clampNum(Number(offsetMm) * dpmm, 0, -120, 120));
+  const lt = Math.round(clampNum(shiftDots, 0, -120, 120));
+  return new TextEncoder().encode(`~TA${ta < 0 ? "-" : ""}${String(Math.abs(ta)).padStart(3, "0")}\r\n^XA^LT${lt}^JUS^XZ\r\n`);
 }
 
 /// يبني الأمر الكامل لطباعة ملصق.
@@ -3264,6 +3297,7 @@ function tsplJobBytes({ canvas, cfg, copies = 1, code = "", epcHex = null }) {
     `DENSITY ${Math.min(15, Math.max(0, Number(cfg.density) || 8))}`,
     `SPEED ${cfg.speed || 3}`,
     `DIRECTION ${cfg.direction ?? 1}`,
+    ...tsplOffsetLines(cfg.labelOffsetMm, cfg.labelShiftDots),
     `REFERENCE 0,0`,
     `CLS`,
     ...(rfidLine ? [rfidLine] : []),
@@ -3293,9 +3327,58 @@ function zplJobBytes({ canvas, cfg, copies = 1, code = "", epcHex = null }) {
   const rfid = cfg.rfid && hex ? `^RS8,,,1,N^RFW,H^FD${hex}^FS` : "";
   const qty = rfid ? 1 : Math.max(1, Number(copies) || 1);
   // ⚠ بلا ^LL: الطابعة تقيس طول الملصق بنفسها — طولٌ أكبر من الحقيقي يجعلها تكمل على ملصقٍ ثانٍ
-  const job = `^XA^PW${canvas.width}^LH0,0${cfg.zplInvert ? "^POI" : "^PON"}^PR${Math.min(6, Math.max(1, Number(cfg.speed) || 3))}`
+  // ^LT (إزاحة الصورة رأسيًّا) حين تكون غير صفر وحدها — والافتراضي كما كان
+  const lt = Math.round(clampNum(cfg.labelShiftDots, 0, -120, 120));
+  const job = `^XA^PW${canvas.width}^LH0,0${lt ? `^LT${lt}` : ""}${cfg.zplInvert ? "^POI" : "^PON"}^PR${Math.min(6, Math.max(1, Number(cfg.speed) || 3))}`
     + `${rfid}^FO0,0^GFA,${total},${total},${bmp.widthBytes},${data}^FS^PQ${qty}^XZ\r\n`;
   return new TextEncoder().encode(job);
+}
+
+/// يسأل الطابعة عن طرازها (~!@ ~!I ~!F ~!T) ويقرأ جوابها عبر خاصية الإشعار — بعض الطابعات تكتب ولا تقرأ
+async function askPrinter(cfg, deviceRef, { timeoutMs = 2500 } = {}) {
+  if (!deviceRef?.current) throw new Error("لا طابعة مقترنة");
+  const server = await deviceRef.current.gatt.connect();
+  const services = await server.getPrimaryServices();
+  let writeChar = null, notifyChar = null;
+  for (const svc of services) {
+    for (const c of await svc.getCharacteristics()) {
+      if (!writeChar && (c.properties.write || c.properties.writeWithoutResponse)) writeChar = c;
+      // خاصية الإشعار قد تكون غير خاصية الكتابة، فبعض الطابعات تفصلهما
+      if (!notifyChar && (c.properties.notify || c.properties.indicate)) notifyChar = c;
+    }
+  }
+  if (!writeChar) throw new Error("الطابعة لا تعرض خاصية كتابة");
+  if (!notifyChar) {
+    return { supported: false,
+      reason: "هذه الطابعة لا تُرجع جوابًا عبر البلوتوث — تكتب ولا تقرأ. جرّب USB أو اقرأ الطراز من ملصق الجهاز." };
+  }
+  const chunks = [];
+  const onData = (e) => {
+    const v = e.target.value;
+    chunks.push(new Uint8Array(v.buffer ? v.buffer : v));
+  };
+  await notifyChar.startNotifications();
+  notifyChar.addEventListener("characteristicvaluechanged", onData);
+  try {
+    await bleWriteChunked(writeChar, new TextEncoder().encode("~!@\r\n~!I\r\n~!F\r\n~!T\r\n"));
+    await new Promise((r) => setTimeout(r, timeoutMs));
+  } finally {
+    notifyChar.removeEventListener("characteristicvaluechanged", onData);
+    try { await notifyChar.stopNotifications(); } catch { /* فشل الإيقاف لا يهمّ */ }
+  }
+  const total = chunks.reduce((a, c) => a + c.length, 0);
+  const all = new Uint8Array(total);
+  let o = 0;
+  for (const c of chunks) { all.set(c, o); o += c.length; }
+  const text = new TextDecoder("utf-8", { fatal: false }).decode(all).replace(/\0+/g, "").trim();
+  // MODEL: هو الحقل الموثوق، فبقية الأرقام ذاكرة حرة تتغيّر بين قراءة وأخرى
+  const modelLine = (text.match(/MODEL\s*:\s*([^\s\r\n]+)/i) || [])[1] || null;
+  const model = modelLine || (text.match(/[A-Z]{2,}[-_]?[A-Z]?\d{3,4}[A-Z]{0,3}/) || [])[0] || null;
+  return {
+    supported: true, bytes: total, text, model,
+    mentionsRfid: /rfid/i.test(text),
+    oem: /gainscha/i.test(text) ? "Gainscha" : /tsc/i.test(text) ? "TSC" : null,
+  };
 }
 
 /// يُرسل بايتات لطابعة عبر BLE بقطعٍ صغيرة.
@@ -3745,4 +3828,21 @@ function diffPermissions(before, after, registry = []) {
   };
 }
 
-export { accountRoot, goldClassOf, applyHqMarkup, markupLabel, comparePeriods, deviceLabel, diffPermissions, documentIndex, documentPdfSections, epcHexToCode, monthRange, networkFeesRecorded, nextSessionId, prefersReducedMotion, printDocumentPdf, priorPeriodOf, readPlateEpc, reportPeriod, reviewFingerprint, reviewKey, reviewSummary, rfidSessionCsv, rfidSessionJson, rfidSessionText, shareOrDownload, signStatement, useCountUp, accountForCategory, accountGroup, accountLabel, accountPath, aiAllowedFor, aiAllowedForRole, aiScope, askReportAi, attachmentByteSize, b32Decode, b32Encode, balancesAt, bleWriteChunked, branchDataKey, branchSnapshotKey, btSupported, bundleById, bundledPages, canvasToTsplBitmap, cardFeeOf, cashAccountFor, cashTrialBalance, categoryById, categoryLabel, childrenOf, cleanToken, codeCounter, codeToEpcHex, compressImage, contentWidth, createNhrFileAssembler, dayEnd, dayStart, detectColumns, detectTraceTopic, describeQuery, diffDatasets, drawCode128, drawQr, emptyRow, exchangeKind, expenseAccountFor, exportLedgerXlsx, exportTablesPdf, fetchAiAuditNarrative, fetchAiBusinessInsights, fetchAiChatReply, fetchAiReportSpec, fetchGoldPriceSAR, fetchLiveGram24, fineAt, fmtWeight, fineToKarat, fromGram, fundingSourceLabel, generateRecoveryCode, generateUnitCode, goldDestLabel, goldProfit, guessScreens, hiddenNumbersScan, inPeriod, inputStyle, isBundle, isGoldCogs, isLiveScrap, isPartial, isUnder, issueBranchCode, issueLicense, itemLabel, journalOf, journalTrialBalance, loadAttachment, lotAllocatedPieces, lotAllocatedWeight, lotReconcile, marginFor, mgrFeeBreakdown, mgrFeeEnabled, mgrFeeOn, mgrFeeRate, migrateLegacyKeys, modeAllowsAction, modeAllowsPage, modeAllowsTab, nameExists, navPerRow, nhrClassify, nhrCommand, nhrCommands, nhrCrc32, nhrHex, nhrIsLiveFrame, nhrParseBatchFile, nhrParseJson, nhrParseLiveFrame, normHeader, normalizeArabicQuery, normalizeFundingSource, normalizeName, normalizeRecovery, onlineBlockReason, openAttachment, openWhatsApp, ounceHash, periodRange, prettyPhone, prettyToken, priceBreakdown, printLabelToDevice, printedCount, qrEccBytes, qrGaloisTables, qrMatrix, qrMul, qrRS, r2, r3, readFileAsDataUrl, readKeyOrNull, remainingQty, renderLabelCanvas, reportFactsText, reportFindings, resolveCompare, resolveRange, rfidSettingsFor, runAuditChecks, runQuery, saleLineProvenance, saleModeOf, saleProfitOf, saleProfitSplit, saveAttachment, scrapPrice24, sellPrice24, sendRawToPrinter, setRuntimeCategories, splitCsvLine, statementDigest, streamBase, toCsv, toGram, toIntlPhone, toLatinDigits, trustBalance, tsplCalibrateBytes, tsplJobBytes, zplJobBytes, unitById, unitCostBasis, unitCurrentValue, usbPrint, useDebounced, useNhrReader, useViewport, useVoice, useWedgeScanner, vendorChallenge, vendorResponse, weekStart, weightTrialBalance };
+// إعدادات الهدر والفروق مع افتراضاتها — القيمة الفارغة أو السالبة تعود للافتراض
+const wastageSettingsOf = (settings = {}) => {
+  const w = settings?.wastage || {};
+  const num = (v, d) => (v === "" || v == null || !Number.isFinite(Number(v)) || Number(v) < 0 ? d : Number(v));
+  return { defaultAllowPct: num(w.defaultAllowPct, 2), codingTolPct: num(w.codingTolPct, 0.1), receiveTolG: num(w.receiveTolG, 0.05) };
+};
+
+// فرق التكويد: المستلَم − المكوَّد. داخل تسامح الميزان «مطابق»، وفوق codingTolPct يلزم سبب
+function codingVarianceOf({ receivedW = 0, codedW = 0, tolG = 0.05, codingTolPct = 0.1 } = {}) {
+  const rec = r3(Number(receivedW) || 0), cod = r3(Number(codedW) || 0);
+  const d = r3(rec - cod);
+  const tol = Math.max(0.005, Number(tolG) >= 0 ? Number(tolG) : 0.05);
+  const pct = rec > 0 ? Math.round(Math.abs(d) / rec * 10000) / 100 : 0;
+  const state = Math.abs(d) <= tol + 1e-9 ? "match" : d > 0 ? "shortage" : "surplus";
+  return { receivedW: rec, codedW: cod, diff: d, pct, state, needsReason: state !== "match" && pct > (Number(codingTolPct) >= 0 ? Number(codingTolPct) : 0.1) };
+}
+
+export { accountForCategory, accountGroup, accountLabel, accountPath, accountRoot, aiAllowedFor, aiAllowedForRole, aiScope, applyHqMarkup, askPrinter, askReportAi, attachmentByteSize, b32Decode, b32Encode, balancesAt, bleWriteChunked, branchDataKey, branchSnapshotKey, btSupported, bundleById, bundledPages, CALIBRATE_MODES, canvasToTsplBitmap, cardFeeOf, cashAccountFor, cashTrialBalance, categoryById, categoryLabel, childrenOf, cleanToken, codeCounter, codeToEpcHex, codingVarianceOf, comparePeriods, compressImage, contentWidth, createNhrFileAssembler, dayEnd, dayStart, describeQuery, detectColumns, detectTraceTopic, deviceLabel, diffDatasets, diffPermissions, documentIndex, documentPdfSections, drawCode128, drawQr, emptyRow, epcHexToCode, exchangeKind, expenseAccountFor, exportLedgerXlsx, exportTablesPdf, fetchAiAuditNarrative, fetchAiBusinessInsights, fetchAiChatReply, fetchAiReportSpec, fetchGoldPriceSAR, fetchLiveGram24, fineAt, fineToKarat, fmtWeight, fromGram, fundingSourceLabel, generateRecoveryCode, generateUnitCode, goldClassOf, goldDestLabel, goldProfit, guessScreens, hiddenNumbersScan, inPeriod, inputStyle, isBundle, isGoldCogs, isLiveScrap, isPartial, issueBranchCode, issueLicense, isUnder, itemLabel, journalOf, journalTrialBalance, loadAttachment, lotAllocatedPieces, lotAllocatedWeight, lotReconcile, marginFor, markupLabel, mgrFeeBreakdown, mgrFeeEnabled, mgrFeeOn, mgrFeeRate, migrateLegacyKeys, modeAllowsAction, modeAllowsPage, modeAllowsTab, monthRange, nameExists, navPerRow, networkFeesRecorded, nextSessionId, nhrClassify, nhrCommand, nhrCommands, nhrCrc32, nhrHex, nhrIsLiveFrame, nhrParseBatchFile, nhrParseJson, nhrParseLiveFrame, normalizeArabicQuery, normalizeFundingSource, normalizeName, normalizeRecovery, normHeader, onlineBlockReason, openAttachment, openWhatsApp, ounceHash, periodRange, prefersReducedMotion, prettyPhone, prettyToken, priceBreakdown, printDocumentPdf, printedCount, printLabelToDevice, priorPeriodOf, qrEccBytes, qrGaloisTables, qrMatrix, qrMul, qrRS, r2, r3, readFileAsDataUrl, readKeyOrNull, readPlateEpc, remainingQty, renderLabelCanvas, reportFactsText, reportFindings, reportPeriod, resolveCompare, resolveRange, reviewFingerprint, reviewKey, reviewSummary, rfidSessionCsv, rfidSessionJson, rfidSessionText, rfidSettingsFor, runAuditChecks, runQuery, saleLineProvenance, saleModeOf, saleProfitOf, saleProfitSplit, saveAttachment, scrapPrice24, sellPrice24, sendRawToPrinter, setRuntimeCategories, shareOrDownload, signStatement, splitCsvLine, statementDigest, streamBase, toCsv, toGram, toIntlPhone, toLatinDigits, trustBalance, tsplCalibrateBytes, tsplJobBytes, tsplOffsetBytes, unitById, unitCostBasis, unitCurrentValue, usbPrint, useCountUp, useDebounced, useNhrReader, useViewport, useVoice, useWedgeScanner, vendorChallenge, vendorResponse, wastageSettingsOf, weekStart, weightTrialBalance, zplJobBytes, zplOffsetBytes };

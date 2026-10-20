@@ -16,7 +16,15 @@ import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 // بطاقة كل موظف: u.pin لم يعد موجودًا في الحالة المحلية إطلاقًا — كان
 // ‌`{"•".repeat(u.pin.length)}` سيرمي خطأ فورًا (u.pin === undefined)، فصار
 // عرضًا ثابتًا بلا اعتماد على طول فعلي.
-function AccessSettingsPage({ users, navRegistry = [], roles = {}, currentUserId = null, onAddUser, onRenameUser, onToggleAi, onSetPermissions: setPermsRaw, onRemoveUser, onEnroll = null, onFetchLog = null, onBack, staffByHq = false }) {
+function AccessSettingsPage({ users, navRegistry = [], roles = {}, currentUserId = null, onAddUser, onRenameUser, onToggleAi, onSetPermissions: setPermsRaw, onRemoveUser, onEnroll = null, onFetchLog = null, onBack, staffByHq = false, onFetchActionsMeta = null, onSetActions = null }) {
+  // الأفعال التي يفرضها الخادم ومنع كل دورٍ وما أغلقته الإدارة — لاستثناءات الشخص فوق دوره
+  const [actMeta, setActMeta] = useState(null);
+  useEffect(() => {
+    if (!onFetchActionsMeta) return undefined;
+    let live = true;
+    onFetchActionsMeta().then((m) => { if (live) setActMeta(m); }).catch(() => {});
+    return () => { live = false; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // ⚠ فرعٌ مرتبطٌ بالإدارة لا يمنح صلاحيات ولا يضيف موظفين ولا يحذفهم — الإدارة تفعل (والخادم يرفض)
   const STAFF_BY_HQ_MSG = "إضافة الموظفين وصلاحياتهم وحذفهم من الإدارة المركزية — اطلبها منها.";
   const onSetPermissions = (...a) => { if (staffByHq) { setGuardMsg(STAFF_BY_HQ_MSG); return; } setPermsRaw(...a); };
@@ -75,6 +83,34 @@ function AccessSettingsPage({ users, navRegistry = [], roles = {}, currentUserId
     if (!base) return [];
     return [...base.allowedTabs.filter((x) => x !== "more"), ...base.allowedMore];
   };
+
+  // الفعل لهذا الشخص: الإدارة تغلب كل شيء، ثم استثناؤه، ثم دوره
+  const actionState = (u, a) => {
+    if ((actMeta?.hqDeny?.[u.role] || []).includes(a)) return { on: false, why: "hq" };
+    if ((u.actionRevoke || []).includes(a)) return { on: false, why: "revoke" };
+    if ((u.actionGrant || []).includes(a)) return { on: true, why: "grant" };
+    return { on: !(actMeta?.roleDeny?.[u.role] || []).includes(a), why: "role" };
+  };
+  const toggleAction = (u, a) => {
+    if (staffByHq) { setGuardMsg(STAFF_BY_HQ_MSG); return; }
+    const st = actionState(u, a);
+    if (st.why === "hq") { setGuardMsg("هذا الفعل مقفل من الإدارة المركزية لهذا الدور — لا يُمنح من الفرع."); return; }
+    const byRole = !(actMeta?.roleDeny?.[u.role] || []).includes(a);
+    const grant = new Set(u.actionGrant || []), revoke = new Set(u.actionRevoke || []);
+    grant.delete(a); revoke.delete(a);
+    // القلب يعكس الحالة: ما يسمح به الدور يُغلق استثناءً، وما يمنعه يُمنح استثناءً، والعودة للدور تمحو الاستثناء
+    if (st.on && byRole) revoke.add(a);
+    if (!st.on && !byRole) grant.add(a);
+    setGuardMsg("");
+    onSetActions?.(u.id, [...grant], [...revoke]);
+  };
+  // تنبيهٌ لا منع: من يفحص الكسر ويعتمد فحصه، أو يُدخل البضاعة ويُخرجها، بلا رقيبٍ ثانٍ
+  const SOD_PAIRS = [
+    { pair: ["assessScrap", "approveScrap"], why: "يفحص الكسر ويعتمد فحصه بنفسه" },
+    { pair: ["addGoods", "issueOut"], why: "يُدخل البضاعة ويُخرجها من النظام" },
+    { pair: ["purchase", "safeMove"], why: "يشتري ويدفع من الخزنة بنفسه" },
+  ];
+  const sodOf = (u) => (actMeta && u.role !== "manager" ? SOD_PAIRS.filter((x) => x.pair.every((a) => actionState(u, a).on)) : []);
 
   const togglePage = (id, pageId) => {
     const target = users.find((u) => u.id === id);
@@ -212,6 +248,40 @@ function AccessSettingsPage({ users, navRegistry = [], roles = {}, currentUserId
 
           <Group title="الصفحات الأساسية (الشريط السفلي)" list={mainPages} />
           <Group title="صفحات المزيد" list={morePages} />
+
+          {/* ── الأفعال: ما يفعله داخل الشاشات — استثناءٌ لهذا الشخص فوق دوره، والخادم يفرضه ── */}
+          {actMeta && onSetActions && (
+            <div data-user-actions>
+              <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-1 mt-4">الأفعال — ما يفعله داخل الشاشات</p>
+              <p style={{ color: "var(--text3)" }} className="text-[11px] mb-2">
+                المضاء = يفعلها. «+» مُنح له فوق دوره · «−» أُغلق عنه · 🔒 أغلقته الإدارة المركزية. اضغط الفعل لتقلبه، وضغطةٌ ثانية تعيده لدوره.
+              </p>
+              {sodOf(u).length > 0 && (
+                <p data-sod-warn style={{ color: "var(--bad)" }} className="text-[11px] font-bold mb-2">
+                  ⚠ يجمع مهامًّا متعارضة: {sodOf(u).map((x) => x.why).join(" · ")} — تنبيهٌ لا منع، إن اضطررتَ فاعلم ما قبلت.
+                </p>
+              )}
+              {Object.entries(actMeta.groups || {}).map(([g, gl]) => (
+                <div key={g} className="mb-2">
+                  <p style={{ color: "var(--text2)" }} className="text-[11px] font-bold mb-1">{gl}</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(actMeta.actions || []).filter((a) => a.group === g).map((a) => {
+                      const st = actionState(u, a.id);
+                      return (
+                        <button key={a.id} type="button" data-user-action={a.id} aria-pressed={st.on} onClick={() => toggleAction(u, a.id)}
+                          className="text-[11px] px-2.5 rounded-full font-bold"
+                          style={{ minHeight: 32, opacity: st.why === "hq" ? 0.5 : 1,
+                            background: st.on ? "var(--accentBg)" : "var(--field)", color: st.on ? "var(--accent)" : "var(--text3)",
+                            border: `1px solid ${st.why === "grant" || st.why === "revoke" ? "var(--accent)" : "var(--line)"}` }}>
+                          {st.why === "hq" ? "🔒 " : st.why === "grant" ? "+ " : st.why === "revoke" ? "− " : ""}{a.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           <div style={{ height: 24 }} />
         </div>
       </div>
@@ -317,8 +387,16 @@ function AccessSettingsPage({ users, navRegistry = [], roles = {}, currentUserId
                     <p style={{ color: "var(--text3)" }} className="text-[11px] mt-0.5">
                       •••• · {allowedCount} صفحة
                       {customized ? " (مخصّصة)" : ""}
+                      {(u.actionGrant || []).length ? ` · + ${(u.actionGrant || []).length} فعل` : ""}
+                      {(u.actionRevoke || []).length ? ` · − ${(u.actionRevoke || []).length} فعل` : ""}
                       {u.salary > 0 ? ` · راتب ${fmt(u.salary, 0)}` : ""}
                     </p>
+                    {u.mustChangePin && (
+                      <p data-default-pin={u.id} style={{ color: "var(--bad)", margin: "2px 0 0" }} className="text-[11px] font-bold">⚠ رقمه السري ما زال الرقم الجاهز — يُطلب منه تغييره عند أول دخول</p>
+                    )}
+                    {sodOf(u).length > 0 && (
+                      <p style={{ color: "var(--bad)", margin: "2px 0 0" }} className="text-[11px]">⚠ يجمع مهامًّا متعارضة: {sodOf(u).map((x) => x.why).join(" · ")}</p>
+                    )}
                     {/* ── أدوات الذكاء ── */}
                     {u.role !== "manager" && (
                       <button
@@ -417,7 +495,7 @@ function AccessSettingsPage({ users, navRegistry = [], roles = {}, currentUserId
 
 const PERM_KINDS = {
   create: "أُضيف", delete: "حُذف", role: "تغيّر دوره", pages: "تغيّرت صفحاته", reset: "أُعيد لافتراضي الدور",
-  ai: "أدوات الذكاء", rename: "تغيّر اسمه", enroll: "ربط جهاز",
+  ai: "أدوات الذكاء", rename: "تغيّر اسمه", enroll: "ربط جهاز", actions: "استثناء أفعال",
 };
 
 /// سجلّ التدقيق يحفظ **ما فُعل**، وهذا يحفظ **من صار يستطيع فعله** — والسؤال
@@ -439,6 +517,7 @@ function PermissionLog({ onFetch, registry = [], roles = {} }) {
     if (x.kind === "rename") return `${x.before?.name || ""} ← ${x.after?.name || ""}`;
     if (x.kind === "create") return roles[x.after?.role]?.label || x.after?.role || "";
     if (x.kind === "enroll") return x.byKind === "self" ? "ربطه الموظّف ووضع رقمه" : "أُصدر رمز ربط";
+    if (x.kind === "actions") return [(x.after?.grant || []).length && `مُنح: ${x.after.grant.join("، ")}`, (x.after?.revoke || []).length && `أُغلق: ${x.after.revoke.join("، ")}`].filter(Boolean).join(" · ") || "أُعيد لدوره";
     const parts = [];
     if ((x.added || []).length) parts.push(`مُنح: ${x.added.map(label).join("، ")}`);
     if ((x.removed || []).length) parts.push(`سُحب: ${x.removed.map(label).join("، ")}`);

@@ -30,7 +30,7 @@ const tagToCode = (raw) => {
   return /^[0-9A-F]{8,}$/.test(upper) ? (epcHexToCode(upper) || upper).toUpperCase() : upper;
 };
 
-function PieceInquiryPage({ price24 = 0, currency = "ر.س", canManageHeld = false, flashToast = null, onBack, settings = null }) {
+function PieceInquiryPage({ price24 = 0, currency = "ر.س", canManageHeld = false, flashToast = null, onBack, settings = null, onItemActions = null, onOpenReservations = null }) {
   const [input, setInput] = useState("");
   const [cards, setCards] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -191,6 +191,24 @@ function PieceInquiryPage({ price24 = 0, currency = "ر.س", canManageHeld = fal
               {c.issued && <Row k="الإخراج" v={`${c.issued.reason}${c.issued.ref ? ` · ${c.issued.ref}` : ""} · ${dt(c.issued.at)}${c.issued.by ? ` · ${c.issued.by}` : ""}${c.issued.note ? ` · ${c.issued.note}` : ""}`} />}
               {c.reservation && <Row k="محجوزة" v={`${c.reservation.ref} · ${c.reservation.customer}`} />}
             </div>
+            {(onItemActions || (c.reservation && onOpenReservations)) && (
+              <div className="flex gap-2 mt-2">
+                {onItemActions && c.itemId && (
+                  <button type="button" data-inq-actions={c.code} onClick={() => onItemActions(c.itemId)}
+                    data-help="يفتح ما يُفعل بهذه القطعة: بيعها أو طباعة ملصقها أو تعديلها أو إخراجها — بحسب صلاحيتك."
+                    className="flex-1 rounded-xl text-[11px] font-bold" style={{ minHeight: 40, background: "var(--accentBg)", color: "var(--accent)", border: "1px solid var(--accentLine)" }}>
+                    إجراءات القطعة
+                  </button>
+                )}
+                {c.reservation && onOpenReservations && (
+                  <button type="button" data-inq-reservations={c.code} onClick={onOpenReservations}
+                    data-help="يفتح الحجوزات حيث ترى لمن حُجزت هذه القطعة ومتى تنتهي مهلتها."
+                    className="flex-1 rounded-xl text-[11px] font-bold" style={{ minHeight: 40, background: "var(--panel)", color: "var(--accentText)", border: "1px solid var(--line)" }}>
+                    افتح الحجوزات
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         )))}
         {!cards.length && (

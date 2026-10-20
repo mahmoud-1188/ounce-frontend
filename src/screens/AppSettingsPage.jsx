@@ -4,11 +4,12 @@ import { APP_MODES, DEFAULT_APP_MODE, DEFAULT_SETTINGS } from "../core/constants
 import { UI_LANGS, readUiLang, setUiLang } from "../domain/i18n.js";
 import { ACCOUNTING_MODES } from "../core/storePackage.js";
 import { PayTerminalCard } from "../ui/PayTerminalCard.jsx";
+import { BranchProfileCard } from "../ui/BranchProfileCard.jsx";
 import { KARATS, fmt, pricePerGram } from "../core/money.js";
 import { CARD_NETWORKS, DEFAULT_CARD_FEES, DEFAULT_MARGINS } from "../core/money-rules.js";
 import { THEMES, THEME_DESIGNS, applyTheme, designOfTheme, effectiveTheme, isDarkTheme } from "../core/theme.js";
 import { hashPin } from "../domain/hashPin.js";
-import { generateRecoveryCode, inputStyle, normalizeRecovery, openWhatsApp, prettyPhone, toIntlPhone } from "../domain/helpers.js";
+import { generateRecoveryCode, inputStyle, wastageSettingsOf, normalizeRecovery, openWhatsApp, prettyPhone, toIntlPhone } from "../domain/helpers.js";
 import { sanitizeNumeric } from "../domain/sanitizeNumeric.js";
 import { verifyToken } from "../domain/verifyToken.js";
 import { Card } from "../ui/Card.jsx";
@@ -19,6 +20,7 @@ import { RfidSettingsCard } from "../ui/RfidSettingsCard.jsx";
 import { ScaleSettingsCard } from "../ui/ScaleSettingsCard.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 import { InstallAppCard } from "../ui/InstallAppCard.jsx";
+import { showStartHere, startHereHidden } from "../ui/StartHereCard.jsx";
 
 /// صفوف الإعدادات الستّة (المرجع م5): الكلمات تعرّف أقسام الصفحة التي تخصّ الصفّ، والشاشات ما يُدار خارجها.
 const SETTINGS_ROWS = [
@@ -26,7 +28,7 @@ const SETTINGS_ROWS = [
     screens: [], status: (s) => `${APP_MODES[s.appMode || DEFAULT_APP_MODE]?.label || ""} · يوم العمل ${s.workdayMode === "off" ? "مطفأ" : "مفعّل"}` },
   { id: "security", label: "الأمان والصلاحيات", icon: ShieldCheck, keys: ["الرقم السري", "الرقابة", "استرجاع"],
     screens: [["access", "الصلاحيات"]], status: (s) => `الرقم السري ${s.requirePin ? "مفعّل" : "مطفأ"} · الاعتماد ${s.approvalsEnabled ? "مفعّل" : "مطفأ"}` },
-  { id: "money", label: "المال والضريبة", icon: Coins, keys: ["الضريبه", "هوامش", "هامش", "عمولات", "مطابقة البنك", "الزكاه", "فحص الكسر", "حد الاجل", "بعد البيع", "واتساب", "البيع اثناء الجرد", "عرض السعر"],
+  { id: "money", label: "المال والضريبة", icon: Coins, keys: ["الضريبه", "هوامش", "هامش", "عمولات", "مطابقة البنك", "الزكاه", "فحص الكسر", "حد الاجل", "الهدر والفروق", "تسامح", "بعد البيع", "واتساب", "البيع اثناء الجرد", "عرض السعر"],
     screens: [], status: (s) => (s.taxEnabled ? `ضريبة ${Math.round((Number(s.taxRate) || 0) * 1000) / 10}٪` : "بلا ضريبة") + ` · الزكاة ${s.zakatEnabled === false ? "مطفأة" : "مفعّلة"}` },
   { id: "devices", label: "الأجهزة", icon: Printer, keys: ["قارئ rfid", "الطابعه", "الميزان"],
     screens: [["printerSetup", "الطابعة"], ["rfidSettings", "القارئ"]], status: () => "الطابعة وقارئ RFID" },
@@ -36,7 +38,7 @@ const SETTINGS_ROWS = [
     screens: [["modules", "الوحدات"], ["backup", "النسخ"]], status: () => "الوحدات الاختيارية والنسخ الاحتياطي" },
 ];
 
-function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSaveBranch, hqPermissions, priceData = {}, onBackfill, canEditControls = false, onSaveControls = null, hqManaged = null, limitsByHq = false, onBack }) {
+function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSaveBranch, hqPermissions, priceData = {}, onBackfill, canEditControls = false, onSaveControls = null, hqManaged = null, limitsByHq = false, onBack, provision = null, onSaveProfile = null }) {
   const [newRecovery, setNewRecovery] = useState("");
   const [uiLangSel, setUiLangSel] = useState(readUiLang);
   const [fees, setFees] = useState(() => ({ ...DEFAULT_CARD_FEES, ...(settings.cardFees || {}) }));
@@ -698,6 +700,39 @@ function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSa
           )}
         </Card>
 
+        {/* ── الهدر والفروق: افتراضات الورشة وتسامح فرق التكويد — تُحفظ على الخادم ضمن تفضيلات الفرع ── */}
+        <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2 mt-4">
+          الهدر والفروق
+        </p>
+        <Card style={{ padding: 14, marginBottom: 12 }}>
+          <p style={{ color: "var(--text3)" }} className="text-[11px] mb-3">
+            فرقٌ داخل تسامح الميزان يُعدّ مطابقة. وفرق التكويد فوق النسبة لا تُقفل الدفعة إلا بسببٍ مكتوب.
+          </p>
+          {(() => {
+            const ws = wastageSettingsOf(settings);
+            const fields = [
+              { key: "defaultAllowPct", label: "المسموح من الهدر ٪ (إن لم يحدّده عقد الورشة)", max: 20 },
+              { key: "codingTolPct", label: "تسامح فرق التكويد ٪", max: 10 },
+              { key: "receiveTolG", label: "تسامح الميزان (جم)", max: 5 },
+            ];
+            return (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2" data-wastage-settings>
+                {fields.map((f) => (
+                  <label key={f.key} className="text-[11px]" style={{ color: "var(--text2)" }}>
+                    {f.label}
+                    <input type="number" min="0" max={f.max} step="0.01" inputMode="decimal" defaultValue={ws[f.key]} data-wastage-field={f.key}
+                      onBlur={(e) => {
+                        const v = Math.max(0, Math.min(f.max, Number(e.target.value) || 0));
+                        if (v !== ws[f.key]) onSave({ wastage: { ...ws, [f.key]: v } });
+                      }}
+                      className="w-full mt-1 px-3 py-2 rounded-xl text-[12px]" style={{ background: "var(--field)", color: "var(--text)", border: "1px solid var(--line)" }} />
+                  </label>
+                ))}
+              </div>
+            );
+          })()}
+        </Card>
+
         {/* ── حدّ الآجل (migration 069): الخادم يفرضه على كل بيعٍ آجل، وما فوقه يحتاج اعتمادًا ── */}
         <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2 mt-4">
           حدّ الآجل
@@ -791,6 +826,10 @@ function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSa
 
         {/* عمولة المدير أُلغيت نهائيًّا — والوضع الخفي أُلغي؛ القطع المعلّقة القديمة تُقرأ وتُباع كما كانت */}
 
+        {/* ── معلومات الفرع ورأس المستندات ── */}
+        <BranchProfileCard profile={provision?.profile || {}} branchCode={branchIdentity?.code || ""} locked={!!provision?.locked}
+          canEdit={!!onSaveProfile} onSave={onSaveProfile || (async () => false)} />
+
         {/* ── لغة الواجهة (تفضيلٌ لهذا الجهاز) ── */}
         <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">لغة الواجهة</p>
         <Card style={{ padding: 14, marginBottom: 16 }} data-ui-lang>
@@ -812,6 +851,7 @@ function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSa
             <span>علامة «؟» على كل زرّ<span style={{ color: "var(--text3)" }} className="block text-[11px]">اضغط «؟» أو اضغط الزرّ مطوّلًا لترى ماذا يفعل — دون أن يُنفَّذ</span></span>
             <input type="checkbox" data-help-badges-toggle checked={settings.helpBadges !== false} onChange={(e) => onSave({ ...settings, helpBadges: e.target.checked })} style={{ accentColor: "var(--accent)", width: 18, height: 18 }} />
           </label>
+          <StartHereAgain />
         </Card>
 
         {/* ── جهاز الدفع (تفضيلٌ لهذا الجهاز) ── */}
@@ -973,6 +1013,22 @@ function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSa
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+
+// «ابدأ هنا» أُخفي من الرئيسية؟ زرٌّ يعيده
+function StartHereAgain() {
+  const [hidden, setHidden] = useState(startHereHidden);
+  return (
+    <div className="flex items-center justify-between gap-2 text-[12px] mt-3 pt-3" style={{ color: "var(--text)", borderTop: "1px solid var(--line)" }}>
+      <span>قائمة «ابدأ هنا» في الرئيسية<span style={{ color: "var(--text3)" }} className="block text-[11px]">{hidden ? "مخفية — تعود حتى تكتمل خطواتها" : "ظاهرة حتى تكتمل خطواتها"}</span></span>
+      <button type="button" data-start-here-show disabled={!hidden} onClick={() => { showStartHere(); setHidden(false); }}
+        className="shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold"
+        style={{ background: hidden ? "var(--accentBg)" : "var(--field)", color: hidden ? "var(--accent)" : "var(--text3)", border: "1px solid var(--line)" }}>
+        {hidden ? "أظهرها" : "ظاهرة"}
+      </button>
     </div>
   );
 }

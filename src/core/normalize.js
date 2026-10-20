@@ -238,6 +238,7 @@ function normalizeExpenses(rows, usersFull) {
       periodMonth: e.period_month, note: e.note || "",
       createdBy: null, createdById: e.created_by,
       businessDayId: e.business_day_id,
+      attachId: e.attach_id || null,
     };
   });
 }
@@ -583,6 +584,10 @@ function normalizeUsers(rows) {
     allowedTabs: u.allowed_tabs,
     allowedMore: u.allowed_more,
     createdAt: u.created_at,
+    // استثناءات الأفعال فوق الدور (migration 086)
+    actionGrant: u.action_grant || [],
+    actionRevoke: u.action_revoke || [],
+    mustChangePin: !!u.must_change_pin,
   }));
 }
 
@@ -601,6 +606,7 @@ function normalizeReservations(rows) {
     // «محجوز حتى» وخطّة التقسيط (migration 069)
     holdUntil: r.hold_until ? String(r.hold_until).slice(0, 10) : "",
     plan: r.plan || null,
+    unitCodes: r.unit_codes || [],
     saleId: r.sale_id || null,
     remaining: r.remaining == null ? null : toMoney(r.remaining),
     description: r.description || "",
@@ -744,6 +750,7 @@ function normalizeBootstrap(boot) {
           postSaleSheet: boot.settings.sale_prefs?.postSaleSheet === true,
           sellDuringStocktake: boot.settings.sale_prefs?.sellDuringStocktake === true,
           quoteDays: Number(boot.settings.sale_prefs?.quoteDays) || 7,
+          ...(boot.settings.sale_prefs?.wastage ? { wastage: boot.settings.sale_prefs.wastage } : {}),
           codingModel: ["branch", "hq", "both"].includes(boot.settings.coding_model) ? boot.settings.coding_model : "both",
           zakatYear: boot.settings.zakat_year === "hijri" ? "hijri" : "gregorian",
         }

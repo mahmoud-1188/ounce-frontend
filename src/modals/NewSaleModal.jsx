@@ -20,10 +20,32 @@ import * as api from "../core/api.js";
 
 const SALE_AUTO_ADD_MS = 300;
 
+// قطعٌ متاحة من نفس العيار والصنف ووزنٍ قريب (±10٪) — بديلٌ يُعرض لقطعةٍ غير متاحة
+function similarPiecesOf(items = [], item, unitCode = "", inSale = {}, limit = 6) {
+  if (!item) return [];
+  const w = Number(item.weight) || 0;
+  const taken = new Set(Object.values(inSale || {}).flat().map((c) => String(c).toUpperCase()));
+  const out = [];
+  for (const it of items || []) {
+    if (Number(it.karat) !== Number(item.karat) || (it.categoryId || "") !== (item.categoryId || "") || it.reservedFor) continue;
+    const iw = Number(it.weight) || 0;
+    if (w > 0 && Math.abs(iw - w) > w * 0.1) continue;
+    for (const u of it.units || []) {
+      if (u.code === unitCode || u.sold || u.issued || u.held || taken.has(String(u.code).toUpperCase()) || onlineBlockReason(it, u.code)) continue;
+      out.push({ itemId: it.id, code: u.code, weight: iw, karat: it.karat });
+      if (out.length >= limit) return out;
+    }
+  }
+  return out;
+}
+
 function NewSaleModal({ activeItems, priceData,
   // ⚠ العملة كانت غائبة عن التوقيع: البدل يستخدمها فيسقط بـ
   // «currency is not defined» — والنافذة تُفرَغ بلا رسالة.
-  currency = "ر.س", initialItemId, initialCustomerId = null, initialDraft = null, onHold = null, taxEnabled, taxRate, settings = {}, role, customers = [], onAddCustomer = null, customOrder = null, reservations = [], dailyCash = null, onClose, onConfirm, onBindEpc, sellerCommission = null }) {
+  currency = "ر.س", initialItemId, initialCustomerId = null, initialDraft = null, onHold = null, taxEnabled, taxRate, settings = {}, role, customers = [], onAddCustomer = null, customOrder = null, reservations = [], dailyCash = null, onClose, onConfirm, onBindEpc, sellerCommission = null, stocktakeLock = null, parkedCodes = {}, allItems = null }) {
+  // قطعةٌ ممسوحة غير متاحة (مباعة أو محجوزة أو في المتجر): تُقترح قطعٌ مشابهة برموزها ليُحضرها البائع
+  const [similarFor, setSimilarFor] = useState(null);
+  const [refreshMsg, setRefreshMsg] = useState("");
   const [customerId, setCustomerId] = useState(customOrder?.customerId || initialCustomerId || initialDraft?.payload?.customerId || "");
   // منتقي العميل: بحثٌ بالاسم أو الجوال، و«+ عميل جديد» يُضاف ويُختار دون مغادرة الفاتورة
   const [custQuery, setCustQuery] = useState("");
@@ -240,6 +262,14 @@ function NewSaleModal({ activeItems, priceData,
     }
     return null;
   };
+  // الرمز بين كل القطع ولو مُباعة — ليُقال لماذا لا تُضاف وتُقترح بدائلها
+  const findAnyUnit = (raw) => {
+    const upper = String(raw || "").trim().toUpperCase();
+    for (const it of allItems || activeItems) for (const u of it.units || []) {
+      if (String(u.code || "").toUpperCase() === upper || (u.epc && String(u.epc).toUpperCase() === upper)) return { item: it, unit: u };
+    }
+    return null;
+  };
   const addByCode = (raw, source = "manual") => {
     clearTimeout(autoAddRef.current);
     const code = String(raw || "").trim();
@@ -249,7 +279,11 @@ function NewSaleModal({ activeItems, priceData,
     if (!m) {
       // ⚠ بطاقة RFID غير مربوطة بقطعة — تُعرض للربط حين جاءت من قارئ أو كاميرا لا من كتابة
       if (source !== "manual" && source !== "typed" && /^[0-9A-F]{8,}$/i.test(code)) { setBindFor(upper); setScanCode(""); return false; }
-      setScanMsg(`لا قطعة متاحة بالرمز ${code} — تأكّد من الرمز أو امسح الملصق ثانيةً`);
+      const gone = findAnyUnit(code);
+      if (gone) {
+        setSimilarFor({ itemId: gone.item.id, code: gone.unit.code });
+        setScanMsg(`القطعة ${gone.unit.code} غير متاحة${gone.unit.sold ? " — مُباعة" : gone.unit.held ? " — معلّقة خارج الرفّ" : ""} · اعرض على العميل قطعةً مشابهة`);
+      } else setScanMsg(`لا قطعة متاحة بالرمز ${code} — تأكّد من الرمز أو امسح الملصق ثانيةً`);
       setScanCode("");
       return false;
     }
@@ -257,17 +291,21 @@ function NewSaleModal({ activeItems, priceData,
     const unitCode = m.unit.code;
     const codes = scannedRef.current[hit.id] || [];
     if (codes.includes(unitCode)) { setScanMsg(`القطعة ${unitCode} في الفاتورة سلفًا`); setScanCode(""); return false; }
+    // القطعة في فاتورةٍ معلّقة: تُستأنف تلك أو تُلغى أوّلًا، وإلا بيعت مرتين على الورق
+    const parkedRef = parkedCodes[String(unitCode).toUpperCase()];
+    if (parkedRef && parkedRef !== initialDraft?.ref) { setScanMsg(`القطعة ${unitCode} في الفاتورة المعلّقة ${parkedRef} — استأنفها أو ألغِها أوّلًا`); setScanCode(""); return false; }
     if (hit.reservedFor) {
       // ⚠ المحجوزة تُباع لصاحب حجزها وحده — ويُخصم عربونه (الخادم يفرض الشيء نفسه)
       const rsv = reservations.find((r) => r.id === hit.reservedFor && r.status === "open");
-      if (!rsv || !rsv.customerId) { setScanMsg("هذه القطعة محجوزة"); setScanCode(""); return false; }
-      if (customerId && customerId !== rsv.customerId) { setScanMsg("هذه القطعة محجوزة لعميل آخر"); setScanCode(""); return false; }
+      if (!rsv || !rsv.customerId) { setScanMsg("هذه القطعة محجوزة — اعرض على العميل قطعةً مشابهة"); setSimilarFor({ itemId: hit.id, code: unitCode }); setScanCode(""); return false; }
+      if (customerId && customerId !== rsv.customerId) { setScanMsg("هذه القطعة محجوزة لعميل آخر — اعرض عليه قطعةً مشابهة"); setSimilarFor({ itemId: hit.id, code: unitCode }); setScanCode(""); return false; }
       if (!customerId) setCustomerId(rsv.customerId);
       setDepositFrom(rsv.id);
     }
     // حارس المتجر: القطعة الملتزَم بها أونلاين لا تُباع في المحل
     const onlineBlock = onlineBlockReason(hit, unitCode);
-    if (onlineBlock) { setScanMsg(onlineBlock); setScanCode(""); return false; }
+    if (onlineBlock) { setScanMsg(`${onlineBlock} — اعرض على العميل قطعةً مشابهة`); setSimilarFor({ itemId: hit.id, code: unitCode }); setScanCode(""); return false; }
+    setSimilarFor(null);
     const next = [...codes, unitCode];
     scannedRef.current = { ...scannedRef.current, [hit.id]: next };
     setSelection((prev) => ({ ...prev, [hit.id]: { ...(prev[hit.id] || { unitPrice: "" }), qty: next.length } }));
@@ -424,14 +462,18 @@ function NewSaleModal({ activeItems, priceData,
               onClick={() => {
                 setFrozenPrice(livePrice);
                 setFrozenAt(new Date().toISOString());
-                setSelection((prev) => {
-                  const next = {};
-                  Object.entries(prev).forEach(([id, v]) => {
-                    const it = activeItems.find((x) => x.id === id);
-                    next[id] = it ? { ...v, unitPrice: unitCurrentValue(it, livePrice).toFixed(2) } : v;
-                  });
-                  return next;
+                // يُحدَّث ما بقي على مقترحه القديم وحده: السعر المتّفق عليه لا يُمسّ والفارغ يبقى فارغًا
+                let updated = 0, kept = 0;
+                const next = {};
+                Object.entries(selection).forEach(([id, v]) => {
+                  const it = activeItems.find((x) => x.id === id);
+                  const cur = Number(v.unitPrice) || 0;
+                  if (!it || !(cur > 0)) { next[id] = v; return; }
+                  if (Math.round(cur * 100) === Math.round(unitCurrentValue(it, frozenPrice) * 100)) { next[id] = { ...v, unitPrice: unitCurrentValue(it, livePrice).toFixed(2) }; updated += 1; }
+                  else { next[id] = v; kept += 1; }
                 });
+                setSelection(next);
+                setRefreshMsg(kept ? `حُدِّث ${updated} سعرًا · لم يُحدَّث ${kept} سعرٌ متّفق عليه — عدّله بيدك إن أردت` : `حُدِّث ${updated} سعرًا بسعر السوق الجديد`);
               }}
               className="text-[11px] px-2.5 py-1 rounded-full font-bold"
               style={{ background: "var(--accentBg)", color: "var(--accent)", border: "1px solid var(--accentLine)" }}
@@ -444,7 +486,20 @@ function NewSaleModal({ activeItems, priceData,
           جُمّد {new Date(frozenAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })} —
           لن يتغيّر الإجمالي بتحرّك السوق أثناء إعداد الفاتورة.
         </p>
+        {refreshMsg && <p style={{ color: "var(--accentText)" }} className="text-[11px] mt-1 font-bold" data-refresh-msg>{refreshMsg}</p>}
       </Card>
+      {/* الجرد جارٍ والبيع موقوف: تُعلَّق الفاتورة بأسعارها وقطعها وتُستأنف بعده */}
+      {stocktakeLock && (
+        <Card style={{ padding: 10, marginBottom: 12, border: "1px solid var(--badLine)", background: "var(--badBg)" }}>
+          <p style={{ color: "var(--bad)", margin: 0 }} className="text-[12px] font-bold" data-stocktake-banner>بدأ جرد المخزون ({stocktakeLock.startedBy || "—"}) — لا يُحفظ البيع الآن</p>
+          <p style={{ color: "var(--text2)", margin: "2px 0 6px" }} className="text-[11px]">علّق الفاتورة الآن وتُستأنف بأسعارها وقطعها بعد انتهاء الجرد.</p>
+          {onHold && selectedCount > 0 && (
+            <button type="button" onClick={() => hold("held")} className="w-full rounded-xl text-xs font-bold" style={{ minHeight: 44, background: "var(--panel)", color: "var(--bad)", border: "1px solid var(--badLine)" }}>
+              علّق الفاتورة
+            </button>
+          )}
+        </Card>
+      )}
 
       {/* مسح الرقاقة: ScanField يقبل قارئ RFID/باركود (يعمل كلوحة مفاتيح)
           أو الكاميرا أو الكتابة اليدوية معًا — يضيف القطعة فورًا دون بحث
@@ -481,6 +536,34 @@ function NewSaleModal({ activeItems, priceData,
           {scanMsg}
         </p>
       )}
+      {/* القطع المشابهة تُذكر برموزها ولا تُضاف بضغطة — يُحضرها البائع من الرفّ ويمسحها */}
+      {similarFor && (() => {
+        const base = (allItems || activeItems).find((i) => i.id === similarFor.itemId);
+        const alts = similarPiecesOf(activeItems, base, similarFor.code, scannedRef.current);
+        return (
+          <div data-similar-for={similarFor.code}>
+          <Card style={{ padding: 10, marginBottom: 12 }}>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[12px] font-bold" style={{ color: "var(--text)" }}>قطعٌ مشابهة ({alts.length})</span>
+              <button type="button" onClick={() => setSimilarFor(null)} className="text-[11px]" style={{ color: "var(--text2)", minHeight: 32 }}>إغلاق</button>
+            </div>
+            {alts.length === 0 ? <p className="text-[11px]" style={{ color: "var(--text2)" }}>لا قطعة مشابهة متاحة الآن</p> : (
+              <>
+                <p className="text-[11px] mb-1.5" style={{ color: "var(--text2)" }}>أحضر إحداها من الرفّ وامسحها لتُضاف</p>
+                <div className="flex flex-wrap gap-2">
+                  {alts.map((a) => (
+                    <span key={a.code} data-similar={a.code} dir="ltr"
+                      className="px-3 py-2 rounded-xl text-[11px] font-bold" style={{ background: "var(--field)", color: "var(--text)", border: "1px solid var(--line)" }}>
+                      {a.code} · {a.karat} · {fmtW(a.weight)} جم
+                    </span>
+                  ))}
+                </div>
+              </>
+            )}
+          </Card>
+          </div>
+        );
+      })()}
       {scanHit && scanMsg.startsWith("أُضيفت") && (() => {
         const it = activeItems.find((x) => x.id === scanHit.itemId);
         if (!it) return null;
@@ -1147,8 +1230,17 @@ function NewSaleModal({ activeItems, priceData,
         const tradeOk =
           paymentMethod !== "scrap" || splitPay || tradeLines.length > 0;
         const canConfirm =
-          selectedCount > 0 && allPriced && tradeOk && !termBlock &&
+          selectedCount > 0 && allPriced && tradeOk && !termBlock && !stocktakeLock &&
           !(paymentMethod === "credit" && !customerId);
+        // ما ينقص قبل التأكيد — يُقال بدل زرٍّ معطّلٍ بلا سبب
+        const missing = [
+          selectedCount === 0 && "أضف قطعة",
+          selectedCount > 0 && !allPriced && "اكتب سعر كل قطعة",
+          !tradeOk && "أضف سطر الكسر",
+          paymentMethod === "credit" && !customerId && "اختر العميل",
+          termBlock && "أكمل الدفع على جهاز الدفع أو اكتب رقم الاعتماد",
+          stocktakeLock && "الجرد جارٍ — علّق الفاتورة",
+        ].filter(Boolean);
         return (
           <>
           {onHold && selectedCount > 0 && (
@@ -1158,6 +1250,9 @@ function NewSaleModal({ activeItems, priceData,
               <button onClick={() => hold("quote")} disabled={!allPriced} className="py-2 rounded-xl text-[12px] font-bold"
                 style={{ background: "var(--panel)", color: allPriced ? "var(--accent)" : "var(--text3)", border: "1px solid var(--line)" }}>عرض سعر للعميل</button>
             </div>
+          )}
+          {!canConfirm && missing.length > 0 && (
+            <p style={{ color: "var(--text3)" }} className="text-[11px] mb-1.5 text-center" data-sale-missing>قبل التأكيد: {missing.join(" · ")}</p>
           )}
           <button
             disabled={!canConfirm}

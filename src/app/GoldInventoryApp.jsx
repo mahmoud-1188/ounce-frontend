@@ -318,7 +318,7 @@ import { buildWeightEntries } from "../domain/buildWeightEntries.js";
 import { computeCommission } from "../domain/computeCommission.js";
 import { computeReturnAmounts } from "../domain/computeReturnAmounts.js";
 import { hashPin } from "../domain/hashPin.js";
-import { applyHqMarkup, sellPrice24, markupLabel, documentIndex, aiAllowedFor, aiScope, branchDataKey, branchSnapshotKey, bundleById, cardFeeOf, cashAccountFor, categoryLabel, contentWidth, exchangeKind, expenseAccountFor, exportTablesPdf, fetchGoldPriceSAR, generateUnitCode, goldDestLabel, goldProfit, inPeriod, isBundle, isLiveScrap, itemLabel, lotAllocatedWeight, migrateLegacyKeys, modeAllowsAction, modeAllowsPage, modeAllowsTab, nameExists, navPerRow, normalizeFundingSource, normalizeName, r2, r3, remainingQty, saleProfitOf, saveAttachment, setRuntimeCategories, streamBase, trustBalance, unitCostBasis, unitCurrentValue, useViewport, weightTrialBalance } from "../domain/helpers.js";
+import { applyHqMarkup, sellPrice24, markupLabel, documentIndex, aiAllowedFor, aiScope, branchDataKey, branchSnapshotKey, bundleById, cardFeeOf, cashAccountFor, categoryLabel, contentWidth, exchangeKind, expenseAccountFor, exportTablesPdf, fetchGoldPriceSAR, generateUnitCode, goldDestLabel, goldProfit, inPeriod, isBundle, isLiveScrap, itemLabel, codingVarianceOf, lotAllocatedWeight, migrateLegacyKeys, wastageSettingsOf, modeAllowsAction, modeAllowsPage, modeAllowsTab, nameExists, navPerRow, normalizeFundingSource, normalizeName, r2, r3, remainingQty, saleProfitOf, saveAttachment, setRuntimeCategories, streamBase, trustBalance, unitCostBasis, unitCurrentValue, useViewport, weightTrialBalance } from "../domain/helpers.js";
 import { isPeriodClosed } from "../domain/isPeriodClosed.js";
 import { key } from "../domain/key.js";
 import { nextCashRef } from "../domain/nextCashRef.js";
@@ -1250,7 +1250,8 @@ export default function GoldInventoryApp() {
       (Number(merged.creditOverdueDays) || 0) !== (Number(appSettings.creditOverdueDays) || 0) ||
       !!merged.postSaleSheet !== !!appSettings.postSaleSheet ||
       !!merged.sellDuringStocktake !== !!appSettings.sellDuringStocktake ||
-      (Number(merged.quoteDays) || 7) !== (Number(appSettings.quoteDays) || 7);
+      (Number(merged.quoteDays) || 7) !== (Number(appSettings.quoteDays) || 7) ||
+      JSON.stringify(merged.wastage || null) !== JSON.stringify(appSettings.wastage || null);
     if (!taxOrFeesChanged) {
       flashToast("تم حفظ الإعدادات");
       return true;
@@ -1266,7 +1267,7 @@ export default function GoldInventoryApp() {
         zakatYear: merged.zakatYear === "hijri" ? "hijri" : "gregorian",
         creditLimitDefault: Number(merged.creditLimitDefault) || 0,
         creditOverdueDays: Number(merged.creditOverdueDays) || 0,
-        salePrefs: { postSaleSheet: !!merged.postSaleSheet, sellDuringStocktake: !!merged.sellDuringStocktake, quoteDays: Number(merged.quoteDays) || 7 },
+        salePrefs: { postSaleSheet: !!merged.postSaleSheet, sellDuringStocktake: !!merged.sellDuringStocktake, quoteDays: Number(merged.quoteDays) || 7, ...(merged.wastage ? { wastage: merged.wastage } : {}) },
       });
       persistSettings({
         ...merged,
@@ -1276,7 +1277,7 @@ export default function GoldInventoryApp() {
         workdayMode: res.settings.workday_mode || "required",
         ...(res.settings.zakat_enabled != null ? { zakatEnabled: res.settings.zakat_enabled !== false, zakatYear: res.settings.zakat_year || "gregorian" } : {}),
         ...(res.settings.credit_limit_default != null ? { creditLimitDefault: Number(res.settings.credit_limit_default) || 0, creditOverdueDays: Number(res.settings.credit_overdue_days) || 0 } : {}),
-        ...(res.settings.sale_prefs ? { postSaleSheet: res.settings.sale_prefs.postSaleSheet === true, sellDuringStocktake: res.settings.sale_prefs.sellDuringStocktake === true, quoteDays: Number(res.settings.sale_prefs.quoteDays) || 7 } : {}),
+        ...(res.settings.sale_prefs ? { postSaleSheet: res.settings.sale_prefs.postSaleSheet === true, sellDuringStocktake: res.settings.sale_prefs.sellDuringStocktake === true, quoteDays: Number(res.settings.sale_prefs.quoteDays) || 7, ...(res.settings.sale_prefs.wastage ? { wastage: res.settings.sale_prefs.wastage } : {}) } : {}),
       });
       flashToast("تم حفظ الإعدادات");
       return true;
@@ -1374,6 +1375,7 @@ export default function GoldInventoryApp() {
         method: entry.method === "network" ? "network" : "cash",
         holdUntil: entry.holdUntil || null,
         plan: entry.plan || null,
+        unitCode: entry.unitCode || null,
       });
       const r = res.reservation;
       const rec = {
@@ -1381,7 +1383,7 @@ export default function GoldInventoryApp() {
         itemId: r.item_id, description: r.description || "", total: Number(r.total) || 0,
         deposit: Number(r.deposit) || 0, remaining: Number(r.remaining) || 0,
         status: r.status, method: r.method, date: r.created_at, createdBy: currentUser?.name || "",
-        holdUntil: r.hold_until ? String(r.hold_until).slice(0, 10) : "", plan: r.plan || null,
+        holdUntil: r.hold_until ? String(r.hold_until).slice(0, 10) : "", plan: r.plan || null, unitCodes: r.unit_codes || [],
       };
       setReservations((prev) => [rec, ...prev]);
       // عربون الحجز دائمًا من صندوق اليومي (daily_cash/daily_network) في
@@ -3827,6 +3829,15 @@ export default function GoldInventoryApp() {
   const canEditRecords = role === "manager" || role === "assistant";
 
   const loadSaleDrafts = () => api.saleDraftsApi.list().then((r) => setSaleDrafts(r.drafts || [])).catch(() => {});
+  // رموز القطع في الفواتير المعلّقة المفتوحة — نافذة البيع ترفض مسحها حتى تُستأنف تلك أو تُلغى
+  const parkedSaleCodes = useMemo(() => {
+    const out = {};
+    saleDrafts.filter((d) => d.status === "open" && d.kind === "held").forEach((d) => {
+      Object.values(d.payload?.unitCodes || {}).flat().forEach((c) => { out[String(c).toUpperCase()] = d.ref; });
+    });
+    return out;
+  }, [saleDrafts]);
+  useEffect(() => { if (showNewSale) loadSaleDrafts(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [showNewSale]);
   /// تعليق الفاتورة أو حفظها عرض سعر — تُغلق النافذة ولا تتحرّك قطعة
   const handleHoldSale = async (kind, payload, total) => {
     try {
@@ -4314,8 +4325,11 @@ export default function GoldInventoryApp() {
       flashToast("منعت الإدارة المركزية هذه العملية");
       return false;
     }
-    const deny = ROLES[role]?.denyActions;
-    if (Array.isArray(deny) && deny.includes(action)) {
+    // استثناء الشخص فوق دوره: المنح يرفع منع الدور، والإغلاق يمنع ما يسمح به الدور
+    const me = users.find((u) => u.id === currentUser?.id);
+    const revoked = (me?.actionRevoke || []).includes(action);
+    const deny = (ROLES[role]?.denyActions || []).filter((a) => !(me?.actionGrant || []).includes(a));
+    if (revoked || deny.includes(action)) {
       flashToast("هذه العملية خارج صلاحيتك");
       audit("permission", {
         entity: "action", entityId: action,
@@ -5030,7 +5044,7 @@ export default function GoldInventoryApp() {
       // ⚠ دمج لا استبدال: appSettings يحمل أيضًا تفضيلات محلية بحتة
       // (الثيم، طباعة، requirePin...) لا وجود لها في الباك إند بعد —
       // استبدال الكائن كاملًا كان سيمحوها.
-      setAppSettings((prev) => ({ ...prev, taxEnabled: n.appSettings.taxEnabled, taxRate: n.appSettings.taxRate, cardFees: n.appSettings.cardFees, workdayMode: n.appSettings.workdayMode, openingMode: n.appSettings.openingMode, openingFinishedAt: n.appSettings.openingFinishedAt, approvalsEnabled: n.appSettings.approvalsEnabled, approvalThresholds: n.appSettings.approvalThresholds, periodLocks: n.appSettings.periodLocks, serverModules: n.appSettings.serverModules || {}, zakatEnabled: n.appSettings.zakatEnabled, zakatYear: n.appSettings.zakatYear, creditLimitDefault: n.appSettings.creditLimitDefault, creditOverdueDays: n.appSettings.creditOverdueDays, postSaleSheet: n.appSettings.postSaleSheet, sellDuringStocktake: n.appSettings.sellDuringStocktake, quoteDays: n.appSettings.quoteDays, codingModel: n.appSettings.codingModel }));
+      setAppSettings((prev) => ({ ...prev, taxEnabled: n.appSettings.taxEnabled, taxRate: n.appSettings.taxRate, cardFees: n.appSettings.cardFees, workdayMode: n.appSettings.workdayMode, openingMode: n.appSettings.openingMode, openingFinishedAt: n.appSettings.openingFinishedAt, approvalsEnabled: n.appSettings.approvalsEnabled, approvalThresholds: n.appSettings.approvalThresholds, periodLocks: n.appSettings.periodLocks, serverModules: n.appSettings.serverModules || {}, zakatEnabled: n.appSettings.zakatEnabled, zakatYear: n.appSettings.zakatYear, creditLimitDefault: n.appSettings.creditLimitDefault, creditOverdueDays: n.appSettings.creditOverdueDays, postSaleSheet: n.appSettings.postSaleSheet, sellDuringStocktake: n.appSettings.sellDuringStocktake, quoteDays: n.appSettings.quoteDays, wastage: n.appSettings.wastage, codingModel: n.appSettings.codingModel }));
     }
   };
 
@@ -7036,7 +7050,10 @@ export default function GoldInventoryApp() {
     // سبب ظهور مبلغ بلا بيان في التقارير — لا يمكن تتبّعه لاحقًا.
     const name = (entry.name || "").trim() || (emp ? `${catLabel} — ${emp.name}` : catLabel);
     try {
+      // الفاتورة أو الإيصال يُحفظ على هذا الجهاز ويُربط بالمصروف بمعرّفه
+      const attachId = entry.invoiceFile ? await saveAttachment(entry.invoiceFile).catch(() => null) : null;
       const res = await api.expensesApi.add({
+        ...(attachId ? { attachId } : {}),
         category: entry.category,
         amount: Number(entry.amount),
         name,
@@ -7051,6 +7068,7 @@ export default function GoldInventoryApp() {
         ...(entry.fixedId ? { fixedId: entry.fixedId } : {}),
       });
       if (res.approvalPending) { notePendingApproval(res.approvalPending); return null; }
+      if (entry.fixedId) refreshFixedDue();
       const record = {
         id: res.expense.id, ref: res.expense.ref, date: res.expense.created_at,
         category: res.expense.category, name: res.expense.name, amount: Number(res.expense.amount) || 0,
@@ -7058,7 +7076,7 @@ export default function GoldInventoryApp() {
         employeeId: res.expense.employee_id, employeeName: emp?.name || null, employeeRef: emp?.ref || null,
         periodMonth: res.expense.period_month, note: res.expense.note || "",
         createdBy: currentUser?.name || "", createdById: res.expense.created_by,
-        businessDayId: res.expense.business_day_id,
+        businessDayId: res.expense.business_day_id, attachId: res.expense.attach_id || null,
       };
       setExpenses((prev) => [record, ...prev]);
       if (res.cashTx) {
@@ -7410,8 +7428,8 @@ export default function GoldInventoryApp() {
   //   القطع محليًا فقط فيضيع عند أول تحميل، ولا يمرّ فرقه بالدفترين.
   //   الخادم يُخرج الناقص ويُضيف الزائد ويقيّد الفرق بتكلفة الشراء
   //   (وسعر اليوم بديلٌ مُعلَن لصنفٍ بلا تكلفة) — ثم نُعيد التحميل.
-  const handleSaveAudit = async (entries, applyReconcile) => {
-    const audit = { id: Date.now().toString(), date: new Date().toISOString(), entries, applied: applyReconcile, createdBy: currentUser?.name || "", ...dayStamp() };
+  const handleSaveAudit = async (entries, applyReconcile, extra = {}) => {
+    const audit = { id: Date.now().toString(), date: new Date().toISOString(), entries, applied: applyReconcile, createdBy: currentUser?.name || "", ...dayStamp(), ...extra };
     if (applyReconcile) {
       try {
         const res = await api.applyStocktake(
@@ -7452,11 +7470,15 @@ export default function GoldInventoryApp() {
   const handleStocktakeChooseScope = (scope) => {
     setStocktake((prev) => ({ ...prev, scope, generalEntries: scope === "general" ? buildEntriesFor(activeItems) : prev.generalEntries }));
   };
-  const handleStocktakeSelectCategory = (catId) => {
+  // قسمٌ أو عدّة أقسام تُجرد معًا — المفتاح يجمع معرّفاتها، وإنهاؤه يعلّم كلًّا منها
+  const handleStocktakeSelectCategory = (catIdOrIds) => {
+    const ids = Array.isArray(catIdOrIds) ? catIdOrIds : [catIdOrIds];
+    const catId = ids.length === 1 ? ids[0] : ids;
+    const key = ids.join("+");
     setStocktake((prev) => {
-      const existing = prev.sectionalEntries[catId];
-      const entries = existing || buildEntriesFor(activeItems.filter((it) => it.categoryId === catId));
-      return { ...prev, activeCategory: catId, sectionalEntries: { ...prev.sectionalEntries, [catId]: entries } };
+      const existing = prev.sectionalEntries[key];
+      const entries = existing || buildEntriesFor(activeItems.filter((it) => ids.includes(it.categoryId)));
+      return { ...prev, activeCategory: catId, sectionalEntries: { ...prev.sectionalEntries, [key]: entries } };
     });
   };
   const handleStocktakeBackToList = () => {
@@ -7467,7 +7489,7 @@ export default function GoldInventoryApp() {
       if (bucket === "general") {
         return { ...prev, generalEntries: prev.generalEntries.map((e) => (e.itemId === itemId ? { ...e, [field]: val } : e)) };
       }
-      const catId = prev.activeCategory;
+      const catId = Array.isArray(prev.activeCategory) ? prev.activeCategory.join("+") : prev.activeCategory;
       return {
         ...prev,
         sectionalEntries: {
@@ -7497,10 +7519,12 @@ export default function GoldInventoryApp() {
     });
     return out;
   };
+  // نتيجة المسح تُحفظ مع الجرد: ما لم يُقرأ برموزه يُعاد عرضه، وكشف الجرد الرسمي يُطبع منها
   const saveScanAudit = (payload) => {
     const entries = scanEntries(payload);
-    if (entries.length) return handleSaveAudit(entries, true);
-    const audit = { id: Date.now().toString(), date: new Date().toISOString(), entries: [], applied: true, scan: payload,
+    const scan = { ...payload, missing: (payload.missing || []).map((m) => m.code) };
+    if (entries.length) return handleSaveAudit(entries, payload.apply !== false, { scan, scope: payload.scope });
+    const audit = { id: Date.now().toString(), date: new Date().toISOString(), entries: [], applied: true, scan, scope: payload.scope,
       createdBy: currentUser?.name || "", ...dayStamp() };
     persistAudits([audit, ...audits]);
     flashToast(payload.soldFound?.length || payload.unknown?.length ? "حُفظ الجرد — لا عجز، والبنود للمراجعة" : "حُفظ الجرد — مطابق");
@@ -7509,22 +7533,23 @@ export default function GoldInventoryApp() {
   const handleStocktakeFinishSection = (applyReconcile) => {
     if (applyReconcile && applyReconcile.kind === "scan") {
       const catId = applyReconcile.categoryId || stocktake.activeCategory;
+      const ids = Array.isArray(catId) ? catId : [catId];
       saveScanAudit(applyReconcile);
       setStocktake((prev) => ({
         ...prev,
         activeCategory: null,
-        sectionalStatus: { ...prev.sectionalStatus, [catId]: applyReconcile.diffCount ? "missing" : "ok" },
+        sectionalStatus: { ...prev.sectionalStatus, ...Object.fromEntries(ids.map((id) => [id, applyReconcile.diffCount ? "missing" : "ok"])) },
       }));
       return;
     }
-    const catId = stocktake.activeCategory;
-    const entries = stocktake.sectionalEntries[catId] || [];
+    const ids = Array.isArray(stocktake.activeCategory) ? stocktake.activeCategory : [stocktake.activeCategory];
+    const entries = stocktake.sectionalEntries[ids.join("+")] || [];
     const hasMissing = entries.some(entryHasVariance);
-    handleSaveAudit(entries, applyReconcile);
+    handleSaveAudit(entries, applyReconcile, { scope: "sectional" });
     setStocktake((prev) => ({
       ...prev,
       activeCategory: null,
-      sectionalStatus: { ...prev.sectionalStatus, [catId]: hasMissing ? "missing" : "ok" },
+      sectionalStatus: { ...prev.sectionalStatus, ...Object.fromEntries(ids.map((id) => [id, hasMissing ? "missing" : "ok"])) },
     }));
     if (!applyReconcile) flashToast("تم حفظ جرد القسم");
   };
@@ -7792,6 +7817,14 @@ export default function GoldInventoryApp() {
     // تركُه بلا تسجيل يعني فرقًا دائمًا لا يُفسَّر.
     const entered = Number(lot.enteredWeight) || lotAllocatedWeight(lot.id, items);
     const variance = (Number(lot.weight) || 0) - entered; // موجب = هالك، سالب = فائض
+    // فوق تسامح فرق التكويد (الإعدادات ← الهدر والفروق) لا تُقفل الدفعة بلا سبب مكتوب
+    const wcfg = wastageSettingsOf(appSettings);
+    const cv = codingVarianceOf({ receivedW: Number(lot.weight) || 0, codedW: entered, tolG: wcfg.receiveTolG, codingTolPct: wcfg.codingTolPct });
+    if (cv.needsReason && !String(note || "").trim()) {
+      const why = typeof window !== "undefined" ? window.prompt(`فرق التكويد ${fmtW(Math.abs(cv.diff))} جم (${cv.pct}٪) فوق التسامح ${wcfg.codingTolPct}٪ — اكتب السبب`) : "";
+      if (!String(why || "").trim()) { flashToast("لم تُقفل الدفعة — السبب مطلوب لفرقٍ فوق التسامح"); return null; }
+      note = String(why).trim();
+    }
     const purity = PURITY[lot.karat] || (Number(lot.karat) || 0) / 24;
     const fine = Math.abs(variance) * purity;
     const value = Math.abs(variance) * (Number(lot.costPerGram) || 0);
@@ -8526,7 +8559,7 @@ export default function GoldInventoryApp() {
             expenseNames={expenseNames}
             users={users}
             onAddExpenseName={handleAddExpenseName}
-            onDeleteExpenseName={handleDeleteExpenseName} expenses={expenses} totals={expensesTotals} currency={priceData.currency} onAdd={handleAddExpense} flashToast={flashToast} />
+            onDeleteExpenseName={handleDeleteExpenseName} fixedDue={fixedDue} expenses={expenses} totals={expensesTotals} currency={priceData.currency} onAdd={handleAddExpense} flashToast={flashToast} />
         )}
 
         {morePage === null && tab === "stocktake" && (
@@ -8559,6 +8592,11 @@ export default function GoldInventoryApp() {
             onFinishGeneral={handleStocktakeFinishGeneral}
             onEndSectional={handleStocktakeEndSectional}
             onCancelScope={handleStocktakeCancelScope}
+            onStartFull={async () => { if (await handleToggleStocktakeLock(true, "all")) handleStocktakeChooseScope("general"); }}
+            branchInfo={{ ...(branchProvision?.profile || {}), name: branchIdentity?.name || "" }}
+            lots={lots}
+            suppliers={suppliers}
+            canPrintSheet={!!appSettings?.officialPrint || role === "manager"}
             flashToast={flashToast}
           />
         )}
@@ -8795,6 +8833,15 @@ export default function GoldInventoryApp() {
             currentUserId={currentUser?.id || null}
             onEnroll={role === "manager" ? (u) => setEnrollFor(u) : null}
             onFetchLog={async () => (await api.controlApi.permissionLog()).log || []}
+            onFetchActionsMeta={() => api.usersApi.actionsMeta()}
+            onSetActions={async (id, grant, revoke) => {
+              try {
+                const r = await api.usersApi.setActions(id, grant, revoke);
+                setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, actionGrant: r.action_grant || [], actionRevoke: r.action_revoke || [] } : u)));
+                flashToast("حُفظت أفعال الموظف");
+                return true;
+              } catch (err) { flashToast(apiErrorMessage(err, "تعذّر حفظ الأفعال")); return false; }
+            }}
             onBack={() => setMorePage(null)}
           />
         )}
@@ -8811,7 +8858,13 @@ export default function GoldInventoryApp() {
             settings={appSettings} onSave={handleUpdateSettings} branchIdentity={branchIdentity} onSaveBranch={handleSaveBranchIdentity} hqPermissions={hqPermissions}
             canEditControls={role === "manager"} onSaveControls={handleSaveControls}
             hqManaged={branchProvision?.locked ? { by: branchProvision.by, at: branchProvision.at } : null} limitsByHq={hqOwnsStaff}
-            onBack={() => setMorePage(null)} />
+            onBack={() => setMorePage(null)}
+            provision={branchProvision}
+            onSaveProfile={role === "manager" ? async (profile) => {
+              try { const r = await api.saveBranchProfile(profile); setBranchProvision((p) => ({ ...(p || {}), profile: r.profile })); flashToast("✓ حُفظت معلومات الفرع"); return true; }
+              catch (err) { flashToast(err?.body?.error === "settings_locked_by_hq" ? "الإدارة ثبّتت معلومات الفرع" : err?.body?.error === "invalid_vat_number" ? "الرقم الضريبي 15 رقمًا يبدأ وينتهي بـ3" : apiErrorMessage(err, "تعذّر الحفظ")); return false; }
+            } : null}
+          />
         )}
         {morePage === "openingCompare" && (
           <OpeningComparePage
@@ -8971,6 +9024,11 @@ export default function GoldInventoryApp() {
             price24={priceData.current}
             onProcess={processSalesReturn}
             onExchange={processExchange}
+            branchName={branchIdentity?.name || appSettings?.storeName || ""}
+            branchInfo={{ ...(branchProvision?.profile || {}), name: branchIdentity?.name || "" }}
+            officialPrint={!!appSettings?.officialPrint}
+            onPrintSale={invoicePrintOn ? printSale : null}
+            flashToast={flashToast}
             onBack={() => { setReturnPreset(null); setMorePage(null); }}
           />
         )}
@@ -9061,7 +9119,9 @@ export default function GoldInventoryApp() {
           <PurchaseOrdersPage suppliers={suppliers} currency={priceData.currency || "ر.س"} onReceived={() => loadBootstrap(currentUser).catch(() => {})} onBack={() => setMorePage(null)} />
         )}
         {morePage === "budgets" && <BudgetsPage currency={priceData.currency || "ر.س"} canEdit={role === "manager"} onBack={() => setMorePage(null)} />}
-        {morePage === "vatReturn" && <VatReturnPage currency={priceData.currency || "ر.س"} onBack={() => setMorePage(null)} />}
+        {morePage === "vatReturn" && <VatReturnPage currency={priceData.currency || "ر.س"} onBack={() => setMorePage(null)}
+          info={{ name: branchProvision?.profile?.legalName || branchIdentity?.name || appSettings?.storeName || "", vat: branchProvision?.profile?.vatNumber || appSettings?.vatNumber || "" }}
+          canSettle={role === "manager"} flashToast={flashToast} onChanged={() => loadBootstrap(currentUser).catch(() => {})} />}
         {morePage === "einvoice" && <EInvoicePage currency={priceData.currency || "ر.س"} flashToast={flashToast}
           onOpenModules={role === "manager" ? () => openPage("modules") : null} onBack={() => setMorePage(null)} />}
         {morePage === "amlRegister" && <AmlRegisterPage currency={priceData.currency || "ر.س"} onBack={() => setMorePage(null)} />}
@@ -9296,6 +9356,7 @@ export default function GoldInventoryApp() {
             onCancel={handleCancelReservation}
             onPay={handlePayReservation}
             onHold={handleHoldReservation}
+            onDeliver={(r) => { setQuickSaleItemId(r.itemId || null); setQuickSaleCustomerId(r.customerId || null); setShowNewSale(true); }}
             onBack={() => setMorePage(null)}
           />
         )}
@@ -9351,6 +9412,8 @@ export default function GoldInventoryApp() {
             currency={priceData.currency}
             price24={priceData.current}
             onBack={() => setMorePage(null)}
+            settings={appSettings} onSaveSettings={role === "manager" ? handleUpdateSettings : null}
+            rfidCfg={rfidCfg} onSaveRfid={role !== "employee" ? handleSaveRfid : null}
           />
         )}
         {morePage === "rfidReader" && (
@@ -9421,7 +9484,9 @@ export default function GoldInventoryApp() {
           />
         )}
         {morePage === "pieceInquiry" && (
-          <PieceInquiryPage price24={priceData.current || 0} currency={priceData.currency} canManageHeld={role === "manager"} flashToast={flashToast} onBack={() => setMorePage(null)} settings={appSettings} />
+          <PieceInquiryPage price24={priceData.current || 0} currency={priceData.currency} canManageHeld={role === "manager"} flashToast={flashToast} onBack={() => setMorePage(null)} settings={appSettings}
+            onItemActions={(itemId) => { const it = items.find((x) => x.id === itemId); if (it) setSheetEntity({ kind: "item", record: it }); else flashToast("القطعة خارج مخزون هذا الجهاز — حدّث البيانات"); }}
+            onOpenReservations={() => openPage("reservations")} />
         )}
         {morePage === "hqDocs" && (
           <HqTransactionsPage
@@ -9692,6 +9757,7 @@ export default function GoldInventoryApp() {
             routing={approvalRouting}
             onDecide={handleDecideApproval}
             onExecute={executeApproval}
+            onOpenPage={(pg) => openPage(pg)}
             meId={currentUser?.id || null}
             onCancel={async (ap) => {
               try {
@@ -10107,6 +10173,9 @@ export default function GoldInventoryApp() {
           initialCustomerId={quickSaleCustomerId}
           initialDraft={resumeDraft}
           onHold={handleHoldSale}
+          stocktakeLock={saleLocked ? stocktakeLock : null}
+          parkedCodes={parkedSaleCodes}
+          allItems={items}
           taxEnabled={appSettings.taxEnabled}
           taxRate={appSettings.taxRate}
           currency={priceData.currency}

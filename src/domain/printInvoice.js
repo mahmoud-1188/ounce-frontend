@@ -78,7 +78,7 @@ ${full ? `<div class="buyer"><b>${L("المشتري", "Buyer")}:</b> ${esc(buyer
   ${full ? `<div class="words">${esc(arabicAmountWords(sale.total))}</div>` : ""}
 </div>
 ${qr ? `<div class="qr">${qrSvg(qr, thermal ? 120 : 140)}</div>` : ""}
-<div class="foot">${sale.sellerName ? `${L("البائع", "Seller")}: ${esc(sale.sellerName)}` : ""}</div>
+<div class="foot">${sale.sellerName ? `${L("البائع", "Seller")}: ${esc(sale.sellerName)}` : ""}${info.footerNote ? `<div>${esc(info.footerNote)}</div>` : ""}</div>
 </div></body></html>`;
 }
 
