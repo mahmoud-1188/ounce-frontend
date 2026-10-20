@@ -644,6 +644,8 @@ const budgetsApi = {
   save: (period, lines) => apiFetch("/budgets", { method: "PUT", body: { period, lines } }),
   copy: (from, to) => apiFetch("/budgets/copy", { method: "POST", body: { from, to } }),
   vatReturn: (from, to) => apiFetch(`/vat-return?from=${from}&to=${to}`),
+  vatSettle: (from, to, source) => apiFetch("/vat-return/settle", { method: "POST", body: { from, to, source } }),
+  vatUndo: (id, reason) => apiFetch(`/vat-return/settle/${id}/undo`, { method: "POST", body: { reason } }),
 };
 
 // الوحدات الاختيارية (migrations 050–052)

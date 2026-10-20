@@ -9115,7 +9115,9 @@ export default function GoldInventoryApp() {
           <PurchaseOrdersPage suppliers={suppliers} currency={priceData.currency || "ر.س"} onReceived={() => loadBootstrap(currentUser).catch(() => {})} onBack={() => setMorePage(null)} />
         )}
         {morePage === "budgets" && <BudgetsPage currency={priceData.currency || "ر.س"} canEdit={role === "manager"} onBack={() => setMorePage(null)} />}
-        {morePage === "vatReturn" && <VatReturnPage currency={priceData.currency || "ر.س"} onBack={() => setMorePage(null)} />}
+        {morePage === "vatReturn" && <VatReturnPage currency={priceData.currency || "ر.س"} onBack={() => setMorePage(null)}
+          info={{ name: branchProvision?.profile?.legalName || branchIdentity?.name || appSettings?.storeName || "", vat: branchProvision?.profile?.vatNumber || appSettings?.vatNumber || "" }}
+          canSettle={role === "manager"} flashToast={flashToast} onChanged={() => loadBootstrap(currentUser).catch(() => {})} />}
         {morePage === "einvoice" && <EInvoicePage currency={priceData.currency || "ر.س"} flashToast={flashToast}
           onOpenModules={role === "manager" ? () => openPage("modules") : null} onBack={() => setMorePage(null)} />}
         {morePage === "amlRegister" && <AmlRegisterPage currency={priceData.currency || "ر.س"} onBack={() => setMorePage(null)} />}
