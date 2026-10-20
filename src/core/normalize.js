@@ -742,7 +742,7 @@ function normalizeBootstrap(boot) {
           openingFinishedAt: boot.settings.opening_finished_at || null,
           approvalsEnabled: boot.settings.approvals_enabled !== false,
           approvalThresholds: boot.settings.approval_thresholds || {},
-          periodLocks: { lockAll: boot.settings.lock_all || null, lockPosted: boot.settings.lock_posted || null },
+          periodLocks: { lockAll: boot.settings.lock_all || null, lockPosted: boot.settings.lock_posted || null, hqLockAll: boot.settings.hq_lock_all || null, hqLockPosted: boot.settings.hq_lock_posted || null },
           // الوحدات الاختيارية من الخادم (migration 050) — { id: { on, cfg } }
           serverModules: boot.settings.modules || {},
           // الزكاة (migration 065): مفعّلةٌ افتراضًا، والسنة ميلادية افتراضًا
