@@ -1393,7 +1393,10 @@ export default function GoldInventoryApp() {
       // هذا المسار تحديدًا — لا يُطلب من الخزنة، فلا حاجة لفحص pool هنا.
       if (res.cashTx) setCashTx((prev) => [normalizeCashTxRow(res.cashTx), ...prev]);
       if (entry.itemId) {
-        setItems((prev) => prev.map((it) => (it.id === entry.itemId ? { ...it, reservedFor: rec.id } : it)));
+        const codes = new Set((rec.unitCodes || []).map((c) => String(c).toUpperCase()));
+        setItems((prev) => prev.map((it) => (it.id !== entry.itemId ? it : codes.size
+          ? { ...it, units: (it.units || []).map((u) => (codes.has(String(u.code).toUpperCase()) ? { ...u, reservedFor: rec.id } : u)) }
+          : { ...it, reservedFor: rec.id })));
       }
       flashToast(`سُجّل الحجز ${rec.ref}`);
       return rec;
@@ -1413,7 +1416,8 @@ export default function GoldInventoryApp() {
       const res = await api.reservationsApi.cancel(id, refund);
       setReservations((prev) => prev.map((x) => (x.id === id ? { ...x, status: "cancelled", cancelledAt: new Date().toISOString(), refunded: !!refund } : x)));
       if (res.cashTx) setCashTx((prev) => [normalizeCashTxRow(res.cashTx), ...prev]);
-      if (r.itemId) setItems((prev) => prev.map((it) => (it.id === r.itemId ? { ...it, reservedFor: null } : it)));
+      if (r.itemId) setItems((prev) => prev.map((it) => (it.id === r.itemId
+        ? { ...it, reservedFor: it.reservedFor === r.id ? null : it.reservedFor, units: (it.units || []).map((u) => (u.reservedFor === r.id ? { ...u, reservedFor: null } : u)) } : it)));
       flashToast(refund ? "أُلغي الحجز وأُرجع العربون" : Number(res?.forfeited) > 0 ? `أُلغي الحجز — صودر العربون ${fmtMoney(res.forfeited)} إيرادًا` : "أُلغي الحجز");
       return res;
     } catch (err) {

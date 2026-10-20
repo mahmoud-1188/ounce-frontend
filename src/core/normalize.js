@@ -29,6 +29,8 @@ function normalizeItems(itemRows, itemUnitRows) {
       epcBoundAt: u.epc_bound_at || null,
       // الوضع الخفي (migration 047): خرجت من الرفّ لا من الدفتر — حتى يُكمَل بيعها
       held: !!u.held,
+      // حجز القطعة بعينها (migration 088) — باقي الصنف يُباع
+      reservedFor: u.reserved_for || null,
       heldAt: u.held_at || null,
       heldBy: u.held_by || "",
       heldRef: u.held_ref || "",

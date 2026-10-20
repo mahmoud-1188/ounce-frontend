@@ -63,7 +63,7 @@ function ReservationsPage({ reservations, customers, activeItems, currency, canM
   const [scan, setScan] = useState("");
   const [scanMsg, setScanMsg] = useState("");
   const [cam, setCam] = useState(false);
-  const freeUnits = (it) => (it?.units || []).filter((u) => !u.sold && !u.issued && !u.held);
+  const freeUnits = (it) => (it?.units || []).filter((u) => !u.sold && !u.issued && !u.held && !u.reservedFor);
   const pickByCode = (raw) => {
     const code = String(raw || "").trim().toUpperCase();
     if (!code) return;
@@ -71,7 +71,7 @@ function ReservationsPage({ reservations, customers, activeItems, currency, canM
     const u = it && (it.units || []).find((x) => String(x.code).toUpperCase() === code || (x.epc && String(x.epc).toUpperCase() === code));
     if (!it || !u) { setScanMsg(`لا قطعة بالرمز ${code}`); return; }
     if (u.sold || u.issued || u.held) { setScanMsg(`القطعة ${u.code} ليست على الرفّ`); return; }
-    if (it.reservedFor) { setScanMsg(`القطعة ${u.code} محجوزةٌ سلفًا`); return; }
+    if (it.reservedFor || u.reservedFor) { setScanMsg(`القطعة ${u.code} محجوزةٌ سلفًا`); return; }
     setItemId(it.id); setUnitCode(u.code); setScan(""); setScanMsg(`✓ ${itemLabel(it)} — ${u.code}`);
   };
   const custList = custQ.trim()

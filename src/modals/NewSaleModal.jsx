@@ -31,7 +31,7 @@ function similarPiecesOf(items = [], item, unitCode = "", inSale = {}, limit = 6
     const iw = Number(it.weight) || 0;
     if (w > 0 && Math.abs(iw - w) > w * 0.1) continue;
     for (const u of it.units || []) {
-      if (u.code === unitCode || u.sold || u.issued || u.held || taken.has(String(u.code).toUpperCase()) || onlineBlockReason(it, u.code)) continue;
+      if (u.code === unitCode || u.sold || u.issued || u.held || u.reservedFor || taken.has(String(u.code).toUpperCase()) || onlineBlockReason(it, u.code)) continue;
       out.push({ itemId: it.id, code: u.code, weight: iw, karat: it.karat });
       if (out.length >= limit) return out;
     }
@@ -294,9 +294,11 @@ function NewSaleModal({ activeItems, priceData,
     // القطعة في فاتورةٍ معلّقة: تُستأنف تلك أو تُلغى أوّلًا، وإلا بيعت مرتين على الورق
     const parkedRef = parkedCodes[String(unitCode).toUpperCase()];
     if (parkedRef && parkedRef !== initialDraft?.ref) { setScanMsg(`القطعة ${unitCode} في الفاتورة المعلّقة ${parkedRef} — استأنفها أو ألغِها أوّلًا`); setScanCode(""); return false; }
-    if (hit.reservedFor) {
+    // الحجز على القطعة نفسها (migration 088) أو على الصنف كله
+    const rsvId = m.unit.reservedFor || hit.reservedFor;
+    if (rsvId) {
       // ⚠ المحجوزة تُباع لصاحب حجزها وحده — ويُخصم عربونه (الخادم يفرض الشيء نفسه)
-      const rsv = reservations.find((r) => r.id === hit.reservedFor && r.status === "open");
+      const rsv = reservations.find((r) => r.id === rsvId && r.status === "open");
       if (!rsv || !rsv.customerId) { setScanMsg("هذه القطعة محجوزة — اعرض على العميل قطعةً مشابهة"); setSimilarFor({ itemId: hit.id, code: unitCode }); setScanCode(""); return false; }
       if (customerId && customerId !== rsv.customerId) { setScanMsg("هذه القطعة محجوزة لعميل آخر — اعرض عليه قطعةً مشابهة"); setSimilarFor({ itemId: hit.id, code: unitCode }); setScanCode(""); return false; }
       if (!customerId) setCustomerId(rsv.customerId);
