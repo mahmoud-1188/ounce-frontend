@@ -7,6 +7,7 @@ import { Card } from "../ui/Card.jsx";
 import { Field } from "../ui/Field.jsx";
 import { NumericInput } from "../ui/NumericInput.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
+import { SupplierOpeningCard } from "../ui/SupplierOpeningCard.jsx";
 
 function OpeningBalancePage({
   openingBalance,
@@ -36,6 +37,10 @@ function OpeningBalancePage({
   onCloseYear,
   flashToast,
   onBack,
+  suppliers = [],
+  supplierOpenings = [],
+  onAddSupplierOpening = null,
+  onVoidSupplierOpening = null,
 }) {
   const [tab, setTab] = useState("opening"); // 'opening' | 'closing'
   const [confirmSave, setConfirmSave] = useState(false);
@@ -266,7 +271,7 @@ function OpeningBalancePage({
           {karatField("عيار الكسر", "safeGoldRawKarat")}
         </div>
         <div className="grid grid-cols-2 gap-2 mb-4">
-          {numField("ذهب مشغول (جم)", "safeGoldCrafted")}
+          {numField("ذهب بالخزنة غير مُكوَّد (جم)", "safeGoldCrafted")}
           {karatField("عيار المشغول", "safeGoldCraftedKarat")}
         </div>
 
@@ -376,6 +381,36 @@ function OpeningBalancePage({
           <input style={inputStyle} value={form.notes} onChange={(e) => set("notes", e.target.value)} />
         </Field>
 
+        {/* أرصدة الموردين الافتتاحية: تُرحَّل فور إضافتها (مقابل رأس المال) — هنا لتكتمل صورة يوم البدء */}
+        <Card style={{ padding: 12, marginBottom: 12 }} data-ob-suppliers>
+          <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-1">أرصدة الموردين (اختياري) — ذهبًا أو نقدًا</p>
+          <p style={{ color: "var(--text2)" }} className="text-[11px] mb-2">
+            دينٌ علينا لمورد أو أصلٌ لنا عنده يوم بدأنا. لا يُعدّ ربحًا ولا خسارة — هو خطّ البداية، ويظهر أوّل سطرٍ في كشف المورد ويُسدَّد منه.
+          </p>
+          {suppliers.length === 0 ? (
+            <p style={{ color: "var(--text3)" }} className="text-[11px]">لا موردين بعد — أضِفهم من «الشراء والموردين ← الموردون» ثم ارجع هنا.</p>
+          ) : suppliers.map((sp) => (
+            <div key={sp.id} className="mb-2">
+              <p style={{ color: "var(--text)" }} className="text-[12px] font-bold mb-1">{sp.name}</p>
+              <SupplierOpeningCard supplier={sp} openings={supplierOpenings} price24={Number(price24) || 0} currency={currency}
+                canManage={!!onAddSupplierOpening} onAdd={onAddSupplierOpening} onVoid={onVoidSupplierOpening} />
+            </div>
+          ))}
+          {(() => {
+            const live = supplierOpenings.filter((o) => !o.voided);
+            if (!live.length) return null;
+            const sum = (pred, f) => live.filter(pred).reduce((a, o) => a + f(o), 0);
+            const goldDue = sum((o) => o.kind === "gold" && o.side === "due", (o) => o.fineWeight), goldOwed = sum((o) => o.kind === "gold" && o.side === "owed", (o) => o.fineWeight);
+            const cashDue = sum((o) => o.kind === "cash" && o.side === "due", (o) => o.amount), cashOwed = sum((o) => o.kind === "cash" && o.side === "owed", (o) => o.amount);
+            const netGold = goldDue - goldOwed, netCash = cashDue - cashOwed;
+            return (
+              <p data-ob-suppliers-effect style={{ color: "var(--text2)" }} className="text-[11px] mt-1" >
+                أثرها: الذهب المملوك {netGold >= 0 ? "+" : "−"}{fmtW(Math.abs(netGold))} جم24 · صافي النقد {netCash >= 0 ? "+" : "−"}{fmtMoney(Math.abs(netCash))} {currency || ""}
+                {Number(price24) > 0 ? ` (يساوي ${netCash >= 0 ? "+" : "−"}${fmtW(Math.abs(netCash) / Number(price24) / 0.875)} جم ع21)` : ""} — والربح لا يتغيّر: الفرق يُقابَل برأس المال (3100).
+              </p>
+            );
+          })()}
+        </Card>
         {!confirmSave ? (
           <button
             onClick={() => setConfirmSave(true)}

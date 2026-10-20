@@ -344,6 +344,7 @@ import { StartHereCard, branchStartSteps } from "../ui/StartHereCard.jsx";
 import { HqDrawsBanner } from "../ui/HqDrawsBanner.jsx";
 import { GlossaryPage } from "../screens/GlossaryPage.jsx";
 import { ACCOUNTING_PAGES, SIMPLE_ACCOUNTING_HIDDEN } from "../core/storePackage.js";
+import { endOfDayBlockers } from "../domain/endOfDay.js";
 import { entityActionsSpec } from "../domain/entities.js";
 import { BudgetsPage } from "../screens/BudgetsPage.jsx";
 import { VatReturnPage } from "../screens/VatReturnPage.jsx";
@@ -1583,7 +1584,7 @@ export default function GoldInventoryApp() {
     if (!realOpenDay) { flashToast("لا يوجد يوم مفتوح"); return null; }
     try {
       const res = await api.day.end({ ...counts, note: note || null });
-      if (res?.approvalPending) { notePendingApproval(res.approvalPending); return true; }
+      if (res?.approvalPending) { notePendingApproval(res.approvalPending); return { approvalPending: res.approvalPending }; }
       const c = res.count || {};
       const v = (Number(c.varianceCash) || 0) + (Number(c.varianceNetwork) || 0);
       flashToast(`أُقفل ${realOpenDay.ref} · وُرِّد ${fmtMoney((Number(res.swept?.cash) || 0) + (Number(res.swept?.network) || 0))} للخزنة` +
@@ -9336,6 +9337,14 @@ export default function GoldInventoryApp() {
             lots={lots}
             onOpenDay={handleOpenBusinessDay}
             onCloseDay2={(note, counts) => handleEndOfDay(note || "", counts)}
+            blockers={endOfDayBlockers({
+              stocktakeLock,
+              heldUnits: (items || []).reduce((a, it) => a + (it.units || []).filter((u) => u.held && !u.sold).length, 0),
+              parked: (saleDrafts || []).filter((d) => d.kind === "parked" && d.status === "open").length,
+              suspendedScrap: (scrapEntries || []).filter((e) => ["pending_break", "in_box", "received"].includes(e.stage)).length,
+              approvalsPending: (approvals || []).filter((a) => a.status === "pending").length,
+              openCustody: !!openCustodySession,
+            })}
             priceData={priceData}
             cashBalance={cashBalance}
             safeBalance={safeBalance}
@@ -9825,6 +9834,10 @@ export default function GoldInventoryApp() {
         )}
         {morePage === "openingBalance" && (
           <OpeningBalancePage
+            suppliers={suppliers}
+            supplierOpenings={supplierOpenings}
+            onAddSupplierOpening={role === "manager" ? handleAddSupplierOpening : null}
+            onVoidSupplierOpening={role === "manager" ? handleVoidSupplierOpening : null}
             openingBalance={openingBalance}
             onSave={handleSaveOpeningBalance}
             setupMode={setupInfo?.ledgerState === "setup"}
