@@ -341,6 +341,7 @@ import { SaleDraftsPage, printQuote } from "../screens/SaleDraftsPage.jsx";
 import { PostSaleSheet } from "../modals/PostSaleSheet.jsx";
 import { HqRequestsPage } from "../screens/HqRequestsPage.jsx";
 import { StartHereCard, branchStartSteps } from "../ui/StartHereCard.jsx";
+import { HqDrawsBanner } from "../ui/HqDrawsBanner.jsx";
 import { GlossaryPage } from "../screens/GlossaryPage.jsx";
 import { ACCOUNTING_PAGES, SIMPLE_ACCOUNTING_HIDDEN } from "../core/storePackage.js";
 import { entityActionsSpec } from "../domain/entities.js";
@@ -580,6 +581,8 @@ export default function GoldInventoryApp() {
   const [attendance, setAttendance] = useState([]);
   const [leaves, setLeaves] = useState([]);
   const [approvals, setApprovals] = useState([]);
+  // طلبات سحب الإدارة من رأس مال الفرع المعلّقة — تظهر للمدير في الرئيسية ليوافق أو يرفض (لا تُدفن في «معاملات الإدارة»)
+  const [hqDraws, setHqDraws] = useState([]);
   // ── قسم المحاسب والرقابة (migration 037) ──
   const [reviews, setReviews] = useState([]);           // أحكام المراجعة — من الخادم، تُضاف ولا تُعدَّل
   // ── تحكّم الإدارة (migration 038) ──
@@ -3830,6 +3833,15 @@ export default function GoldInventoryApp() {
 
   const loadSaleDrafts = () => api.saleDraftsApi.list().then((r) => setSaleDrafts(r.drafts || [])).catch(() => {});
   // رموز القطع في الفواتير المعلّقة المفتوحة — نافذة البيع ترفض مسحها حتى تُستأنف تلك أو تُلغى
+  useEffect(() => {
+    if (role !== "manager" || !currentUser) { setHqDraws([]); return undefined; }
+    const pull = () => api.hqTransactionsApi.list()
+      .then((rows) => setHqDraws((rows || []).filter((t) => t.flow === "capital_draw" && t.status === "pending")))
+      .catch(() => {});
+    pull();
+    const t = setInterval(pull, 60000);
+    return () => clearInterval(t);
+  }, [role, currentUser?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const parkedSaleCodes = useMemo(() => {
     const out = {};
     saleDrafts.filter((d) => d.status === "open" && d.kind === "held").forEach((d) => {
@@ -8414,6 +8426,21 @@ export default function GoldInventoryApp() {
             onOpenCoding={() => openPage("addGoods")} onOpenOpening={() => openPage("openingBalance")}
             onExit={() => { setQuickSaleItemId(null); setQuickSaleCustomerId(null); setShowNewSale(true); }}
             onGoLive={() => handleGoLive(setupInfo.request?.status === "approved" ? setupInfo.request.id : null)} />
+        )}
+        {morePage === null && tab === "home" && role === "manager" && hqDraws.length > 0 && (
+          <HqDrawsBanner draws={hqDraws} currency={priceData.currency || "ر.س"}
+            onDecide={async (t, approve) => {
+              let note = "";
+              if (!approve) { note = window.prompt("سبب الرفض (يصل الإدارة):", "") || ""; if (!note.trim()) return; }
+              try {
+                await api.hqTransactionsApi.decideCapitalDraw(t.id, approve ? "approved" : "rejected", note);
+                flashToast(approve ? "خرج المبلغ من الخزنة إلى الإدارة — ورُحّل قيده" : "رُفض السحب وأُبلغت الإدارة");
+                setHqDraws((p) => p.filter((x) => x.id !== t.id));
+                if (approve) loadBootstrap(currentUser).catch(() => {});
+              } catch (err) {
+                flashToast(err?.body?.error === "insufficient_source_cash" ? `رصيد الخزنة لا يكفي (المتاح ${fmtMoney(err.body.available || 0)})` : apiErrorMessage(err, "تعذّر تسجيل القرار"));
+              }
+            }} />
         )}
         {morePage === null && tab === "home" && (
           <HomeScreen
