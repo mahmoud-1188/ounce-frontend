@@ -827,6 +827,8 @@ export const workshopApi = {
 };
 // مراقبة الأعطال (migration 082): بلاغ العطل يصل الإدارة — بلا انتظارٍ ولا رسالة خطأ إن فشل
 export const reportClientError = (body) => (authToken ? fetchApi("/client-errors", { method: "POST", body }).catch(() => null) : Promise.resolve(null));
+// معلومات الفرع ورأس المستندات (المدير)
+export const saveBranchProfile = (profile) => apiFetch("/settings/branch-profile", { method: "POST", body: { profile } });
 export const labelReprint = (body) => apiFetch("/items/units/reprint", { method: "POST", body });
 // إلغاء تكويد قطع: وزنها يعود لدفعتها المفتوحة (أو يخرج من الافتتاحي في فترة التجهيز) — باعتمادٍ وسبب
 export const uncodeUnits = (body) => apiFetch("/items/units/uncode", { method: "POST", body });

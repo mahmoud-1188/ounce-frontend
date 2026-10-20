@@ -8811,7 +8811,13 @@ export default function GoldInventoryApp() {
             settings={appSettings} onSave={handleUpdateSettings} branchIdentity={branchIdentity} onSaveBranch={handleSaveBranchIdentity} hqPermissions={hqPermissions}
             canEditControls={role === "manager"} onSaveControls={handleSaveControls}
             hqManaged={branchProvision?.locked ? { by: branchProvision.by, at: branchProvision.at } : null} limitsByHq={hqOwnsStaff}
-            onBack={() => setMorePage(null)} />
+            onBack={() => setMorePage(null)}
+            provision={branchProvision}
+            onSaveProfile={role === "manager" ? async (profile) => {
+              try { const r = await api.saveBranchProfile(profile); setBranchProvision((p) => ({ ...(p || {}), profile: r.profile })); flashToast("✓ حُفظت معلومات الفرع"); return true; }
+              catch (err) { flashToast(err?.body?.error === "settings_locked_by_hq" ? "الإدارة ثبّتت معلومات الفرع" : err?.body?.error === "invalid_vat_number" ? "الرقم الضريبي 15 رقمًا يبدأ وينتهي بـ3" : apiErrorMessage(err, "تعذّر الحفظ")); return false; }
+            } : null}
+          />
         )}
         {morePage === "openingCompare" && (
           <OpeningComparePage

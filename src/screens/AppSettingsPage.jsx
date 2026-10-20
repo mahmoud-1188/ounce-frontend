@@ -4,6 +4,7 @@ import { APP_MODES, DEFAULT_APP_MODE, DEFAULT_SETTINGS } from "../core/constants
 import { UI_LANGS, readUiLang, setUiLang } from "../domain/i18n.js";
 import { ACCOUNTING_MODES } from "../core/storePackage.js";
 import { PayTerminalCard } from "../ui/PayTerminalCard.jsx";
+import { BranchProfileCard } from "../ui/BranchProfileCard.jsx";
 import { KARATS, fmt, pricePerGram } from "../core/money.js";
 import { CARD_NETWORKS, DEFAULT_CARD_FEES, DEFAULT_MARGINS } from "../core/money-rules.js";
 import { THEMES, THEME_DESIGNS, applyTheme, designOfTheme, effectiveTheme, isDarkTheme } from "../core/theme.js";
@@ -36,7 +37,7 @@ const SETTINGS_ROWS = [
     screens: [["modules", "الوحدات"], ["backup", "النسخ"]], status: () => "الوحدات الاختيارية والنسخ الاحتياطي" },
 ];
 
-function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSaveBranch, hqPermissions, priceData = {}, onBackfill, canEditControls = false, onSaveControls = null, hqManaged = null, limitsByHq = false, onBack }) {
+function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSaveBranch, hqPermissions, priceData = {}, onBackfill, canEditControls = false, onSaveControls = null, hqManaged = null, limitsByHq = false, onBack, provision = null, onSaveProfile = null }) {
   const [newRecovery, setNewRecovery] = useState("");
   const [uiLangSel, setUiLangSel] = useState(readUiLang);
   const [fees, setFees] = useState(() => ({ ...DEFAULT_CARD_FEES, ...(settings.cardFees || {}) }));
@@ -790,6 +791,10 @@ function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSa
         </Card>
 
         {/* عمولة المدير أُلغيت نهائيًّا — والوضع الخفي أُلغي؛ القطع المعلّقة القديمة تُقرأ وتُباع كما كانت */}
+
+        {/* ── معلومات الفرع ورأس المستندات ── */}
+        <BranchProfileCard profile={provision?.profile || {}} branchCode={branchIdentity?.code || ""} locked={!!provision?.locked}
+          canEdit={!!onSaveProfile} onSave={onSaveProfile || (async () => false)} />
 
         {/* ── لغة الواجهة (تفضيلٌ لهذا الجهاز) ── */}
         <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">لغة الواجهة</p>
