@@ -3828,6 +3828,15 @@ export default function GoldInventoryApp() {
   const canEditRecords = role === "manager" || role === "assistant";
 
   const loadSaleDrafts = () => api.saleDraftsApi.list().then((r) => setSaleDrafts(r.drafts || [])).catch(() => {});
+  // رموز القطع في الفواتير المعلّقة المفتوحة — نافذة البيع ترفض مسحها حتى تُستأنف تلك أو تُلغى
+  const parkedSaleCodes = useMemo(() => {
+    const out = {};
+    saleDrafts.filter((d) => d.status === "open" && d.kind === "held").forEach((d) => {
+      Object.values(d.payload?.unitCodes || {}).flat().forEach((c) => { out[String(c).toUpperCase()] = d.ref; });
+    });
+    return out;
+  }, [saleDrafts]);
+  useEffect(() => { if (showNewSale) loadSaleDrafts(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [showNewSale]);
   /// تعليق الفاتورة أو حفظها عرض سعر — تُغلق النافذة ولا تتحرّك قطعة
   const handleHoldSale = async (kind, payload, total) => {
     try {
@@ -10129,6 +10138,9 @@ export default function GoldInventoryApp() {
           initialCustomerId={quickSaleCustomerId}
           initialDraft={resumeDraft}
           onHold={handleHoldSale}
+          stocktakeLock={saleLocked ? stocktakeLock : null}
+          parkedCodes={parkedSaleCodes}
+          allItems={items}
           taxEnabled={appSettings.taxEnabled}
           taxRate={appSettings.taxRate}
           currency={priceData.currency}
