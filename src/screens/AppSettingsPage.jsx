@@ -686,9 +686,10 @@ function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSa
               { key: "defaultAllowPct", label: "المسموح من الهدر ٪ (إن لم يحدّده عقد الورشة)", max: 20 },
               { key: "codingTolPct", label: "تسامح فرق التكويد ٪", max: 10 },
               { key: "receiveTolG", label: "تسامح الميزان (جم)", max: 5 },
+              { key: "claimDays", label: "مهلة مطالبة الورشة (يوم)", max: 365 },
             ];
             return (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2" data-wastage-settings>
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-2" data-wastage-settings>
                 {fields.map((f) => (
                   <label key={f.key} className="text-[11px]" style={{ color: "var(--text2)" }}>
                     {f.label}

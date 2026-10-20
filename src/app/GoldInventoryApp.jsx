@@ -1915,7 +1915,12 @@ export default function GoldInventoryApp() {
         if (res?.approvalPending) { notePendingApproval(res.approvalPending); return false; }
       } else if (ap.kind === "safe_audit") await api.safe.audit(p);
       else if (ap.kind === "go_live") { await api.setupApi.goLive({ ...(ap.payload || {}), approvalId: ap.id }); refreshSetup(); }
-      else if (ap.kind === "workshop_wastage") { const { jobId, ...body } = ap.payload || {}; await api.workshopApi.receive(jobId, { ...body, approvalId: ap.id }); }
+      // هدر الورشة: إقفالٌ بشطب الزائد أو تسوية مطالبة — والطلب القديم (قبل 090) إقفالٌ بالشطب
+      else if (ap.kind === "workshop_wastage") {
+        const { jobId, action, ...body } = ap.payload || {};
+        if (action === "settle") await api.workshopApi.settle(jobId, { ...body, approvalId: ap.id });
+        else await api.workshopApi.close(jobId, { decision: "writeoff", price24: body.price24, approvalId: ap.id });
+      }
       else if (ap.kind === "item_uncode") { if (!(await handleUncodeUnits(ap.payload?.codes || [], ap.payload?.reason || "", ap.id))) return false; }
       else if (ap.kind === "label_reprint") {
         const r = await api.labelReprint({ ...(ap.payload || {}), approvalId: ap.id });
@@ -9563,7 +9568,8 @@ export default function GoldInventoryApp() {
         )}
         {morePage === "workshop" && (
           <WorkshopPage settings={appSettings} price24={Number(priceData.current) || 0} currency={priceData.currency} flashToast={flashToast}
-            onPending={notePendingApproval} onBack={() => setMorePage(null)} />
+            categories={categories} isManager={role === "manager"} taxRate={appSettings?.taxEnabled ? Number(appSettings?.taxRate) || 0.15 : 0}
+            onChanged={() => loadBootstrap(currentUser).catch(() => {})} onPending={notePendingApproval} onBack={() => setMorePage(null)} />
         )}
         {morePage === "scrapCustody" && (
           <ScrapCustodyPage
