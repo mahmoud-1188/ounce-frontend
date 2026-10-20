@@ -518,6 +518,8 @@ const usersApi = {
   // allowedPages: string[] لتخصيص صريح، أو null لإرجاع افتراضي الدور —
   // نفس اتفاقية null/[] الموثَّقة في migration 002 وpermissions.js.
   setPermissions: (id, allowedPages) => apiFetch(`/users/${id}/permissions`, { method: "PATCH", body: { allowedPages } }),
+  actionsMeta: () => apiFetch("/users/actions-meta"),
+  setActions: (id, grant, revoke) => apiFetch(`/users/${id}/actions`, { method: "PATCH", body: { grant, revoke } }),
   remove: (id) => apiFetch(`/users/${id}`, { method: "DELETE" }),
 };
 

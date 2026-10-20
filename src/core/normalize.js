@@ -583,6 +583,10 @@ function normalizeUsers(rows) {
     allowedTabs: u.allowed_tabs,
     allowedMore: u.allowed_more,
     createdAt: u.created_at,
+    // استثناءات الأفعال فوق الدور (migration 086)
+    actionGrant: u.action_grant || [],
+    actionRevoke: u.action_revoke || [],
+    mustChangePin: !!u.must_change_pin,
   }));
 }
 

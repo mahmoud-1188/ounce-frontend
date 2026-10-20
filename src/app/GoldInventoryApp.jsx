@@ -4324,8 +4324,11 @@ export default function GoldInventoryApp() {
       flashToast("منعت الإدارة المركزية هذه العملية");
       return false;
     }
-    const deny = ROLES[role]?.denyActions;
-    if (Array.isArray(deny) && deny.includes(action)) {
+    // استثناء الشخص فوق دوره: المنح يرفع منع الدور، والإغلاق يمنع ما يسمح به الدور
+    const me = users.find((u) => u.id === currentUser?.id);
+    const revoked = (me?.actionRevoke || []).includes(action);
+    const deny = (ROLES[role]?.denyActions || []).filter((a) => !(me?.actionGrant || []).includes(a));
+    if (revoked || deny.includes(action)) {
       flashToast("هذه العملية خارج صلاحيتك");
       audit("permission", {
         entity: "action", entityId: action,
@@ -8825,6 +8828,15 @@ export default function GoldInventoryApp() {
             currentUserId={currentUser?.id || null}
             onEnroll={role === "manager" ? (u) => setEnrollFor(u) : null}
             onFetchLog={async () => (await api.controlApi.permissionLog()).log || []}
+            onFetchActionsMeta={() => api.usersApi.actionsMeta()}
+            onSetActions={async (id, grant, revoke) => {
+              try {
+                const r = await api.usersApi.setActions(id, grant, revoke);
+                setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, actionGrant: r.action_grant || [], actionRevoke: r.action_revoke || [] } : u)));
+                flashToast("حُفظت أفعال الموظف");
+                return true;
+              } catch (err) { flashToast(apiErrorMessage(err, "تعذّر حفظ الأفعال")); return false; }
+            }}
             onBack={() => setMorePage(null)}
           />
         )}
