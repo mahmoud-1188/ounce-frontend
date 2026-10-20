@@ -6182,7 +6182,8 @@ export default function GoldInventoryApp() {
     const lot = lots.find((l) => l.id === lotId);
     let res;
     try {
-      res = await api.createLotItems(lotId, rows, distributionMode);
+      // باقة «بدون محاسبة»: تكويدٌ بالجرام بلا دفعة
+      res = lotId ? await api.createLotItems(lotId, rows, distributionMode) : await api.createDirectItems(rows);
     } catch (err) {
       flashToast(addItemsErrorMessage(err));
       return null;
@@ -7834,14 +7835,10 @@ export default function GoldInventoryApp() {
     if (lot) flashToast("تم إنشاء دفعة جديدة");
     return lot;
   };
-  const handleCloseLot = (lot, note) => txn("handleCloseLot", () => {
-    // الفرق بين وزن الدفعة المشتراة وما دخل المخزون فعلًا ذهب حقيقي:
-    // إمّا فُقد في التصنيع والتداول (هالك) أو زاد عن المتوقع (فائض).
-    // تسجيله بقيمته يجعل تكلفة البضاعة صحيحة ويُبقي الجرد متطابقًا؛
-    // تركُه بلا تسجيل يعني فرقًا دائمًا لا يُفسَّر.
+  // إقفال الدفعة على الخادم (POST /lots/:id/close): الفرق بين المشترى والمكوَّد ذهبٌ حقيقي — عجزٌ أو زيادة يُرحَّل
+  // وزنًا وقيدًا. فوق تسامح فرق التكويد (الإعدادات ← الهدر والفروق) لا تُقفل بلا سببٍ مكتوب.
+  const handleCloseLot = async (lot, note = "") => {
     const entered = Number(lot.enteredWeight) || lotAllocatedWeight(lot.id, items);
-    const variance = (Number(lot.weight) || 0) - entered; // موجب = هالك، سالب = فائض
-    // فوق تسامح فرق التكويد (الإعدادات ← الهدر والفروق) لا تُقفل الدفعة بلا سبب مكتوب
     const wcfg = wastageSettingsOf(appSettings);
     const cv = codingVarianceOf({ receivedW: Number(lot.weight) || 0, codedW: entered, tolG: wcfg.receiveTolG, codingTolPct: wcfg.codingTolPct });
     if (cv.needsReason && !String(note || "").trim()) {
@@ -7849,51 +7846,19 @@ export default function GoldInventoryApp() {
       if (!String(why || "").trim()) { flashToast("لم تُقفل الدفعة — السبب مطلوب لفرقٍ فوق التسامح"); return null; }
       note = String(why).trim();
     }
-    const purity = PURITY[lot.karat] || (Number(lot.karat) || 0) / 24;
-    const fine = Math.abs(variance) * purity;
-    const value = Math.abs(variance) * (Number(lot.costPerGram) || 0);
-    const now = new Date().toISOString();
-
-    persistLots(
-      lots.map((l) =>
-        l.id === lot.id
-          ? { ...l, status: "closed", closedAt: now, enteredWeight: entered, wastageWeight: variance > 0 ? variance : 0, surplusWeight: variance < 0 ? -variance : 0 }
-          : l
-      )
-    );
-
-    if (Math.abs(variance) > 0.0005) {
-      const adj = {
-        id: Date.now().toString() + "wa",
-        ref: nextRef("scrap", weightAdjustments).replace("SCR", "WGT"),
-        ...dayStamp(),
-        date: now,
-        lotId: lot.id,
-        lotRef: lot.ref || null,
-        supplierId: lot.supplierId,
-        karat: lot.karat,
-        kind: variance > 0 ? "wastage" : "surplus",
-        weight: Math.abs(variance),
-        fineWeight: fine,
-        costPerGram: Number(lot.costPerGram) || 0,
-        value,
-        purchasedWeight: Number(lot.weight) || 0,
-        enteredWeight: entered,
-        note: note || "",
-        createdBy: currentUser?.name || "",
-        category: variance > 0 ? "gold_wastage" : "gold_weight_surplus",
-      };
-      persistWeightAdjustments([adj, ...weightAdjustments]);
-      flashToast(
-        variance > 0
-          ? `أُقفلت الدفعة — هالك ${fmtW(Math.abs(variance))} جم`
-          : `أُقفلت الدفعة — فائض ${fmtW(Math.abs(variance))} جم`
-      );
-    } else {
-      flashToast("أُقفلت الدفعة — مطابقة تامة");
+    try {
+      const r = await api.closeLot(lot.id, note);
+      const up = normalizeLots([r.lot])[0];
+      setLots((prev) => prev.map((l) => (l.id === lot.id ? { ...l, ...up } : l)));
+      flashToast(Math.abs(r.diff) > 0.0005
+        ? `أُقفلت الدفعة — ${r.diff > 0 ? "عجز" : "زيادة"} تكويد ${fmtW(Math.abs(r.diff))} جم`
+        : "أُقفلت الدفعة — الوزن مطابق");
+      return true;
+    } catch (err) {
+      flashToast(err?.body?.error === "reason_required" ? "فرقٌ فوق التسامح — السبب مطلوب" : apiErrorMessage(err, "تعذّر إقفال الدفعة"));
+      return null;
     }
-  
-  });
+  };
 
   const handleSetPrinted = (itemId, codes, printedValue) => {
     const next = items.map((it) => {
@@ -8695,6 +8660,8 @@ export default function GoldInventoryApp() {
             }}
             openingMode={!!appSettings.openingMode}
             onCreateOpeningLot={handleCreateOpeningLot}
+            inventoryOnly={storePackage === "no_accounting"}
+            onCloseLot={role === "manager" ? handleCloseLot : null}
             currency={priceData.currency}
             price24={priceData.current}
             onDeleteItem={handleDeleteItem}

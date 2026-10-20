@@ -382,6 +382,8 @@ function createSupplier(payload) {
 // التكويد في الإدارة (migration 069): إرسال الدفعة واسترجاعها
 const sendLotToHq = (lotId) => apiFetch(`/lots/${lotId}/send-to-hq`, { method: "POST", body: {} });
 const recallLot = (lotId) => apiFetch(`/lots/${lotId}/recall`, { method: "POST", body: {} });
+const createDirectItems = (rows) => apiFetch("/items/direct", { method: "POST", body: { rows } });
+const closeLot = (lotId, note) => apiFetch(`/lots/${lotId}/close`, { method: "POST", body: { note } });
 
 function createLotItems(lotId, rows, distributionMode) {
   return apiFetch(`/lots/${lotId}/items`, {
@@ -779,6 +781,8 @@ export {
   createLotItems,
   sendLotToHq,
   recallLot,
+  closeLot,
+  createDirectItems,
   reconcileCategories,
   rfid,
   scrap,
