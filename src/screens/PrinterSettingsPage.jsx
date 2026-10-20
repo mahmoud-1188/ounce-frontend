@@ -6,7 +6,7 @@ import { DEFAULT_PRINTER, PRINTER_SERVICES } from "../core/constants.js";
 import { PURITY, fmt, fmtW } from "../core/money.js";
 import { buildCalibrationCanvas } from "../domain/buildCalibrationCanvas.js";
 import { buildPlateEpc } from "../domain/buildPlateEpc.js";
-import { bleWriteChunked, btSupported, codeToEpcHex, inputStyle, printLabelToDevice, sendRawToPrinter, tsplCalibrateBytes, tsplJobBytes, usbPrint } from "../domain/helpers.js";
+import { CALIBRATE_MODES, askPrinter, bleWriteChunked, btSupported, codeToEpcHex, inputStyle, printLabelToDevice, sendRawToPrinter, tsplCalibrateBytes, tsplJobBytes, tsplOffsetBytes, usbPrint, zplOffsetBytes } from "../domain/helpers.js";
 import { Card } from "../ui/Card.jsx";
 import { Field } from "../ui/Field.jsx";
 import { LabelLayoutEditor } from "../ui/LabelLayoutEditor.jsx";
@@ -14,13 +14,26 @@ import { MmInput } from "../ui/MmInput.jsx";
 import { NumericInput } from "../ui/NumericInput.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 import { rememberBluetoothDevice } from "../domain/labelPrint.js";
+import { RfidSettingsCard } from "../ui/RfidSettingsCard.jsx";
+import { PayTerminalCard } from "../ui/PayTerminalCard.jsx";
 
-function PrinterSettingsPage({ config, onSave, sampleItem, currency, price24, onBack }) {
+// قوالب الضبط المحفوظة على هذا الجهاز (بلا الجهاز المقترن: معرّفه خاصٌّ بهذا الجوّال)
+const PRESETS_KEY = "ounce_printer_presets_v1";
+const readPresets = () => { try { const v = JSON.parse(localStorage.getItem(PRESETS_KEY) || "[]"); return Array.isArray(v) ? v : []; } catch { return []; } };
+
+function PrinterSettingsPage({ config, onSave, sampleItem, currency, price24, onBack, settings = null, onSaveSettings = null, rfidCfg = null, onSaveRfid = null }) {
   const [cfg, setCfg] = useState({ ...DEFAULT_PRINTER, ...(config || {}) });
   const [busy, setBusy] = useState("");
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const deviceRef = useRef(null);
+  const [showBytes, setShowBytes] = useState("");
+  const [calPrinted, setCalPrinted] = useState(false);
+  const [askRfid, setAskRfid] = useState(false);
+  const [askResult, setAskResult] = useState(null);
+  const [presets, setPresets] = useState(readPresets);
+  const [presetName, setPresetName] = useState("");
+  const [importText, setImportText] = useState("");
   const set = (k, v) => setCfg((p) => ({ ...p, [k]: v }));
   // ما يغيّر الطباعة نفسها يُحفظ فورًا — كان مفتاح الرقاقة يضيع إن خرج المستخدم قبل «حفظ»
   const setNow = (k, v) => setCfg((p) => { const n = { ...p, [k]: v }; onSave(n); return n; });
@@ -132,12 +145,14 @@ function PrinterSettingsPage({ config, onSave, sampleItem, currency, price24, on
         const hex = buildPlateEpc({ code: "R7K2M9PQ", storeId: cfg.storeId || 0 });
         await sendRaw(`^XA^RS8,,,1,N^RFW,H^FD${hex}^FS^FO40,40^A0N,40,40^FDRFID R7K2M9PQ^FS^PQ1^XZ\r\n`, "RFID وحده (ZPL)");
         setStatus("⑤ اقرأ الرقاقة بالقارئ: إن بدأ رقمها بـ 52374B32 فالكتابة تعمل");
+        setAskRfid(true);
         return;
       }
       const line = String(cfg.rfidCommand || 'RFID WRITE,H,0,96,EPC,"{HEX}"').replace("{HEX}", buildPlateEpc({ code: "R7K2M9PQ", storeId: cfg.storeId || 0 })).replace("{CODE}", "R7K2M9PQ");
       log(`أمر الرقاقة: ${line}`);
       await sendRaw(`SIZE ${cfg.labelWidthMm || 50} mm, ${cfg.labelHeightMm || 30} mm\r\nGAP ${cfg.gapMm ?? 2} mm, 0 mm\r\nCLS\r\n${line}\r\nTEXT 30,30,"3",0,1,1,"RFID R7K2M9PQ"\r\nPRINT 1,1\r\n`, "RFID وحده");
       setStatus("⑤ اقرأ الرقاقة بالقارئ: إن ظهر R7K2M9PQ فالكتابة تعمل — وإن طُبع النص بلا كتابة فالطابعة لا تفهم صيغة الأمر، جرّب الصيغة الأخرى");
+      setAskRfid(true);
     } catch (e) { setError(String(e?.message || e)); log(`✗ ${e?.message || e}`); } finally { setBusy(""); }
   };
 
@@ -176,7 +191,11 @@ function PrinterSettingsPage({ config, onSave, sampleItem, currency, price24, on
         widthMm: cfg.labelWidthMm || 50,
         heightMm: cfg.labelHeightMm || 20,
         gapMm: cfg.gapMm ?? 2,
+        offsetMm: cfg.labelOffsetMm ?? 0,
+        shiftDots: cfg.labelShiftDots ?? 0,
+        mode: cfg.calibrateMode || "gapdetect",
       });
+      setShowBytes(new TextDecoder().decode(bytes));
       await sendRawToPrinter(bytes, cfg, deviceRef, (serial) => set("usbSerial", serial));
       setStatus("أُرسل أمر القياس — ستسحب الطابعة ورقتين وتقيسهما. انتظر توقّفها ثم اطبع الإطار.");
     } catch (e) { setError(String(e?.message || e)); } finally { setBusy(""); }
@@ -195,8 +214,65 @@ function PrinterSettingsPage({ config, onSave, sampleItem, currency, price24, on
       // رقاقةٍ في كل مرة تُتلف رقائق بلا فائدة.
       const bytes = tsplJobBytes({ canvas, cfg: { ...cfg, rfid: false }, copies: 1, code: "" });
       await sendRawToPrinter(bytes, cfg, deviceRef, (serial) => set("usbSerial", serial));
-      setStatus("طُبع الإطار — إن انقطع من جهةٍ فالمقاس أكبر من ورقك، وإن بقي فراغٌ واسع فأصغر.");
+      setStatus("طُبع الإطار — قِسه بمسطرة واختر تحته كيف خرج.");
+      setCalPrinted(true);
     } catch (e) { setError(String(e?.message || e)); } finally { setBusy(""); }
+  };
+
+  /// الإزاحة وحدها — بلغة الطابعة: ZPL (~TA و^LT) أو TSPL (OFFSET وSHIFT)
+  const applyOffset = async () => {
+    setError(""); setBusy("offset");
+    try {
+      const bytes = cfg.rfidMode === "zpl"
+        ? zplOffsetBytes({ offsetMm: cfg.labelOffsetMm ?? 0, shiftDots: cfg.labelShiftDots ?? 0, dpi: cfg.dpi })
+        : tsplOffsetBytes({ widthMm: cfg.labelWidthMm || 50, heightMm: cfg.labelHeightMm || 20, gapMm: cfg.gapMm ?? 2, offsetMm: cfg.labelOffsetMm ?? 0, shiftDots: cfg.labelShiftDots ?? 0 });
+      setShowBytes(new TextDecoder().decode(bytes));
+      await sendRawToPrinter(bytes, cfg, deviceRef, (serial) => set("usbSerial", serial));
+      onSave(cfg);
+      setStatus("✓ أُرسلت الإزاحة — اطبع إطار الفحص لترى أثرها.");
+    } catch (e) { setError(String(e?.message || e)); } finally { setBusy(""); }
+  };
+
+  const askDevice = async () => {
+    setError(""); setBusy("ask"); setAskResult(null);
+    try {
+      const r = await askPrinter(cfg, deviceRef);
+      setAskResult(r);
+      setStatus(r.supported ? (r.text ? "ردّت الطابعة" : "لم تردّ — قد لا تدعم السؤال") : "");
+    } catch (e) { setError(String(e?.message || e)); } finally { setBusy(""); }
+  };
+
+  // يعيد إعدادات التطبيق لا الطابعة — والاقتران كما هو
+  const factoryReset = () => {
+    if (!window.confirm("إعادة إعدادات الملصق في التطبيق للبداية؟ الاقتران يبقى كما هو.")) return;
+    const n = { ...DEFAULT_PRINTER, deviceId: cfg.deviceId, deviceName: cfg.deviceName, usbSerial: cfg.usbSerial, mode: cfg.mode, transport: cfg.transport };
+    setCfg(n); onSave(n);
+    setStatus("✓ عادت إعدادات التطبيق للبداية — والطابعة مقترنةٌ كما هي.");
+  };
+
+  const savePresets = (next) => { setPresets(next); try { localStorage.setItem(PRESETS_KEY, JSON.stringify(next)); } catch { /* تخزينٌ محجوب */ } };
+  const savePreset = () => {
+    const name = presetName.trim() || `ملصق ${cfg.labelWidthMm || "?"}×${cfg.labelHeightMm || "?"} مم`;
+    const { deviceId, deviceName, usbSerial, ...keep } = cfg; // eslint-disable-line no-unused-vars
+    savePresets([...presets.filter((x) => x.name !== name), { name, at: new Date().toISOString().slice(0, 10), cfg: keep }].slice(-8));
+    setPresetName("");
+    setStatus(`✓ حُفظ الضبط باسم «${name}»`);
+  };
+  const copySettings = async () => {
+    const txt = JSON.stringify({ v: 1, kind: "printerSettings", at: new Date().toISOString(), cfg }, null, 1);
+    try { await navigator.clipboard.writeText(txt); setStatus("نُسخت الإعدادات — احفظها عندك"); }
+    catch { setImportText(txt); setStatus("انسخها من الصندوق أدناه"); }
+  };
+  const pasteSettings = () => {
+    setError("");
+    try {
+      const o = JSON.parse(importText.trim());
+      const incoming = o?.kind === "printerSettings" ? o.cfg : o;
+      if (!incoming || typeof incoming !== "object") throw new Error("ليست إعدادات طابعة");
+      const next = { ...DEFAULT_PRINTER, ...incoming, deviceId: cfg.deviceId, deviceName: cfg.deviceName, usbSerial: cfg.usbSerial };
+      setCfg(next); onSave(next); setImportText("");
+      setStatus(`استُرجعت — ${next.labelWidthMm}×${next.labelHeightMm} مم · ${next.dpi || 203} dpi`);
+    } catch (e) { setError(`تعذّرت القراءة: ${e?.message || e}`); }
   };
 
   const testPrint = async () => {
@@ -229,6 +305,25 @@ function PrinterSettingsPage({ config, onSave, sampleItem, currency, price24, on
     <div>
       <SubPageHeader title="إعدادات الطابعة" onBack={onBack} />
       <div className="px-4 pt-3">
+        {/* طابعتان منفصلتان: الملصقات هنا، والفواتير من سجلّ المبيعات على طابعة الجهاز */}
+        <Card style={{ padding: 12, marginBottom: 12, background: "var(--field)" }}>
+          <div data-print-split>
+            <p style={{ color: "var(--text)", margin: 0 }} className="text-[12px] font-bold">طابعتان منفصلتان</p>
+            <p style={{ color: "var(--text2)", margin: "4px 0 0" }} className="text-[11px] leading-6">
+              🏷 <b>ملصقات التكويد</b>: هنا — على طابعة الملصقات مباشرةً، الرقاقة مع كل ملصق.<br />
+              🧾 <b>الفواتير</b>: {settings?.invoicePrintOn
+                ? <>من سجلّ المبيعات على طابعة الجهاز العادية — لا تشترك في إعدادٍ مع الملصقات.</>
+                : <><b>معطّلة في الفرع حاليًا</b> — المفعّل طباعة ملصقات التكويد وحدها.</>}
+            </p>
+            {onSaveSettings && settings && (
+              <button type="button" data-invoice-print-toggle onClick={() => onSaveSettings({ ...settings, invoicePrintOn: !settings.invoicePrintOn })}
+                className="mt-2 px-3 rounded-xl text-[11px] font-bold" style={{ minHeight: 36, background: "var(--panel)", color: "var(--accent)", border: "1px solid var(--accentLine)" }}>
+                {settings.invoicePrintOn ? "عطّل طباعة الفواتير" : "فعّل طباعة الفواتير"}
+              </button>
+            )}
+          </div>
+        </Card>
+
         {/* طريقة الطباعة */}
         <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">طريقة الطباعة</p>
         <div className="grid grid-cols-2 gap-2 mb-3">
@@ -367,6 +462,29 @@ function PrinterSettingsPage({ config, onSave, sampleItem, currency, price24, on
                 style={{ background: "var(--accentBg)", color: "var(--accent)", border: "1px solid var(--accentLine)" }}>
                 {busy === "fmt" ? "… جارٍ طباعة 4 ملصقات" : "⑥ جرّب 4 صيغ للرقاقة — FMTA · FMTB · FMTC · FMTD"}
               </button>
+              <button onClick={askDevice} disabled={!!busy} className="w-full py-2 rounded-xl text-[11px] font-bold mb-2"
+                style={{ background: "var(--field)", color: "var(--text2)", border: "1px solid var(--line)" }}>
+                {busy === "ask" ? "يسأل…" : "اسأل الطابعة عن طرازها"}
+              </button>
+              {askResult && (
+                <div data-ask-result style={{ background: "var(--bg)", borderRadius: 10, padding: 10, marginBottom: 8 }}>
+                  {!askResult.supported ? (
+                    <p style={{ color: "var(--bad)", margin: 0 }} className="text-[11px] leading-7">⚠ {askResult.reason}</p>
+                  ) : !askResult.text ? (
+                    <p style={{ color: "var(--text3)", margin: 0 }} className="text-[11px] leading-7">لم يصل جواب. بعض الطُّرز لا تردّ عبر البلوتوث — اقرأ الطراز من ملصق الجهاز نفسه.</p>
+                  ) : (
+                    <>
+                      <p style={{ color: "var(--accentText)", margin: "0 0 3px" }} className="text-[11px] font-bold">ردّ الطابعة{askResult.model ? ` — ${askResult.model}` : ""}</p>
+                      <p style={{ color: "var(--text2)", margin: 0, direction: "ltr", fontFamily: "monospace", fontSize: 10, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>{askResult.text}</p>
+                      {askResult.oem && <p style={{ color: "var(--accentText)", margin: "5px 0 0" }} className="text-[11px] leading-7">⚠ الصانع الحقيقي <b>{askResult.oem}</b> — الاسم على العلبة قد يختلف. <b>ابحث عن دليل الطراز أعلاه</b> لا عن اسم العلبة.</p>}
+                      <p style={{ color: askResult.mentionsRfid ? "var(--good)" : "var(--bad)", margin: "5px 0 0" }} className="text-[11px] leading-7">
+                        {askResult.mentionsRfid ? "✓ الجواب يذكر RFID — الطراز يدعم الرقاقة."
+                          : <>⚠ <b>الجواب لا يذكر RFID.</b> وهذا لا يحسم: <b>اطبع صفحة SELFTEST</b> (②). إن لم تذكر RFID فالطابعة <b>بلا وحدة ترميز</b> — ولا صيغةَ أمرٍ تُصلح ذلك.</>}
+                      </p>
+                    </>
+                  )}
+                </div>
+              )}
               <p style={{ color: "var(--text3)", margin: "0 0 6px" }} className="text-[10px]">
                 ④ «طباعة تجريبية» في الأسفل = الملصق كاملًا بالصورة وRFID.
               </p>
@@ -434,6 +552,41 @@ function PrinterSettingsPage({ config, onSave, sampleItem, currency, price24, on
                   <p style={{ color: "var(--text3)", margin: 0 }} className="text-[10px] leading-6">
                     الرقاقة تحمل الرمز ورقم المحل وتاريخ الكتابة — فرقاقةُ فرعٍ آخر تُقرأ «ليست لنا» لا «مفقودة».
                   </p>
+                  <div className="flex items-center gap-2 my-2 px-3 py-2 rounded-xl" data-rfid-verified={cfg.rfidVerified ? "1" : "0"}
+                    style={{ background: cfg.rfidVerified ? "var(--goodBg)" : "var(--field)", border: `1px solid ${cfg.rfidVerified ? "var(--goodLine)" : "var(--line)"}` }}>
+                    <span className="text-[11px] font-bold flex-1" style={{ color: cfg.rfidVerified ? "var(--good)" : "var(--text2)" }}>
+                      {cfg.rfidVerified ? "✓ جُرّبت الكتابة وقرأها القارئ" : "لم تُؤكَّد الكتابة بالقارئ بعد — جرّب ⑤ في سلّم الفحص"}
+                    </span>
+                  </div>
+                  {askRfid && (
+                    <div className="flex flex-col gap-1.5 mb-2" data-rfid-ask>
+                      <p style={{ color: "var(--accentText)", margin: 0 }} className="text-[11px] font-bold">ماذا قرأ القارئ؟</p>
+                      <button onClick={() => { setNow("rfidVerified", true); setAskRfid(false); setStatus("✓ الرقاقة تُكتب — وتُكتب الآن مع كل ملصق."); }}
+                        className="w-full text-right py-2.5 px-3 rounded-xl text-[11px] font-bold" style={{ background: "var(--goodBg)", color: "var(--good)", border: "1px solid var(--goodLine)" }}>
+                        ✓ قرأ رمز التجربة — الكتابة تعمل
+                      </button>
+                      <button onClick={() => { setNow("rfidVerified", false); setAskRfid(false); setStatus("جرّب الصيغة التالية (⑥) ثم اكتب مرةً أخرى."); }}
+                        className="w-full text-right py-2.5 px-3 rounded-xl text-[11px]" style={{ background: "var(--field)", color: "var(--text2)", border: "1px solid var(--line)" }}>
+                        ✗ الرمز المصنعيّ ما زال — لم تُكتب
+                      </button>
+                    </div>
+                  )}
+                  <div style={{ background: "var(--bg)", borderRadius: 10, padding: 10, marginTop: 8 }}>
+                    <p style={{ color: "var(--accentText)", margin: "0 0 4px" }} className="text-[11px] font-bold">قبل أول تجربة — معايرة الرقاقة من الطابعة</p>
+                    <p style={{ color: "var(--text3)", margin: 0 }} className="text-[10px] leading-7">
+                      والطابعة جاهزة والضوء الأزرق ثابت، <b>اضغط FEED نحو 4 ثوانٍ</b> حتى تبدأ بسحب الورق ثم أفلت. تقيس الورق
+                      <b> وموضع كتابة الرقاقة تحت الهوائي</b>، وتنتهي حين يثبت الضوء الأزرق. ثم ⑤ — <b>يخرج ملصقٌ واحد</b> برقاقته — وامسحه بالقارئ.
+                    </p>
+                    <p style={{ color: "var(--bad)", margin: "6px 0 0" }} className="text-[10px] leading-7">
+                      ⚠ <b>وموضع الهوائي يهمّ.</b> صفحة الفحص تُظهر <b>ANTENNA POSITION</b> — والرقاقة تُكتب وهي تحته تمامًا. فإن كان الملصق مائلًا أو الورق غير مشدود مرّت بلا كتابة. <b>عايِر الطابعة</b> قبل التجربة.
+                    </p>
+                    <div style={{ borderTop: "1px solid var(--line)", marginTop: 8, paddingTop: 8 }}>
+                      <p style={{ color: "var(--accentText)", margin: "0 0 3px" }} className="text-[11px] font-bold">لماذا القارئ يُظهر رمزًا طويلًا؟</p>
+                      <p style={{ color: "var(--text3)", margin: 0 }} className="text-[10px] leading-7">رقاقة EPC تحفظ <b>96 بت رقمية</b> لا حروفًا، والقارئ العام يعرضها <b>ست عشريًّا</b> — وهذا سليم:</p>
+                      <p style={{ color: "var(--text2)", margin: "4px 0", fontFamily: "monospace", direction: "ltr", fontSize: 10 }}>R7K2M9PQ → {codeToEpcHex("R7K2M9PQ")}</p>
+                      <p style={{ color: "var(--good)", margin: 0 }} className="text-[10px] leading-7">✓ <b>وقارئ أونصة يفكّه ويعرض الرمز نفسه.</b> جرّب من: الجرد ← قارئ RFID.</p>
+                    </div>
+                  </div>
                 </>
               )}
             </Card>
@@ -512,17 +665,163 @@ function PrinterSettingsPage({ config, onSave, sampleItem, currency, price24, on
                     <b>②</b> «عايِر الطابعة» — تسحب ورقتين وتقيسهما بنفسها.<br />
                     <b>③</b> «اطبع إطار الفحص» ثم <b>قِس الإطار المطبوع بمسطرة</b>:
                   </p>
-                  <div style={{ borderTop: "1px solid var(--line)", marginTop: 6, paddingTop: 6 }}>
-                    <p style={{ color: "var(--good)", margin: 0 }} className="text-[10px] leading-7">
-                      ✓ <b>يملأ الملصق تمامًا</b> — انتهيتَ.
-                    </p>
-                    <p style={{ color: "var(--bad)", margin: "3px 0 0" }} className="text-[10px] leading-7">
-                      ⚠ <b>أصغر بنحو الثلث</b> (علامة 40 عند 27 مم مثلًا) — <b>الدقّة خاطئة</b>:
-                      بدّلها إلى {(Number(cfg.dpi) || 203) === 203 ? "300" : "203"} dpi وأعد.
-                      <br />⚠ <b>أصغر أو أكبر قليلًا</b> — المقاس خاطئ: عدّل الأرقام أعلاه وأعد.
-                      <br />⚠ <b>انقطع من جهة</b> — المقاس أكبر من ورقك.
-                    </p>
+                  {/* سؤالٌ بعد طباعة الإطار لا تحذيرٌ أحمر */}
+                  {calPrinted ? (
+                    <div style={{ borderTop: "1px solid var(--line)", marginTop: 8, paddingTop: 8 }} data-cal-ask>
+                      <p style={{ color: "var(--accentText)", margin: "0 0 6px" }} className="text-[11px] font-bold">كيف خرج الإطار؟</p>
+                      <div className="flex flex-col gap-1.5">
+                        <button onClick={() => { setCalPrinted(false); setStatus("✓ ضُبطت الطابعة — ابدأ الطباعة."); }}
+                          className="w-full text-right py-2.5 px-3 rounded-xl text-[11px] font-bold" style={{ background: "var(--goodBg)", color: "var(--good)", border: "1px solid var(--goodLine)" }}>
+                          ✓ يملأ الملصق تمامًا — انتهيت
+                        </button>
+                        <button onClick={() => { const next = (Number(cfg.dpi) || 203) === 203 ? 300 : 203; setNow("dpi", next); setStatus(`بُدّلت الدقّة إلى ${next} dpi — اطبع الإطار ثانيةً.`); }}
+                          className="w-full text-right py-2.5 px-3 rounded-xl text-[11px]" style={{ background: "var(--field)", color: "var(--text2)", border: "1px solid var(--line)" }}>
+                          <b>أصغر بنحو الثلث</b> — علامة 40 عند 27 مم
+                          <span className="block text-[10px]" style={{ color: "var(--text3)", marginTop: 2 }}>الدقّة خاطئة ← بدّلها إلى {(Number(cfg.dpi) || 203) === 203 ? "300" : "203"} dpi</span>
+                        </button>
+                        <button onClick={() => { setCalPrinted(false); setStatus("قِس الملصق بمسطرة وصحّح العرض والطول أعلاه، ثم اطبع الإطار."); }}
+                          className="w-full text-right py-2.5 px-3 rounded-xl text-[11px]" style={{ background: "var(--field)", color: "var(--text2)", border: "1px solid var(--line)" }}>
+                          <b>أصغر أو أكبر قليلًا</b><span className="block text-[10px]" style={{ color: "var(--text3)", marginTop: 2 }}>المقاس خاطئ ← صحّح الأرقام أعلاه</span>
+                        </button>
+                        <button onClick={() => { setCalPrinted(false); setStatus("المقاس أكبر من ورقك — أنقِص العرض أو الطول ثم اطبع الإطار."); }}
+                          className="w-full text-right py-2.5 px-3 rounded-xl text-[11px]" style={{ background: "var(--field)", color: "var(--text2)", border: "1px solid var(--line)" }}>
+                          <b>انقطع من جهة</b><span className="block text-[10px]" style={{ color: "var(--text3)", marginTop: 2 }}>المقاس أكبر من ورقك ← أنقِصه</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p style={{ color: "var(--text3)", margin: "6px 0 0" }} className="text-[10px] leading-7">بعد الطباعة يسألك التطبيق كيف خرج الإطار، ويقول لك ماذا تغيّر.</p>
+                  )}
+                </div>
+
+                {/* صيغة أمر القياس — بعض الطابعات تفهم غير GAPDETECT */}
+                <div style={{ borderTop: "1px solid var(--line)", marginTop: 10, paddingTop: 10 }}>
+                  <p style={{ color: "var(--accentText)", margin: "0 0 5px" }} className="text-[11px] font-bold">صيغة المعايرة — جرّبها إن لم تتحرّك الطابعة</p>
+                  <div className="flex gap-1.5 flex-wrap mb-2">
+                    {CALIBRATE_MODES.map((m) => {
+                      const on = (cfg.calibrateMode || "gapdetect") === m.id;
+                      return (
+                        <button key={m.id} data-cal-mode={m.id} onClick={() => setNow("calibrateMode", m.id)} className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold"
+                          style={{ background: on ? "var(--accentBg)" : "var(--field)", color: on ? "var(--accent)" : "var(--text3)", border: "1px solid var(--line)" }}>{m.label}</button>
+                      );
+                    })}
                   </div>
+                  <p style={{ color: "var(--text3)", margin: 0 }} className="text-[10px] leading-6">{(CALIBRATE_MODES.find((m) => m.id === (cfg.calibrateMode || "gapdetect")) || {}).hint} — وإن لم تتحرّك طابعتك فجرّب غيرها، ثم ④ لتعرف أن الاتصال سليم.</p>
+                </div>
+
+                {/* اتجاه الطباعة */}
+                <div style={{ borderTop: "1px solid var(--line)", marginTop: 10, paddingTop: 10 }}>
+                  <p style={{ color: "var(--accentText)", margin: "0 0 6px" }} className="text-[11px] font-bold">اتجاه الطباعة</p>
+                  <div className="grid grid-cols-2 gap-2 mb-1">
+                    {[[false, "الافتراضي"], [true, "اقلب 180°"]].map(([flip, lab]) => {
+                      const on = cfg.rfidMode === "zpl" ? !!cfg.zplInvert === flip : (Number(cfg.direction ?? 1) === 0) === flip;
+                      return (
+                        <button key={lab} data-direction={flip ? "flip" : "normal"}
+                          onClick={() => setCfg((p) => { const n = p.rfidMode === "zpl" ? { ...p, zplInvert: flip } : { ...p, direction: flip ? 0 : 1 }; onSave(n); return n; })}
+                          className="py-2.5 rounded-xl text-[11px] font-bold"
+                          style={{ background: on ? "var(--accentBg)" : "var(--field)", color: on ? "var(--accent)" : "var(--text3)", border: `1px solid ${on ? "var(--accentLine)" : "var(--line)"}` }}>
+                          {on ? "✓ " : ""}{lab}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p style={{ color: "var(--text3)", margin: 0 }} className="text-[10px] leading-7">
+                    اطبع <b>إطار الفحص</b>: <b>المربّع الأسود يجب أن يخرج في الزاوية اليمنى العليا</b> — كما في المعاينة. إن خرج في الزاوية المقابلة، اضغط «اقلب 180°».
+                  </p>
+                </div>
+
+                {/* متقدّم — الإزاحة */}
+                <details className="mt-3" data-offsets>
+                  <summary style={{ color: "var(--text2)", minHeight: 44 }} className="text-xs font-bold">متقدّم — الإزاحة (الطباعة مائلة أو تُقطع خطأً)</summary>
+                  <Field label={`موضع التوقّف: ${cfg.labelOffsetMm ?? 0} مم`}>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => setNow("labelOffsetMm", Math.max(-10, (Number(cfg.labelOffsetMm) || 0) - 0.5))} aria-label="أنقص موضع التوقّف نصف مليمتر"
+                        style={{ width: 40, height: 36, borderRadius: 10, background: "var(--field)", border: "1px solid var(--line)", fontSize: 16, fontWeight: 800 }}>−</button>
+                      <input type="range" min={-10} max={10} step={0.5} style={{ flex: 1 }} value={Number(cfg.labelOffsetMm) || 0}
+                        onChange={(e) => set("labelOffsetMm", Number(e.target.value))} onMouseUp={() => onSave(cfg)} onTouchEnd={() => onSave(cfg)} />
+                      <button onClick={() => setNow("labelOffsetMm", Math.min(10, (Number(cfg.labelOffsetMm) || 0) + 0.5))} aria-label="زد موضع التوقّف نصف مليمتر"
+                        style={{ width: 40, height: 36, borderRadius: 10, background: "var(--field)", border: "1px solid var(--line)", fontSize: 16, fontWeight: 800 }}>+</button>
+                    </div>
+                  </Field>
+                  <p style={{ color: "var(--text3)", margin: "-4px 0 8px" }} className="text-[10px] leading-6">
+                    ⚠ <b>أين تقف الورقة بعد الطباعة.</b> زِده إن كان الملصق لا يخرج كفايةً لتقطعه، وأنقِصه إن كانت تُقطع على الملصق التالي.
+                  </p>
+                  <Field label={`إزاحة الطباعة: ${cfg.labelShiftDots ?? 0} نقطة (${((Number(cfg.labelShiftDots) || 0) / ((Number(cfg.dpi) || 203) / 25.4)).toFixed(1)} مم)`}>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => setNow("labelShiftDots", Math.max(-120, (Number(cfg.labelShiftDots) || 0) - 6))} aria-label="أنقص إزاحة الطباعة نصف مليمتر"
+                        style={{ width: 40, height: 36, borderRadius: 10, background: "var(--field)", border: "1px solid var(--line)", fontSize: 16, fontWeight: 800 }}>−</button>
+                      <input type="range" min={-120} max={120} step={6} style={{ flex: 1 }} value={Number(cfg.labelShiftDots) || 0}
+                        onChange={(e) => set("labelShiftDots", Number(e.target.value))} onMouseUp={() => onSave(cfg)} onTouchEnd={() => onSave(cfg)} />
+                      <button onClick={() => setNow("labelShiftDots", Math.min(120, (Number(cfg.labelShiftDots) || 0) + 6))} aria-label="زد إزاحة الطباعة نصف مليمتر"
+                        style={{ width: 40, height: 36, borderRadius: 10, background: "var(--field)", border: "1px solid var(--line)", fontSize: 16, fontWeight: 800 }}>+</button>
+                    </div>
+                  </Field>
+                  <p style={{ color: "var(--text3)", margin: "-4px 0 8px" }} className="text-[10px] leading-6">
+                    ⚠ <b>يُحرّك الصورة على الورقة رأسيًّا</b> — لا الورقة نفسها. زِده إن كانت الكتابة قريبةً من الحافّة العليا.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button onClick={applyOffset} disabled={!!busy} data-apply-offset className="py-2.5 rounded-xl text-[11px] font-bold"
+                      style={{ background: "var(--accentBg)", color: "var(--accent)", border: "1px solid var(--accentLine)" }}>{busy === "offset" ? "يُرسل…" : "طبّق الإزاحة"}</button>
+                    <button onClick={printCalLabel} disabled={!!busy} className="py-2.5 rounded-xl text-[11px] font-bold"
+                      style={{ background: "var(--field)", color: "var(--text2)", border: "1px solid var(--line)" }}>اطبع إطار الفحص</button>
+                  </div>
+                  <button onClick={() => setCfg((p) => { const n = { ...p, labelOffsetMm: 0, labelShiftDots: 0 }; onSave(n); return n; })} className="w-full py-2 rounded-xl text-[10px] mt-2" style={{ color: "var(--text3)" }}>
+                    أعِد الإزاحة للصفر
+                  </button>
+                </details>
+
+                {/* إعادة الطابعة لإعدادات المصنع ومعنى الأضواء — من دليل الشركة */}
+                <details className="mt-1">
+                  <summary style={{ color: "var(--text2)", minHeight: 44 }} className="text-xs font-bold">ماذا يعني ضوء الطابعة؟ · إعادتها لإعدادات المصنع</summary>
+                  <div style={{ background: "var(--bg)", border: "1px solid var(--line)", borderRadius: 10, padding: "8px 10px", marginBottom: 8 }} className="text-[10px] leading-7">
+                    <b style={{ color: "var(--accentText)" }}>ماذا يعني الضوء؟</b><br />
+                    🔵 أزرق ثابت = جاهزة (ومعه 🟢 أخضر = وضع الشريط)<br />
+                    🔴 أحمر يومض = <b>انتهى الورق</b><br />
+                    🔴🔵 أحمر وأزرق يومضان = <b>لا تجد الفجوة</b> ← عايِر<br />
+                    🔴 أحمر ثابت + 🟢 أخضر يومض = <b>انتهى الشريط</b> أو ملفوفٌ خطأ<br />
+                    🔴🟢 أحمر وأخضر بالتناوب = خطأٌ آخر<br />
+                    ⚠ بعد إصلاح السبب: <b>اضغط FEED مرّة</b> لإلغاء الخطأ.
+                  </div>
+                  <p style={{ color: "var(--bad)", margin: "0 0 6px" }} className="text-[11px] font-bold">إعادة الطابعة لإعدادات المصنع</p>
+                  <p style={{ color: "var(--text3)", margin: "0 0 8px" }} className="text-[10px] leading-7">
+                    ① أطفئ الطابعة · ② <b>اضغط FEED واستمرّ</b> · ③ شغّلها وأنت ضاغط · ④ <b>أفلت حين يثبت الضوء الأزرق وحده</b> — فتصفّر <b>خمس مرّات</b> وتعود لإعدادات المصنع.<br />
+                    ⚠ أضواءٌ أخرى أثناء الضغط تعني وظائف أخرى: <b>الأخضر وحده</b> = صفحة فحص · <b>الأحمر وحده</b> = تخطّي AUTO.BAS · <b>الأزرق والأحمر معًا</b> = وضع Dump.
+                  </p>
+                  <button onClick={factoryReset} disabled={!!busy} className="w-full py-2.5 rounded-xl text-[11px] font-bold"
+                    style={{ background: "var(--field)", color: "var(--text2)", border: "1px solid var(--line)" }}>أعِد إعدادات التطبيق للبداية</button>
+                </details>
+
+                {/* ما أُرسل للطابعة */}
+                {showBytes && (
+                  <div style={{ borderTop: "1px solid var(--line)", marginTop: 10, paddingTop: 10 }} data-shown-bytes>
+                    <div className="flex items-baseline justify-between mb-1">
+                      <span style={{ color: "var(--accentText)" }} className="text-[11px] font-bold">ما أُرسل للطابعة</span>
+                      <button onClick={() => setShowBytes("")} style={{ color: "var(--text3)" }} className="text-[10px]">أخفِ</button>
+                    </div>
+                    <pre style={{ background: "var(--bg)", border: "1px solid var(--line)", borderRadius: 10, padding: 9, fontSize: 10, lineHeight: 1.9, direction: "ltr", textAlign: "left", overflowX: "auto", color: "var(--text2)", margin: 0, maxHeight: 150, fontFamily: "ui-monospace,Menlo,monospace" }}>{showBytes}</pre>
+                    <button onClick={() => { navigator.clipboard?.writeText(showBytes).catch(() => {}); }} className="w-full py-2 rounded-xl text-[10px] mt-2"
+                      style={{ background: "var(--field)", color: "var(--text2)", border: "1px solid var(--line)" }}>انسخ — لإرساله للمطوّر</button>
+                  </div>
+                )}
+
+                {/* قوالب الضبط */}
+                <div style={{ borderTop: "1px solid var(--line)", marginTop: 10, paddingTop: 10 }} data-presets>
+                  <p style={{ color: "var(--accentText)", margin: "0 0 6px" }} className="text-[11px] font-bold">احفظ هذا الضبط</p>
+                  <div className="flex gap-2 mb-2">
+                    <input style={{ ...inputStyle, marginBottom: 0, flex: 1 }} value={presetName} onChange={(e) => setPresetName(e.target.value)}
+                      placeholder={`ملصق ${cfg.labelWidthMm || "?"}×${cfg.labelHeightMm || "?"} مم`} />
+                    <button onClick={savePreset} data-preset-save className="px-4 rounded-xl text-[11px] font-bold" style={{ background: "var(--accentBg)", color: "var(--accent)", border: "1px solid var(--accentLine)" }}>احفظ</button>
+                  </div>
+                  <p style={{ color: "var(--text3)", margin: "0 0 8px" }} className="text-[10px] leading-6">⚠ <b>الجهاز المقترن لا يُحفظ</b> — معرّفُه خاصٌّ بهذا الجوّال.</p>
+                  {presets.map((ps) => (
+                    <div key={ps.name} className="flex items-center gap-2 mb-1.5">
+                      <button onClick={() => { const n = { ...cfg, ...ps.cfg, deviceId: cfg.deviceId, deviceName: cfg.deviceName, usbSerial: cfg.usbSerial }; setCfg(n); onSave(n); setStatus(`استُعيد «${ps.name}» — اطبع إطار الفحص للتأكّد.`); }}
+                        className="flex-1 text-right py-2.5 px-3 rounded-xl text-[11px]" style={{ background: "var(--bg)", color: "var(--text2)", border: "1px solid var(--line)" }}>
+                        <b>{ps.name}</b><span className="block text-[10px]" style={{ color: "var(--text3)", marginTop: 1 }}>{ps.cfg?.labelWidthMm}×{ps.cfg?.labelHeightMm} مم · {ps.cfg?.dpi || 203} dpi · حُفظ {ps.at}</span>
+                      </button>
+                      <button onClick={() => savePresets(presets.filter((x) => x.name !== ps.name))} aria-label={`احذف القالب ${ps.name}`} style={{ color: "var(--bad)", padding: "0 6px" }} className="text-[11px]">✕</button>
+                    </div>
+                  ))}
                 </div>
               </Card>
 
@@ -662,6 +961,34 @@ function PrinterSettingsPage({ config, onSave, sampleItem, currency, price24, on
           >
             حفظ
           </button>
+        </div>
+
+        <Card style={{ padding: 11, marginTop: 10, marginBottom: 12 }}>
+          <div data-printer-backup>
+            <p style={{ color: "var(--accent)", margin: "0 0 4px" }} className="text-[11px] font-bold">نسخة الإعدادات</p>
+            <p style={{ color: "var(--text3)", margin: "0 0 8px" }} className="text-[11px] leading-7">
+              ⚠ ضبطُ الملصق يأخذ وقتًا وورقًا. <b>انسخه واحفظه عندك</b> — تسترجعه في أي جهازٍ أو فرعٍ جديد بلصقةٍ واحدة.
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={copySettings} className="py-2.5 rounded-xl text-[11px] font-bold" style={{ background: "var(--accentBg)", color: "var(--accent)", border: "1px solid var(--accentLine)" }}>انسخ إعداداتي</button>
+              <button onClick={pasteSettings} disabled={!importText.trim()} className="py-2.5 rounded-xl text-[11px] font-bold"
+                style={{ background: importText.trim() ? "linear-gradient(135deg,var(--gradFrom),var(--gradTo))" : "var(--field)", color: importText.trim() ? "var(--panel)" : "var(--text3)", border: "1px solid var(--line)" }}>استرجع</button>
+            </div>
+            <textarea value={importText} onChange={(e) => setImportText(e.target.value)} placeholder="الصق نسخة الإعدادات هنا ثم اضغط «استرجع»"
+              style={{ ...inputStyle, minHeight: 66, marginTop: 8, direction: "ltr", fontFamily: "monospace", fontSize: 10 }} />
+            <p style={{ color: "var(--text3)", margin: "2px 0 0" }} className="text-[11px] leading-6">⚠ الاسترجاع <b>لا يمسّ اقتران الطابعة</b>.</p>
+          </div>
+        </Card>
+
+        {/* الأجهزة الأخرى في المكان نفسه: قارئ RFID وجهاز الدفع */}
+        {rfidCfg && onSaveRfid && (
+          <div className="mt-3">
+            <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">قارئ RFID</p>
+            <RfidSettingsCard settings={rfidCfg} onSave={onSaveRfid} />
+          </div>
+        )}
+        <div className="mt-3 mb-6">
+          <PayTerminalCard />
         </div>
       </div>
     </div>

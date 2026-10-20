@@ -9351,6 +9351,8 @@ export default function GoldInventoryApp() {
             currency={priceData.currency}
             price24={priceData.current}
             onBack={() => setMorePage(null)}
+            settings={appSettings} onSaveSettings={role === "manager" ? handleUpdateSettings : null}
+            rfidCfg={rfidCfg} onSaveRfid={role !== "employee" ? handleSaveRfid : null}
           />
         )}
         {morePage === "rfidReader" && (
