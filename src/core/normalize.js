@@ -318,6 +318,7 @@ function normalizeTaskirOfficeTx(rows) {
     type: t.direction === "in" ? "debit" : "credit", kind: t.kind || "gold",
     karat: t.karat, weight: toWeight(t.weight), amount: toMoney(t.amount),
     note: t.note || "", createdBy: null, businessDayId: t.business_day_id,
+    refTable: t.ref_table || null, refId: t.ref_id || null,
   }));
 }
 

@@ -3294,17 +3294,18 @@ export default function GoldInventoryApp() {
 
     const amt = Number(form.amount) || 0;
     const p24 = Number(priceData.current) || 0;
-    if (amt <= 0 || p24 <= 0) { flashToast("أدخل مبلغًا وسعرًا صالحًا"); return null; }
+    // سدادُ شراءٍ آجلٍ بعينه يُطفئ بنسبته لا بسعر اليوم — فلا يلزمه سعر
+    if (amt <= 0 || (p24 <= 0 && !form.forTxId)) { flashToast("أدخل مبلغًا وسعرًا صالحًا"); return null; }
     try {
       await api.taskirApi.settleOffice(officeId, {
-        mode: "cash", amount: amt, source: form.source || "safe_cash", priceAtSettle: p24,
+        mode: "cash", amount: amt, source: form.source || "safe_cash", priceAtSettle: p24, forTxId: form.forTxId || undefined,
       });
       const officeTxRes = await api.taskirApi.officeTx(officeId);
       setTaskirOfficeTx((prev) => [
         ...normalizeTaskirOfficeTx(officeTxRes.officeTx || []),
         ...prev.filter((t) => t.officeId !== officeId),
       ]);
-      flashToast(`سُدّد ${fmtMoney(amt)} — يعادل ${fmtW(roundW(amt / p24))} جم24`);
+      flashToast(form.forTxId ? `سُدّد ${fmtMoney(amt)} من الشراء الآجل` : `سُدّد ${fmtMoney(amt)} — يعادل ${fmtW(roundW(amt / p24))} جم24`);
       return true;
     } catch (err) {
       flashToast(apiErrorMessage(err, "تعذّر سداد المكتب"));
