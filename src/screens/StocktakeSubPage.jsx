@@ -1,10 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronLeft, Grid, Lock, Package, Scan, Warehouse } from "lucide-react";
 import { fine24, fmtW } from "../core/money.js";
-import { btSupported, categoryLabel, epcHexToCode, inputStyle } from "../domain/helpers.js";
+import { btSupported, categoryLabel, epcHexToCode, inputStyle, itemLabel } from "../domain/helpers.js";
+import { printStocktakeSheet } from "../domain/officialDocs.js";
+import { CameraScanner } from "../ui/CameraScanner.jsx";
 import { Card } from "../ui/Card.jsx";
 import { EmptyState } from "../ui/EmptyState.jsx";
 import { Hallmark } from "../ui/Hallmark.jsx";
+
+// أطول فجوةٍ بين حرفين يكتبهما القارئ — ما فوقها كتابةٌ باليد
+const READER_MAX_GAP_MS = 120;
 
 function StocktakeSubPage({ lock, onToggleLock, sellDuring = false,
   activeItems,
@@ -24,7 +29,10 @@ function StocktakeSubPage({ lock, onToggleLock, sellDuring = false,
   onCancelScope,
   onSaveSettings,
   flashToast,
+  onStartFull = null, branchInfo = {}, lots = [], suppliers = [], canPrintSheet = false,
 }) {
+  // وضع المخزون: لا بيع يُوقَف ولا قيد يُرحَّل، فالنصوص تقول «يُخرَج من المخزون» لا «يُقيَّد عجزًا»
+  const inventoryOnly = settings.appMode === "inventory";
   // ── إعداد إظهار الوزن ──
   //
   // بعض المحلات تجرد بالعدد وحده: الوزن يبطئ العدّاد ويجعله يقارن بدل
@@ -44,25 +52,39 @@ function StocktakeSubPage({ lock, onToggleLock, sellDuring = false,
   const [btBusy, setBtBusy] = useState(false);
   const [btError, setBtError] = useState("");
   const inputRef = useRef(null);
+  // الجرد بالقارئ وحده: فجوةٌ بين الحروف أطول من القارئ تعني كتابةً باليد فتُرفض
+  const typeGap = useRef({ last: 0, slow: false });
+  const [cam, setCam] = useState(false);
+  // رقائق قرأها القارئ من رفوف الجيران أو أقسامٍ غير مختارة — تُتجاهل بصمت وتُعدّ
+  const [ignoredN, setIgnoredN] = useState(0);
+  const [pickCats, setPickCats] = useState([]);
+  // { title, codes } لورقة ما لم يُقرأ في جردٍ محفوظ
+  const [savedMissing, setSavedMissing] = useState(null);
+  const [undo, setUndo] = useState(null);
+  useEffect(() => { if (!undo) return undefined; const t = setTimeout(() => setUndo(null), 8000); return () => clearTimeout(t); }, [undo]);
 
   const scope = stocktake.scope;
   const cat = stocktake.activeCategory;
 
   // ── وحدات النطاق الحالي ──
-  const unitsIn = (categoryId) => {
+  const catIds = cat ? (Array.isArray(cat) ? cat : [cat]) : [];
+  // المعلّقة خارج الرفّ لا تُعدّ ناقصة، وبقايا الأطقم غير المكوَّدة تُعدّ بوزنها لا برمزها
+  const unitsIn = (ids) => {
     const out = [];
     activeItems.forEach((it) => {
-      if (categoryId && it.categoryId !== categoryId) return;
+      if (it.remnant) return;
+      if (ids && ids.length && !ids.includes(it.categoryId)) return;
       (it.units || []).forEach((u) => {
-        if (!u.sold) out.push({ code: u.code, item: it });
+        if (!u.sold && !u.held) out.push({ code: u.code, item: it });
       });
     });
     return out;
   };
 
   const scopeUnits = useMemo(
-    () => (scope === "sectional" ? (cat ? unitsIn(cat) : []) : unitsIn(null)),
-    [scope, cat, activeItems]
+    () => (scope === "sectional" ? (catIds.length ? unitsIn(catIds) : []) : unitsIn(null)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [scope, catIds.join("+"), activeItems]
   );
 
   const summary = useMemo(() => {
@@ -142,10 +164,10 @@ function StocktakeSubPage({ lock, onToggleLock, sellDuring = false,
   };
   const feed = (raw) => {
     const parts = String(raw || "").split(/[\s,;]+/).filter(Boolean);
-    if (parts.length > 1) { parts.forEach((x) => feedOne(x)); return; }
+    if (parts.length > 1) { parts.forEach((x) => feedOne(x, { quiet: true })); return; }
     feedOne(raw);
   };
-  const feedOne = (raw) => {
+  const feedOne = (raw, { quiet = false } = {}) => {
     const code = resolveCode(raw);
     if (!code) return;
     const hit = scopeUnits.find((u) => String(u.code).toUpperCase() === code);
@@ -154,16 +176,19 @@ function StocktakeSubPage({ lock, onToggleLock, sellDuring = false,
       const sold = allItems.some((it) => (it.units || []).some((u) => u.sold && String(u.code).toUpperCase() === code));
       if (sold) {
         setSoldFound((p) => (p.includes(code) ? p : [...p, code]));
-        flashToast(`«${code}» مسجّلة مباعة — للمراجعة، لا تُضاف`);
+        if (!quiet) flashToast(`«${code}» مسجّلةٌ مباعة — تُوقف للمراجعة، لا تُعدّ زيادة`);
         return;
       }
+      const held = allItems.some((it) => (it.units || []).some((u) => u.held && String(u.code).toUpperCase() === code));
+      if (held) { if (!quiet) flashToast(`«${code}» معلّقة — خارج العدّ`); return; }
       const known = allItems.some((it) => (it.units || []).some((u) => String(u.code).toUpperCase() === code));
-      if (!known) setUnknown((p) => (p.includes(code) ? p : [...p, code]));
-      flashToast(known ? `«${code}» ليست في هذا النطاق` : `«${code}» رمزٌ لا يعرفه النظام`);
+      if (known) { setIgnoredN((n) => n + 1); if (!quiet) flashToast(`«${code}» ليست في هذا النطاق`); return; }
+      setUnknown((p) => (p.includes(code) ? p : [...p, code]));
+      if (!quiet) flashToast(`«${code}» رمزٌ لا يعرفه النظام`);
       return;
     }
     if (scanned[code]) {
-      flashToast("قُرئت مسبقًا");
+      if (!quiet) flashToast("قُرئت مسبقًا");
       return;
     }
     setScanned((p) => ({ ...p, [hit.code]: true }));
@@ -174,7 +199,15 @@ function StocktakeSubPage({ lock, onToggleLock, sellDuring = false,
     if (scope && (scope === "general" || cat)) inputRef.current?.focus();
   }, [scope, cat]);
 
-  const reset = () => { setScanned({}); setSoldFound([]); setUnknown([]); setConfirmFinish(false); setShowMissing(false); setManual(""); };
+  const reset = () => { setScanned({}); setSoldFound([]); setUnknown([]); setIgnoredN(0); setConfirmFinish(false); setShowMissing(false); setManual(""); setUndo(null); };
+  // تصفير القراءة يُتراجع عنه خلال ثوانٍ — ضغطةٌ خاطئة لا تمسح عدّ ساعة
+  const resetWithUndo = () => {
+    const prev = { scanned, soldFound, unknown };
+    reset();
+    if (Object.keys(prev.scanned).length || prev.soldFound.length) setUndo(prev);
+  };
+  const remnants = useMemo(() => (allItems.length ? allItems : activeItems).filter((it) => it.remnant && !it.voided
+    && (!catIds.length || scope !== "sectional" || catIds.includes(it.categoryId))), [allItems, activeItems, scope, catIds.join("+")]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ⚠ إنهاء العدّ بالمسح يحفظ فروقه الحقيقية (كان يُحفظ «مطابقًا» أيًّا كان المقروء):
   //   الناقص بأعيانه يُسوّى بمعالج الجرد نفسه (عجزٌ بتكلفة القطعة في الدفترين)،
@@ -189,7 +222,7 @@ function StocktakeSubPage({ lock, onToggleLock, sellDuring = false,
       soldFound, unknown,
       diffCount: summary.missingCount,
     };
-    if (scope === "general") onFinishGeneral(payload);
+    if (scope === "general") { onFinishGeneral(payload); if (lock && onToggleLock) onToggleLock(false); }
     else onFinishSection(payload);
     if (soldFound.length) onSoldFound?.(soldFound);
     reset();
@@ -237,62 +270,74 @@ function StocktakeSubPage({ lock, onToggleLock, sellDuring = false,
     </Card>
   );
 
-  // ── القطع المتبقية ──
-  const MissingList = () => (
-    <>
+  // ── ورقة القطع غير المقروءة: صورتها ووصفها ودفعتها ومورّدها لتُبحث على الرفّ ──
+  const lotBy = useMemo(() => new Map((lots || []).map((l) => [l.id, l])), [lots]);
+  const supBy = useMemo(() => new Map((suppliers || []).map((x) => [x.id, x])), [suppliers]);
+  const unitsForCodes = (codes = []) => {
+    const want = new Set(codes.map((c) => String(c).toUpperCase()));
+    const out = [];
+    for (const it of allItems.length ? allItems : activeItems) for (const u of it.units || []) {
+      if (want.has(String(u.code).toUpperCase())) out.push({ code: u.code, item: it });
+    }
+    return out;
+  };
+  const MissingList = (units, title, onClose) => (
+    <div data-missing-sheet>
       <div className="flex items-center justify-between mb-2">
         <span style={{ color: "var(--bad)" }} className="text-xs font-bold">
-          لم تُقرأ ({summary.missingCount})
+          {title} ({units.length})
         </span>
-        <button onClick={() => setShowMissing(false)}
-          className="text-[10px] px-2.5 py-1 rounded-full"
-          style={{ background: "var(--panel)", color: "var(--accentText)", border: "1px solid var(--line)" }}>
+        <button onClick={onClose}
+          className="text-[11px] px-2.5 py-1 rounded-full"
+          style={{ background: "var(--panel)", color: "var(--accentText)", border: "1px solid var(--line)", minHeight: 32 }}>
           إخفاء
         </button>
       </div>
       <div className="flex flex-col gap-2 mb-3">
-        {summary.missing.slice(0, 60).map((u) => (
-          <Card key={u.code} style={{ padding: 10 }}>
-            <div className="flex items-center gap-2.5">
-              {u.item.photo ? (
-                <img src={u.item.photo} alt=""
-                  style={{ width: 44, height: 44, borderRadius: 9, objectFit: "cover", flexShrink: 0 }} />
-              ) : (
-                <div style={{
-                  width: 44, height: 44, borderRadius: 9, flexShrink: 0,
-                  background: "var(--panel)", border: "1px solid var(--line)",
-                  display: "grid", placeItems: "center",
-                }}>
-                  <Hallmark karat={u.item.karat} size={30} />
-                </div>
-              )}
-              <div className="flex-1">
-                <p style={{ color: "var(--text)", fontFamily: "monospace", margin: 0 }} className="text-xs font-bold">
-                  {u.code}
-                </p>
-                <p style={{ color: "var(--text2)", margin: 0 }} className="text-[11px]">
-                  {categoryLabel(u.item.categoryId)} · عيار {u.item.karat}
-                  {showWeight ? ` · ${fmtW(u.item.weight)} جم` : ""}
-                </p>
-                {u.item.sku && (
-                  <p style={{ color: "var(--text3)", margin: 0 }} className="text-[10px]">{u.item.sku}</p>
+        {units.slice(0, 80).map((u) => {
+          const lot = u.item.lotId ? lotBy.get(u.item.lotId) : null;
+          const supplier = lot ? (supBy.get(lot.supplierId)?.name || "") : "";
+          const photo = u.item.photoUrl || u.item.photoDataUrl || u.item.photo || null;
+          return (
+            <Card key={u.code} style={{ padding: 10 }}>
+              <div className="flex items-center gap-2.5">
+                {photo ? (
+                  <img src={photo} alt=""
+                    style={{ width: 52, height: 52, borderRadius: 9, objectFit: "cover", flexShrink: 0 }} />
+                ) : (
+                  <div style={{
+                    width: 52, height: 52, borderRadius: 9, flexShrink: 0,
+                    background: "var(--panel)", border: "1px solid var(--line)",
+                    display: "grid", placeItems: "center",
+                  }}>
+                    <Hallmark karat={u.item.karat} size={30} />
+                  </div>
                 )}
+                <div className="flex-1 min-w-0">
+                  <p style={{ color: "var(--text)", fontFamily: "monospace", margin: 0 }} className="text-xs font-bold" dir="ltr">
+                    {u.code}
+                  </p>
+                  <p style={{ color: "var(--text2)", margin: 0 }} className="text-[11px]">
+                    {itemLabel(u.item)}
+                    {showWeight ? ` · ${fmtW(u.item.weight)} جم${Number(u.item.stonesWeight) > 0 ? ` (فصوص ${fmtW(u.item.stonesWeight)})` : ""}` : ""}
+                  </p>
+                  {(lot || supplier || u.item.sku) && (
+                    <p style={{ color: "var(--text3)", margin: 0 }} className="text-[11px]">
+                      {[lot?.ref && `دفعة ${lot.ref}`, supplier && `المورّد ${supplier}`, u.item.sku].filter(Boolean).join(" · ")}
+                    </p>
+                  )}
+                </div>
               </div>
-              <button onClick={() => feed(u.code)}
-                className="text-[10px] px-2.5 py-1.5 rounded-full"
-                style={{ background: "var(--accentBg)", color: "var(--accent)", border: "1px solid var(--accentLine)" }}>
-                تأكيد يدوي
-              </button>
-            </div>
-          </Card>
-        ))}
-        {summary.missingCount > 60 && (
-          <p style={{ color: "var(--text3)" }} className="text-[10px]">
-            و{summary.missingCount - 60} قطعة أخرى
+            </Card>
+          );
+        })}
+        {units.length > 80 && (
+          <p style={{ color: "var(--text3)" }} className="text-[11px]">
+            و{units.length - 80} قطعة أخرى
           </p>
         )}
       </div>
-    </>
+    </div>
   );
 
   // ── شريط القارئ ──
@@ -318,19 +363,37 @@ function StocktakeSubPage({ lock, onToggleLock, sellDuring = false,
         )}
       </div>
       {btError && <p style={{ color: "var(--bad)" }} className="text-[10px] mb-2">{btError}</p>}
+      {/* الجرد بالقارئ وحده: الكتابة باليد (فجوات بين الحروف) تُرفض، ولا تأكيد يدويًّا لقطعةٍ لم تُقرأ */}
       <input
         ref={inputRef}
         style={{ ...inputStyle, marginBottom: 0 }}
         value={manual}
         onChange={(e) => setManual(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter") { feed(manual); setManual(""); }
+          const now = Date.now();
+          const g = typeGap.current;
+          if (e.key === "Enter") {
+            const slow = g.slow; g.last = 0; g.slow = false;
+            const code = manual; setManual("");
+            if (slow) { flashToast("⚠ الجرد بالقارئ وحده — الكتابة باليد غير مقبولة. امسح الرقاقة أو الملصق"); return; }
+            feed(code);
+            return;
+          }
+          if (e.key.length === 1) { if (g.last && now - g.last > READER_MAX_GAP_MS) g.slow = true; g.last = now; }
+          else if (e.key === "Backspace" || e.key === "Delete") g.slow = true;
         }}
-        placeholder="امسح الرقاقة أو اكتب الكود ثم Enter"
+        placeholder="امسح الرقاقة بالقارئ"
         autoComplete="off"
+        data-reader-only
       />
-      <p style={{ color: "var(--text3)" }} className="text-[10px] mt-1">
-        معظم الماسحات تعمل كلوحة مفاتيح — تُدخل الكود هنا مباشرة بلا اتصال. وقارئ RFID يُقرأ منه EPC الوسم مباشرةً.
+      <button onClick={() => setCam(true)} data-stock-cam
+        className="w-full py-2.5 rounded-xl text-[11px] font-bold mt-2"
+        style={{ background: "var(--accentBg)", color: "var(--accent)", border: "1px solid var(--accentLine)" }}>
+        امسح بالكاميرا
+      </button>
+      {cam && <CameraScanner onScan={(code) => feed(code)} onClose={() => setCam(false)} />}
+      <p style={{ color: "var(--text3)" }} className="text-[11px] mt-1">
+        الجرد بالقارئ وحده: معظم الماسحات تعمل كلوحة مفاتيح — تُدخل الكود هنا مباشرة بلا اتصال. لا إدخال باليد. وقارئ RFID يُقرأ منه EPC الوسم مباشرةً.
       </p>
       <details className="mt-2">
         <summary style={{ color: "var(--accentText)" }} className="text-[11px] cursor-pointer">دفعة من قارئ RFID (لصق عدّة وسوم)</summary>
@@ -352,40 +415,53 @@ function StocktakeSubPage({ lock, onToggleLock, sellDuring = false,
         الجرد
       </h1>
 
-      {/* قفل المخزون */}
-      <Card style={{ padding: 14, marginBottom: 16, border: `1px solid ${lock ? "var(--accentLine)" : "var(--line)"}` }}>
-        <div className="flex items-center justify-between mb-1">
-          <span style={{ color: lock ? "var(--accent)" : "var(--text)" }} className="text-sm font-bold flex items-center gap-1.5">
-            <Lock size={14} /> {lock ? "المخزون مقفل" : "قفل المخزون للجرد"}
-          </span>
-        </div>
-        <p style={{ color: "var(--text2)" }} className="text-[11px] mb-3">
-          {lock
-            ? (sellDuring
-              ? `بدأه ${lock.startedBy}. البيع مسموح (إعداد) — ما يُباع الآن يُطابَق مبيعًا عند الاعتماد، والتحويلات موقوفة.`
-              : `بدأه ${lock.startedBy}. البيع والتحويلات موقوفة حتى فتح القفل.`)
-            : sellDuring
-              ? "يوقف التحويلات أثناء العدّ — والبيع مسموح (إعداد)."
-              : "يوقف البيع والتحويلات أثناء العدّ — وإلا ظهر البيع عجزًا."}
-        </p>
-        <button onClick={() => onToggleLock(!lock)}
-          className="w-full py-2.5 rounded-xl text-xs font-bold"
-          style={lock
-            ? { background: "var(--goodBg)", color: "var(--good)", border: "1px solid var(--goodLine)" }
-            : { background: "var(--accentBg)", color: "var(--accent)", border: "1px solid var(--accentLine)" }}>
-          {lock ? "فتح القفل واستئناف البيع" : "قفل المخزون وبدء الجرد"}
-        </button>
-      </Card>
+      {savedMissing && (
+        <Card style={{ padding: 12, marginBottom: 12, border: "1px solid var(--badLine)" }}>
+          {MissingList(unitsForCodes(savedMissing.codes), savedMissing.title, () => setSavedMissing(null))}
+        </Card>
+      )}
+      {/* بقايا أطقم لم تُكوَّد: تُعدّ بوزنها، فلا يظهر رمزها القديم عجزًا ولا زيادة */}
+      {remnants.length > 0 && (
+        <Card style={{ padding: 12, marginBottom: 12, border: "1px solid var(--accentLine)", background: "var(--accentBg)" }}>
+          <p data-remnant-warn style={{ color: "var(--accent)", margin: 0 }} className="text-xs font-bold">
+            ⚠ {remnants.length} بقايا أطقم لم تُكوَّد ({fmtW(remnants.reduce((x, r) => x + (Number(r.weight) || 0), 0))} جم) — تُعدّ بوزنها، لا عجزًا ولا زيادةً للرمز القديم. كوِّدها من «التكويد».
+          </p>
+        </Card>
+      )}
+
+      {/* قفل المخزون: جرد المحل يقفل البيع، وجرد القسم لا يقفله */}
+      {lock && (
+        <Card style={{ padding: 12, marginBottom: 12, border: "1px solid var(--accentLine)" }}>
+          <p style={{ color: "var(--accent)", margin: 0 }} className="text-xs font-bold flex items-center gap-1.5">
+            <Lock size={14} /> {inventoryOnly ? "جرد المحل جارٍ" : sellDuring ? "جرد المحل جارٍ — البيع مسموحٌ بالإعداد، والمبيع أثناء العدّ يُطابَق" : "المخزون مقفل للجرد — البيع موقوف"}
+          </p>
+          <p style={{ color: "var(--text3)", margin: "2px 0 0" }} className="text-[11px]">بدأه {lock.startedBy}</p>
+          {onToggleLock && !inventoryOnly && (
+            <button type="button" onClick={() => onToggleLock(false)} className="w-full mt-2 rounded-xl text-xs font-bold" data-unlock-sales
+              style={{ minHeight: 44, background: "var(--panel)", color: "var(--goodSolid)", border: "1px solid var(--goodLine)" }}>افتح البيع دون إنهاء الجرد</button>
+          )}
+        </Card>
+      )}
 
       {/* اختيار النطاق */}
       {!scope && (
         <>
-          <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">اختر نوع الجرد</p>
+          {onStartFull && (
+            <>
+              <button type="button" data-stock-full onClick={() => { reset(); lock ? onChooseScope("general") : onStartFull(); }}
+                className="w-full py-3 rounded-xl font-bold"
+                style={{ background: "linear-gradient(135deg,var(--gradFrom),var(--gradTo))", color: "var(--panel)" }}>
+                {lock ? "تابع جرد المحل" : inventoryOnly || sellDuring ? "ابدأ جرد المحل" : "ابدأ جرد المحل — يوقف البيع"}
+              </button>
+              <p style={{ color: "var(--text3)" }} className="text-[11px] mt-1 mb-3">{inventoryOnly ? "كل القطع دفعةً واحدة — والعدّ يبدأ فورًا" : sellDuring ? "يقفل التحويل حتى تُنهي — والبيع مسموح (إعداد) — والعدّ يبدأ فورًا" : "يقفل البيع والتحويل حتى تُنهي — والعدّ يبدأ فورًا"}</p>
+            </>
+          )}
+          {!onStartFull && <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">اختر نوع الجرد</p>}
           <div className="flex flex-col gap-2 mb-4">
             {[
-              { id: "sectional", label: "جرد الأقسام", hint: "قسمًا قسمًا — أسهل للتوزيع بين العاملين", icon: Grid },
-              { id: "general", label: "جرد شامل", hint: "المخزون كله دفعة واحدة", icon: Warehouse },
-            ].map((o) => {
+              { id: "sectional", label: onStartFull && !lock && !inventoryOnly ? "جرد قسم — لا يوقف البيع" : "جرد الأقسام", hint: "قسمًا قسمًا — أسهل للتوزيع بين العاملين", icon: Grid },
+              !onStartFull && { id: "general", label: "جرد شامل", hint: "المخزون كله دفعة واحدة", icon: Warehouse },
+            ].filter(Boolean).map((o) => {
               const Icon = o.icon;
               return (
                 <button key={o.id} onClick={() => { reset(); onChooseScope(o.id); }} className="w-full text-right">
@@ -407,6 +483,10 @@ function StocktakeSubPage({ lock, onToggleLock, sellDuring = false,
                 </button>
               );
             })}
+            {onStartFull && !lock && !inventoryOnly && (
+              <button type="button" data-stock-general-nolock onClick={() => { reset(); onChooseScope("general"); }} className="text-[11px] font-bold"
+                style={{ color: "var(--text2)", textDecoration: "underline", minHeight: 44 }}>أو جرد شامل دون إيقاف البيع</button>
+            )}
           </div>
 
           {/* إعداد الوزن */}
@@ -445,9 +525,24 @@ function StocktakeSubPage({ lock, onToggleLock, sellDuring = false,
                         {(a.diffCount || 0) === 0 ? "مطابق" : `فرق ${a.diffCount}`}
                       </span>
                     </div>
-                    <p style={{ color: "var(--text3)" }} className="text-[10px] mt-0.5">
-                      {new Date(a.date).toLocaleString("en-GB")} · {a.createdBy || ""}
+                    <p style={{ color: "var(--text3)" }} className="text-[11px] mt-0.5">
+                      {new Date(a.date).toLocaleString("en-GB")} · {a.createdBy || ""}{a.scan ? " · بالقارئ" : ""}
                     </p>
+                    {canPrintSheet && (
+                      <button type="button" data-audit-sheet={a.id} onClick={() => { if (!printStocktakeSheet(a, { items: allItems.length ? allItems : activeItems, info: branchInfo })) flashToast("اسمح بالنوافذ المنبثقة للطباعة"); }}
+                        data-help="يطبع كشف الجرد الرسمي لهذه العملية: النظام والمعدود والفرق لكل صنف، وتواقيع لجنة الجرد."
+                        className="w-full rounded-xl text-[11px] font-bold mt-2" style={{ minHeight: 40, background: "var(--accentBg)", color: "var(--accent)", border: "1px solid var(--accentLine)" }}>
+                        كشف الجرد الرسمي
+                      </button>
+                    )}
+                    {(a.scan?.missing || []).length > 0 && (
+                      <button type="button" data-audit-missing={a.scan.missing.length}
+                        onClick={() => setSavedMissing({ title: `لم تُقرأ في جرد ${new Date(a.date).toLocaleDateString("en-GB")}`, codes: a.scan.missing })}
+                        className="w-full rounded-xl text-[11px] font-bold mt-2"
+                        style={{ minHeight: 40, background: "var(--badBg)", color: "var(--bad)", border: "1px solid var(--badLine)" }}>
+                        لم تُقرأ {a.scan.missing.length} — اضغط لترى كل قطعة بصورتها
+                      </button>
+                    )}
                   </Card>
                 ))}
               </div>
@@ -474,9 +569,14 @@ function StocktakeSubPage({ lock, onToggleLock, sellDuring = false,
               {categories.map((c) => {
                 const done = stocktake.sectionalStatus?.[c.id] === "done";
                 return (
-                  <button key={c.id} onClick={() => { reset(); onSelectCategory(c.id); }} className="w-full text-right">
-                    <Card style={{ padding: 12, border: `1px solid ${done ? "var(--goodLine)" : "var(--line)"}` }}>
+                  <button key={c.id} onClick={() => setPickCats((p) => (p.includes(c.id) ? p.filter((x) => x !== c.id) : [...p, c.id]))} className="w-full text-right"
+                    role="checkbox" aria-checked={pickCats.includes(c.id)} aria-label={`اختر قسم ${categoryLabel(c.id)}`} data-stock-cat={c.id}>
+                    <Card style={{ padding: 12, border: `1px solid ${pickCats.includes(c.id) ? "var(--accent)" : done ? "var(--goodLine)" : "var(--line)"}` }}>
                       <div className="flex items-center gap-2">
+                        <span style={{ width: 20, height: 20, borderRadius: 6, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                          background: pickCats.includes(c.id) ? "var(--accent)" : "transparent", border: `1px solid ${pickCats.includes(c.id) ? "var(--accent)" : "var(--accentLine)"}` }}>
+                          {pickCats.includes(c.id) && <Check size={13} color="var(--panel)" />}
+                        </span>
                         <span style={{ color: "var(--text)", fontFamily: "'Cairo', sans-serif" }} className="text-sm font-bold flex-1">
                           {categoryLabel(c.id)}
                         </span>
@@ -498,13 +598,18 @@ function StocktakeSubPage({ lock, onToggleLock, sellDuring = false,
                   </button>
                 );
               })}
+              <button disabled={!pickCats.length} onClick={() => { reset(); onSelectCategory(pickCats.length === 1 ? pickCats[0] : pickCats); setPickCats([]); }}
+                data-stock-start className="w-full py-3 rounded-xl font-bold"
+                style={{ background: pickCats.length ? "linear-gradient(135deg,var(--gradFrom),var(--gradTo))" : "var(--accentBg)", color: pickCats.length ? "var(--panel)" : "var(--text3)" }}>
+                {pickCats.length ? `ابدأ جرد ${pickCats.length === 1 ? `قسم ${categoryLabel(pickCats[0])}` : `${pickCats.length} أقسام`}` : "اختر قسمًا أو أكثر"}
+              </button>
             </div>
           )}
           {Object.keys(stocktake.sectionalStatus || {}).length > 0 && (
-            <button onClick={() => { reset(); onEndSectional(); }}
+            <button onClick={() => { reset(); onEndSectional(); if (lock && onToggleLock) onToggleLock(false); }}
               className="w-full py-3 rounded-xl font-bold"
               style={{ background: "linear-gradient(135deg,var(--gradFrom),var(--gradTo))", color: "var(--panel)" }}>
-              إنهاء الجرد وحفظ النتيجة
+              {lock && onToggleLock && !inventoryOnly ? "إنهاء الجرد وفتح البيع" : "إنهاء الجرد وحفظ النتيجة"}
             </button>
           )}
         </>
@@ -515,7 +620,7 @@ function StocktakeSubPage({ lock, onToggleLock, sellDuring = false,
         <>
           <div className="flex items-center justify-between mb-3">
             <span style={{ color: "var(--accent)" }} className="text-xs font-bold">
-              {scope === "general" ? "جرد شامل" : categoryLabel(cat)}
+              {scope === "general" ? "جرد شامل" : catIds.map((c) => categoryLabel(c)).join(" · ")}
             </span>
             <button onClick={() => { reset(); scope === "general" ? onCancelScope() : onBackToList(); }}
               className="text-[10px] px-2.5 py-1 rounded-full"
@@ -527,7 +632,19 @@ function StocktakeSubPage({ lock, onToggleLock, sellDuring = false,
           {ReaderBar()}
           {SummaryRow()}
 
-          {showMissing && summary.missingCount > 0 && MissingList()}
+          {ignoredN > 0 && (
+            <p style={{ color: "var(--text3)", margin: "0 0 8px" }} className="text-[11px]" data-ignored={ignoredN}>
+              تُجوهلت {ignoredN} رقاقة من قسمٍ غير مختار — لا تُعدّ ولا تُحفظ
+            </p>
+          )}
+          {undo && (
+            <div className="flex items-center justify-between gap-2 mb-2 px-3 py-2 rounded-xl" style={{ background: "var(--field)", border: "1px solid var(--line)" }}>
+              <span className="text-[11px]" style={{ color: "var(--text2)" }}>صُفّرت القراءة</span>
+              <button type="button" data-stock-undo onClick={() => { setScanned((cur) => ({ ...undo.scanned, ...cur })); setSoldFound((cur) => [...new Set([...undo.soldFound, ...cur])]); setUnknown((cur) => [...new Set([...undo.unknown, ...cur])]); setUndo(null); }}
+                className="text-[11px] font-bold px-3 rounded-full" style={{ minHeight: 32, color: "var(--accent)", border: "1px solid var(--accentLine)" }}>تراجع</button>
+            </div>
+          )}
+          {showMissing && summary.missingCount > 0 && MissingList(summary.missing, "لم تُقرأ", () => setShowMissing(false))}
 
           {summary.missingCount === 0 && summary.total > 0 && (
             <Card style={{ padding: 12, marginBottom: 12, border: "1px solid var(--goodLine)" }}>
@@ -556,10 +673,18 @@ function StocktakeSubPage({ lock, onToggleLock, sellDuring = false,
           {confirmFinish && (
             <Card style={{ padding: 12, marginBottom: 12, border: "1px solid var(--accentLine)" }}>
               <p style={{ color: "var(--text)" }} className="text-xs font-bold mb-1">احفظ الجرد بفروقه؟</p>
-              <p style={{ color: "var(--text2)" }} className="text-[11px] mb-2">
-                {summary.missingCount > 0 && <>ناقص {summary.missingCount} قطعة{showWeight ? ` (${fmtW(summary.missingWeight)} جم)` : ""} — عجز جرد بتكلفتها في الدفترين. </>}
-                {soldFound.length > 0 && <>{soldFound.length} مبيعة وُجدت — بند مراجعة للمدير. </>}
-                {unknown.length > 0 && <>{unknown.length} رمز مجهول — يُذكر في السجل.</>}
+              <p style={{ color: "var(--text2)" }} className="text-[11px] mb-2 leading-6">
+                مطابق {summary.read} · {summary.missingCount > 0 ? (
+                  <button type="button" data-finish-missing={summary.missingCount} onClick={() => setShowMissing(true)}
+                    className="font-bold underline" style={{ color: "var(--bad)", minHeight: 32 }}>ناقص {summary.missingCount}{showWeight ? ` (${fmtW(summary.missingWeight)} جم)` : ""} — اضغط للتفاصيل</button>
+                ) : <b>ناقص 0</b>}
+                {unknown.length > 0 ? ` · غير معروف ${unknown.length} (يُحفظ للمراجعة)` : ""}
+              </p>
+              <p style={{ color: "var(--text3)" }} className="text-[11px] mb-2 leading-6">
+                {inventoryOnly
+                  ? "الناقص يُخرَج من المخزون بلا قيد — وضع المخزون. والمعلّقة لا تُعدّ ناقصة."
+                  : "الناقص يُقيَّد عجزًا بتكلفة القطعة في الدفترين — كالجرد اليدوي. والمعلّقة لا تُعدّ عجزًا."}
+                {soldFound.length > 0 ? " والمباعة التي وُجدت لا تُسوّى ولا تُرحَّل — تُوقف لقرار المدير: البيع صحيح · إرجاع البيع · إضافة كقطعة جديدة." : ""}
               </p>
               <div className="grid grid-cols-2 gap-2">
                 <button onClick={() => setConfirmFinish(false)} className="py-2 rounded-xl text-xs font-bold"
@@ -571,7 +696,7 @@ function StocktakeSubPage({ lock, onToggleLock, sellDuring = false,
           )}
 
           <div className="grid grid-cols-2 gap-2 mb-4">
-            <button onClick={reset}
+            <button onClick={resetWithUndo}
               className="py-2.5 rounded-xl text-xs font-bold"
               style={{ background: "var(--panel)", color: "var(--text2)", border: "1px solid var(--line)" }}>
               تصفير القراءة
@@ -580,7 +705,7 @@ function StocktakeSubPage({ lock, onToggleLock, sellDuring = false,
               onClick={() => (hasDiffs ? setConfirmFinish(true) : finish())}
               className="py-2.5 rounded-xl text-xs font-bold"
               style={{ background: "linear-gradient(135deg,var(--gradFrom),var(--gradTo))", color: "var(--panel)" }}>
-              {scope === "general" ? "إنهاء الجرد" : "إنهاء القسم"}
+              {scope === "general" ? (lock && onToggleLock && !inventoryOnly ? "إنهاء الجرد وفتح البيع" : "إنهاء الجرد") : "إنهاء القسم"}
             </button>
           </div>
         </>

@@ -141,4 +141,32 @@ function printOfficialDoc(doc, opts = {}) {
   return true;
 }
 
-export { arabicAmountWords, arabicNumberWords, creditNoteHtml, OFFICIAL_KINDS, printOfficialDoc, voucherHtml };
+
+// كشف الجرد الرسمي: النظام والمعدود والفرق لكل صنف وما لم يُقرأ برموزه، وتواقيع لجنة الجرد
+function printStocktakeSheet(audit, { items = [], info = {} } = {}) {
+  const entries = Array.isArray(audit?.entries) ? audit.entries : [];
+  const sysOf = (e) => (Number.isFinite(Number(e.systemQty)) ? Number(e.systemQty) : (Number(e.countedQty) || 0) + (e.missingCodes || []).length);
+  const rows = entries.map((e, i) => {
+    const it = items.find((x) => x.id === e.itemId) || {};
+    const sys = sysOf(e), cnt = Number(e.countedQty) || 0, diff = cnt - sys;
+    return `<tr><td class="c">${i + 1}</td><td class="r">${esc(it.name || categoryLabel(it.categoryId || e.category) || e.itemId)}</td><td class="c">${esc(it.karat || e.karat || "")}</td><td class="c">${fmtW(it.weight || e.systemWeight || 0)}</td><td class="c">${sys}</td><td class="c">${cnt}</td><td class="c" style="${diff ? "color:#b00;font-weight:700" : ""}">${diff > 0 ? "+" : ""}${diff}</td><td class="r"><small>${esc((e.missingCodes || []).join("، "))}</small></td></tr>`;
+  }).join("");
+  const diffs = entries.filter((e) => (Number(e.countedQty) || 0) !== sysOf(e)).length;
+  const scan = audit?.scan || null;
+  const body = `
+<div class="kv">
+  <div><b>التاريخ</b> ${esc(new Date(audit.date).toLocaleString("en-GB"))}</div><div><b>النطاق</b> ${audit.scope === "sectional" ? "جرد أقسام" : "جرد شامل"}${scan ? " · بالقارئ" : ""}</div>
+  <div><b>أجراه</b> ${esc(audit.createdBy || "")}</div><div><b>النتيجة</b> ${diffs ? `${diffs} صنفًا بفرق` : "مطابق"}${audit.applied ? " · سُوّي في الدفاتر" : ""}</div>
+  ${scan ? `<div><b>المتوقَّع</b> ${scan.expectedCount ?? "—"} قطعة</div><div><b>المقروء</b> ${scan.countedCount ?? "—"} قطعة</div>` : ""}
+</div>
+<table><thead><tr><th>#</th><th>الصنف</th><th>العيار</th><th>الوزن</th><th>النظام</th><th>المعدود</th><th>الفرق</th><th>قطعٌ لم تُقرأ</th></tr></thead><tbody>${rows || `<tr><td colspan="8" class="c">لا فروق — كل القطع قُرئت</td></tr>`}</tbody></table>
+${scan?.soldFound?.length ? `<div class="box">قطعٌ مسجّلة مباعة وُجدت على الرفّ (للمراجعة): ${esc(scan.soldFound.join("، "))}</div>` : ""}
+<div class="sign"><div>عضو اللجنة</div><div>عضو اللجنة</div><div>رئيس اللجنة / المدير</div></div>`;
+  const win = window.open("", "_blank");
+  if (!win) return false;
+  win.document.open(); win.document.write(officialDocHtml({ title: "كشف الجرد", sub: info.name || "", size: "A4 portrait", margin: "12mm", body, info })); win.document.close();
+  setTimeout(() => { try { win.focus(); win.print(); } catch { /* أُغلقت */ } }, 350);
+  return true;
+}
+
+export { arabicAmountWords, arabicNumberWords, creditNoteHtml, OFFICIAL_KINDS, printOfficialDoc, printStocktakeSheet, voucherHtml };

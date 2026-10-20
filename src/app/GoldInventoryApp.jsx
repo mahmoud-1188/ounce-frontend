@@ -7420,8 +7420,8 @@ export default function GoldInventoryApp() {
   //   القطع محليًا فقط فيضيع عند أول تحميل، ولا يمرّ فرقه بالدفترين.
   //   الخادم يُخرج الناقص ويُضيف الزائد ويقيّد الفرق بتكلفة الشراء
   //   (وسعر اليوم بديلٌ مُعلَن لصنفٍ بلا تكلفة) — ثم نُعيد التحميل.
-  const handleSaveAudit = async (entries, applyReconcile) => {
-    const audit = { id: Date.now().toString(), date: new Date().toISOString(), entries, applied: applyReconcile, createdBy: currentUser?.name || "", ...dayStamp() };
+  const handleSaveAudit = async (entries, applyReconcile, extra = {}) => {
+    const audit = { id: Date.now().toString(), date: new Date().toISOString(), entries, applied: applyReconcile, createdBy: currentUser?.name || "", ...dayStamp(), ...extra };
     if (applyReconcile) {
       try {
         const res = await api.applyStocktake(
@@ -7462,11 +7462,15 @@ export default function GoldInventoryApp() {
   const handleStocktakeChooseScope = (scope) => {
     setStocktake((prev) => ({ ...prev, scope, generalEntries: scope === "general" ? buildEntriesFor(activeItems) : prev.generalEntries }));
   };
-  const handleStocktakeSelectCategory = (catId) => {
+  // قسمٌ أو عدّة أقسام تُجرد معًا — المفتاح يجمع معرّفاتها، وإنهاؤه يعلّم كلًّا منها
+  const handleStocktakeSelectCategory = (catIdOrIds) => {
+    const ids = Array.isArray(catIdOrIds) ? catIdOrIds : [catIdOrIds];
+    const catId = ids.length === 1 ? ids[0] : ids;
+    const key = ids.join("+");
     setStocktake((prev) => {
-      const existing = prev.sectionalEntries[catId];
-      const entries = existing || buildEntriesFor(activeItems.filter((it) => it.categoryId === catId));
-      return { ...prev, activeCategory: catId, sectionalEntries: { ...prev.sectionalEntries, [catId]: entries } };
+      const existing = prev.sectionalEntries[key];
+      const entries = existing || buildEntriesFor(activeItems.filter((it) => ids.includes(it.categoryId)));
+      return { ...prev, activeCategory: catId, sectionalEntries: { ...prev.sectionalEntries, [key]: entries } };
     });
   };
   const handleStocktakeBackToList = () => {
@@ -7477,7 +7481,7 @@ export default function GoldInventoryApp() {
       if (bucket === "general") {
         return { ...prev, generalEntries: prev.generalEntries.map((e) => (e.itemId === itemId ? { ...e, [field]: val } : e)) };
       }
-      const catId = prev.activeCategory;
+      const catId = Array.isArray(prev.activeCategory) ? prev.activeCategory.join("+") : prev.activeCategory;
       return {
         ...prev,
         sectionalEntries: {
@@ -7507,10 +7511,12 @@ export default function GoldInventoryApp() {
     });
     return out;
   };
+  // نتيجة المسح تُحفظ مع الجرد: ما لم يُقرأ برموزه يُعاد عرضه، وكشف الجرد الرسمي يُطبع منها
   const saveScanAudit = (payload) => {
     const entries = scanEntries(payload);
-    if (entries.length) return handleSaveAudit(entries, true);
-    const audit = { id: Date.now().toString(), date: new Date().toISOString(), entries: [], applied: true, scan: payload,
+    const scan = { ...payload, missing: (payload.missing || []).map((m) => m.code) };
+    if (entries.length) return handleSaveAudit(entries, payload.apply !== false, { scan, scope: payload.scope });
+    const audit = { id: Date.now().toString(), date: new Date().toISOString(), entries: [], applied: true, scan, scope: payload.scope,
       createdBy: currentUser?.name || "", ...dayStamp() };
     persistAudits([audit, ...audits]);
     flashToast(payload.soldFound?.length || payload.unknown?.length ? "حُفظ الجرد — لا عجز، والبنود للمراجعة" : "حُفظ الجرد — مطابق");
@@ -7519,22 +7525,23 @@ export default function GoldInventoryApp() {
   const handleStocktakeFinishSection = (applyReconcile) => {
     if (applyReconcile && applyReconcile.kind === "scan") {
       const catId = applyReconcile.categoryId || stocktake.activeCategory;
+      const ids = Array.isArray(catId) ? catId : [catId];
       saveScanAudit(applyReconcile);
       setStocktake((prev) => ({
         ...prev,
         activeCategory: null,
-        sectionalStatus: { ...prev.sectionalStatus, [catId]: applyReconcile.diffCount ? "missing" : "ok" },
+        sectionalStatus: { ...prev.sectionalStatus, ...Object.fromEntries(ids.map((id) => [id, applyReconcile.diffCount ? "missing" : "ok"])) },
       }));
       return;
     }
-    const catId = stocktake.activeCategory;
-    const entries = stocktake.sectionalEntries[catId] || [];
+    const ids = Array.isArray(stocktake.activeCategory) ? stocktake.activeCategory : [stocktake.activeCategory];
+    const entries = stocktake.sectionalEntries[ids.join("+")] || [];
     const hasMissing = entries.some(entryHasVariance);
-    handleSaveAudit(entries, applyReconcile);
+    handleSaveAudit(entries, applyReconcile, { scope: "sectional" });
     setStocktake((prev) => ({
       ...prev,
       activeCategory: null,
-      sectionalStatus: { ...prev.sectionalStatus, [catId]: hasMissing ? "missing" : "ok" },
+      sectionalStatus: { ...prev.sectionalStatus, ...Object.fromEntries(ids.map((id) => [id, hasMissing ? "missing" : "ok"])) },
     }));
     if (!applyReconcile) flashToast("تم حفظ جرد القسم");
   };
@@ -8577,6 +8584,11 @@ export default function GoldInventoryApp() {
             onFinishGeneral={handleStocktakeFinishGeneral}
             onEndSectional={handleStocktakeEndSectional}
             onCancelScope={handleStocktakeCancelScope}
+            onStartFull={async () => { if (await handleToggleStocktakeLock(true, "all")) handleStocktakeChooseScope("general"); }}
+            branchInfo={{ ...(branchProvision?.profile || {}), name: branchIdentity?.name || "" }}
+            lots={lots}
+            suppliers={suppliers}
+            canPrintSheet={!!appSettings?.officialPrint || role === "manager"}
             flashToast={flashToast}
           />
         )}
