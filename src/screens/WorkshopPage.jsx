@@ -8,6 +8,7 @@ import { Card } from "../ui/Card.jsx";
 import { Field } from "../ui/Field.jsx";
 import { NumericInput } from "../ui/NumericInput.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
+import { WastageReportView } from "../ui/WastageReportView.jsx";
 
 /// الورشة كاملة: الورش موردون بعقدٍ (نسبة الهدر وأساسها)، والصرف بأكثر من وزنة، والاستلام قطعةً قطعة تُكوَّد فورًا
 /// في المخزون، والبرادة لصندوق الكسر، والمردود للخزنة. عند الإقفال يُشطب المسموح وتُستحقّ الأجور، والزائد مطالبةٌ
@@ -73,6 +74,7 @@ function WorkshopPage({ settings = null, price24 = 0, currency = "ر.س", catego
   const [terms, setTerms] = useState(null);   // تعديل عقد ورشة
   const [pay, setPay] = useState(null);       // سداد أجور
   const [msg, setMsg] = useState("");
+  const [view, setView] = useState("jobs");
   const ws = wastageSettingsOf(settings || {});
   const cats = (categories || []).filter((c) => isUuid(c.id));
   const load = () => {
@@ -159,6 +161,12 @@ function WorkshopPage({ settings = null, price24 = 0, currency = "ر.س", catego
     <div className="pb-24">
       <SubPageHeader title="الورشة" onBack={onBack} />
       <div className="px-4 pt-3" data-workshop>
+        <div className="grid grid-cols-2 gap-1.5 mb-3">
+          {[["jobs", "الأوامر والورش"], ["report", "تقرير الهدر"]].map(([id, l]) => (
+            <button key={id} type="button" data-workshop-view={id} onClick={() => setView(id)} className="py-2 rounded-xl text-[11px] font-bold" style={view === id ? soft : btn}>{l}</button>
+          ))}
+        </div>
+        {view === "report" ? <WastageReportView currency={currency} /> : (<>
         <p style={{ color: "var(--text2)" }} className="text-[11px] mb-3">اصرف خامًا للورشة بوزنه، واستلم القطع قطعةً قطعة فتُكوَّد فورًا، والبرادة لصندوق الكسر — الهدر بالصافي، والزائد على العقد مطالبةٌ على الورشة.</p>
         {!(price24 > 0) && <p style={{ color: "var(--bad)" }} className="text-[11px] mb-2">ضع سعر الذهب اليوم — القطع والهدر يُقوَّمان به.</p>}
         {msg && <p data-workshop-msg style={{ color: "var(--accentText)" }} className="text-[11px] mb-2">{msg}</p>}
@@ -403,6 +411,7 @@ function WorkshopPage({ settings = null, price24 = 0, currency = "ر.س", catego
           );
         })}
         {jobs && jobs.length === 0 && !form && <p style={{ color: "var(--text3)" }} className="text-[11px]">لا عمليات ورشة بعد.</p>}
+        </>)}
       </div>
     </div>
   );

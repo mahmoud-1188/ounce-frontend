@@ -839,6 +839,7 @@ export const workshopApi = {
   close: (id, body) => apiFetch(`/workshop/jobs/${id}/close`, { method: "POST", body }),
   settle: (id, body) => apiFetch(`/workshop/jobs/${id}/settle`, { method: "POST", body }),
   payFees: (body) => apiFetch("/workshop/pay-fees", { method: "POST", body }),
+  report: (from, to) => apiFetch(`/workshop/report?from=${from}&to=${to}`),
 };
 // مراقبة الأعطال (migration 082): بلاغ العطل يصل الإدارة — بلا انتظارٍ ولا رسالة خطأ إن فشل
 export const reportClientError = (body) => (authToken ? fetchApi("/client-errors", { method: "POST", body }).catch(() => null) : Promise.resolve(null));
