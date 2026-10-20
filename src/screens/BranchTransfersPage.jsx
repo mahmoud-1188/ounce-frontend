@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Loader2, Send } from "lucide-react";
 import { fmtMoney, fmtW } from "../core/money.js";
 import * as api from "../core/api.js";
-import { inputStyle } from "../domain/helpers.js";
+import { inputStyle, itemLabel } from "../domain/helpers.js";
 import { Card } from "../ui/Card.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 import { UnprintedLabelsCard } from "../ui/UnprintedLabelsCard.jsx";
@@ -19,6 +19,19 @@ function BranchTransfersPage({ currency = "ر.س", canMove = false, isManager = 
   const [msg, setMsg] = useState(null);
   // العدّ عند الاستلام: { id, arrived: Set(codes), weight, scan }
   const [count, setCount] = useState(null);
+  // اختيار القطع من قائمة المتاح بالبحث — بديلٌ عن كتابة رموزها
+  const [pickQ, setPickQ] = useState("");
+  const codeList = codes.split(/[\s,،;]+/).map((c) => c.trim().toUpperCase()).filter(Boolean);
+  const avail = [];
+  for (const it of items) {
+    if (it.voided || it.reservedFor || it.remnant) continue;
+    for (const u of it.units || []) if (!u.sold && !u.issued && !u.held) avail.push({ code: u.code, printed: !!u.printed, label: `${itemLabel(it)} · ${fmtW(it.weight)} جم` });
+  }
+  const shown = pickQ.trim() ? avail.filter((a) => (a.code + a.label).toUpperCase().includes(pickQ.trim().toUpperCase())).slice(0, 40) : [];
+  const togglePick = (code) => {
+    const has = codeList.includes(code.toUpperCase());
+    setCodes(has ? codeList.filter((c) => c !== code.toUpperCase()).join("\n") : [...codeList, code].join("\n"));
+  };
   const load = () => api.modulesApi.transfers().then((x) => { setD(x); if (!to && x.branches[0]) setTo(x.branches[0].id); }).catch(() => setD({ branches: [], transfers: [] }));
   useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const ERR = {
@@ -90,6 +103,22 @@ function BranchTransfersPage({ currency = "ر.س", canMove = false, isManager = 
             </select>
             <textarea rows={3} value={codes} onChange={(e) => setCodes(e.target.value)} placeholder="امسح رموز القطع أو الصقها"
               style={{ ...inputStyle, marginTop: 6, resize: "none" }} />
+            <input style={{ ...inputStyle, marginTop: 6 }} value={pickQ} onChange={(e) => setPickQ(e.target.value)} placeholder="أو ابحث برمز القطعة أو صنفها واخترها" aria-label="ابحث برمز القطعة أو صنفها" data-transfer-search />
+            {shown.length > 0 && (
+              <div className="flex flex-col gap-1 mt-1" style={{ maxHeight: 220, overflowY: "auto" }} data-transfer-picks>
+                {shown.map((a) => {
+                  const on = codeList.includes(a.code.toUpperCase());
+                  return (
+                    <button key={a.code} type="button" onClick={() => togglePick(a.code)} aria-pressed={on} data-transfer-pick={a.code}
+                      className="text-right rounded-xl px-2.5 py-1.5 text-[11px]"
+                      style={{ minHeight: 36, background: on ? "var(--accentBg)" : "var(--field)", color: on ? "var(--accent)" : "var(--text)", border: `1px solid ${on ? "var(--accentLine)" : "var(--line)"}` }}>
+                      {on ? "✓ " : ""}<span dir="ltr" style={{ fontFamily: "monospace" }}>{a.code}</span> · {a.label}{a.printed ? "" : " · بلا ملصق"}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {codeList.length > 0 && <p style={{ color: "var(--text3)" }} className="text-[11px] mt-1">{codeList.length} قطعة في التحويل</p>}
             <input style={{ ...inputStyle, marginTop: 6 }} value={note} onChange={(e) => setNote(e.target.value)} placeholder="ملاحظة (اختياري)" />
             <UnprintedLabelsCard units={unprinted} where="التحويل" printerCfg={printerCfg} onSavePrinter={onSavePrinter} onBindEpc={onBindEpc}
               onSetPrinted={onSetPrinted} currency={currency} price24={price24} />
