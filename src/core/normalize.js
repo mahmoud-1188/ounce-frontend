@@ -238,6 +238,7 @@ function normalizeExpenses(rows, usersFull) {
       periodMonth: e.period_month, note: e.note || "",
       createdBy: null, createdById: e.created_by,
       businessDayId: e.business_day_id,
+      attachId: e.attach_id || null,
     };
   });
 }

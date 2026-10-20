@@ -7050,7 +7050,10 @@ export default function GoldInventoryApp() {
     // سبب ظهور مبلغ بلا بيان في التقارير — لا يمكن تتبّعه لاحقًا.
     const name = (entry.name || "").trim() || (emp ? `${catLabel} — ${emp.name}` : catLabel);
     try {
+      // الفاتورة أو الإيصال يُحفظ على هذا الجهاز ويُربط بالمصروف بمعرّفه
+      const attachId = entry.invoiceFile ? await saveAttachment(entry.invoiceFile).catch(() => null) : null;
       const res = await api.expensesApi.add({
+        ...(attachId ? { attachId } : {}),
         category: entry.category,
         amount: Number(entry.amount),
         name,
@@ -7065,6 +7068,7 @@ export default function GoldInventoryApp() {
         ...(entry.fixedId ? { fixedId: entry.fixedId } : {}),
       });
       if (res.approvalPending) { notePendingApproval(res.approvalPending); return null; }
+      if (entry.fixedId) refreshFixedDue();
       const record = {
         id: res.expense.id, ref: res.expense.ref, date: res.expense.created_at,
         category: res.expense.category, name: res.expense.name, amount: Number(res.expense.amount) || 0,
@@ -7072,7 +7076,7 @@ export default function GoldInventoryApp() {
         employeeId: res.expense.employee_id, employeeName: emp?.name || null, employeeRef: emp?.ref || null,
         periodMonth: res.expense.period_month, note: res.expense.note || "",
         createdBy: currentUser?.name || "", createdById: res.expense.created_by,
-        businessDayId: res.expense.business_day_id,
+        businessDayId: res.expense.business_day_id, attachId: res.expense.attach_id || null,
       };
       setExpenses((prev) => [record, ...prev]);
       if (res.cashTx) {
@@ -8555,7 +8559,7 @@ export default function GoldInventoryApp() {
             expenseNames={expenseNames}
             users={users}
             onAddExpenseName={handleAddExpenseName}
-            onDeleteExpenseName={handleDeleteExpenseName} expenses={expenses} totals={expensesTotals} currency={priceData.currency} onAdd={handleAddExpense} flashToast={flashToast} />
+            onDeleteExpenseName={handleDeleteExpenseName} fixedDue={fixedDue} expenses={expenses} totals={expensesTotals} currency={priceData.currency} onAdd={handleAddExpense} flashToast={flashToast} />
         )}
 
         {morePage === null && tab === "stocktake" && (
