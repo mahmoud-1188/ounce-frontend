@@ -7080,6 +7080,7 @@ export default function GoldInventoryApp() {
         periodMonth: isPayroll ? entry.periodMonth || new Date().toISOString().slice(0, 7) : null,
         installments: entry.category === "advance" ? Number(entry.installments) || 1 : undefined,
         nameId: entry.nameId || null,
+        ...(Number(entry.vatAmount) > 0 ? { vatAmount: Number(entry.vatAmount) } : {}),
         // مصروفٌ من قالبٍ ثابت: الخادم يعلّم شهره مسجَّلًا بعد نجاح القيد
         ...(entry.fixedId ? { fixedId: entry.fixedId } : {}),
       });
@@ -7691,6 +7692,7 @@ export default function GoldInventoryApp() {
         scrapKarat: paymentMethod === "scrap" ? Number(draft.scrapKarat) || null : undefined,
         scrapWeight: paymentMethod === "scrap" ? Number(draft.scrapWeight) || 0 : undefined,
         invoicePending: !draft.invoiceFile,
+        ...(Number(draft.inputVat) > 0 ? { inputVat: Number(draft.inputVat) } : {}),
         lines: linesIn.map((ln) => ({
           karat: Number(ln.karat), weight: Number(ln.weight) || 0,
           costPerGram: Number(ln.costPerGram) || 0, workmanshipTotal: Number(ln.workmanshipTotal) || 0,

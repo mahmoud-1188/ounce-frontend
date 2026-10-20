@@ -21,6 +21,8 @@ function AddExpenseForm({ expenseNames = [], fixedDue = [], users = [], onAddExp
   const [note, setNote] = useState("");
   const [installments, setInstallments] = useState("1");
   const [invoiceFile, setInvoiceFile] = useState(null);
+  // ضريبة المدخلات داخل المبلغ — تُخصم من ضريبة المبيعات في الإقرار
+  const [vatAmount, setVatAmount] = useState("");
   const [more, setMore] = useState(false);
   // مصروفٌ ثابت مستحقّ اختير: الخادم يعلّم شهره مسجَّلًا بعد نجاح القيد
   const [fixedId, setFixedId] = useState(null);
@@ -173,6 +175,20 @@ function AddExpenseForm({ expenseNames = [], fixedDue = [], users = [], onAddExp
           </div>
         )}
         {!isPayroll && (
+          <Field label="منها ضريبة القيمة المضافة (اختياري)">
+            <div className="flex gap-2">
+              <input style={{ ...inputStyle, flex: 1, marginBottom: 0 }} type="text" inputMode="decimal" value={vatAmount}
+                onChange={(e) => setVatAmount(sanitizeNumeric(e.target.value))} placeholder="0.00" aria-label="ضريبة المدخلات" />
+              <button type="button" data-expense-vat-15 disabled={!(Number(amount) > 0)}
+                onClick={() => setVatAmount((Math.round((Number(amount) * 15 / 115) * 100) / 100).toFixed(2))}
+                className="px-3 rounded-xl text-[11px] font-bold" style={{ minHeight: 44, background: "var(--panel)", color: "var(--accent)", border: "1px solid var(--accentLine)" }}>
+                15٪ داخل المبلغ
+              </button>
+            </div>
+            {Number(vatAmount) >= Number(amount) && Number(amount) > 0 && <p style={{ color: "var(--bad)" }} className="text-[11px] mt-1">الضريبة أكبر من المبلغ</p>}
+          </Field>
+        )}
+        {!isPayroll && (
           <div data-expense-invoice>
             <InvoiceAttachField value={invoiceFile} onChange={setInvoiceFile} optional
               label={category === "purchases" ? "فاتورة الشراء (اختياري) — صوّرها أو أرفق ملفًّا" : "الفاتورة أو الإيصال (اختياري)"} />
@@ -192,6 +208,7 @@ function AddExpenseForm({ expenseNames = [], fixedDue = [], users = [], onAddExp
                 employeeId: isPayroll ? employeeId : null,
                 installments: category === "advance" ? Math.min(60, Math.max(1, Number(installments) || 1)) : undefined,
                 ...(fixedId ? { fixedId } : {}),
+                ...(!isPayroll && Number(vatAmount) > 0 && Number(vatAmount) < Number(amount) ? { vatAmount: Number(vatAmount) } : {}),
                 invoiceFile: isPayroll ? null : invoiceFile,
               })
             }
