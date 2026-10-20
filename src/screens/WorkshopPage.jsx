@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Hammer, Scale } from "lucide-react";
 import * as api from "../core/api.js";
 import { KARATS, fmtMoney, fmtW } from "../core/money.js";
-import { inputStyle } from "../domain/helpers.js";
+import { inputStyle, wastageSettingsOf } from "../domain/helpers.js";
 import { SCALE_LINK, scaleConnect, scaleLinkWait } from "../domain/scale.js";
 import { Card } from "../ui/Card.jsx";
 import { Field } from "../ui/Field.jsx";
@@ -89,7 +89,7 @@ function WorkshopPage({ settings = null, price24 = 0, currency = "ر.س", flashT
         {!(price24 > 0) && <p style={{ color: "var(--bad)" }} className="text-[11px] mb-2">ضع سعر الذهب اليوم — الهدر يُقوَّم به عند الاستلام.</p>}
         {msg && <p style={{ color: "var(--accentText)" }} className="text-[11px] mb-2">{msg}</p>}
         {!form ? (
-          <button type="button" data-workshop-new onClick={() => setForm({ name: "", karat: 21, weight: "", pct: "2", basis: "in", ev: null })} className="w-full py-2.5 rounded-xl text-xs font-bold mb-3 flex items-center justify-center gap-1.5"
+          <button type="button" data-workshop-new onClick={() => setForm({ name: "", karat: 21, weight: "", pct: String(wastageSettingsOf(settings || {}).defaultAllowPct), basis: "in", ev: null })} className="w-full py-2.5 rounded-xl text-xs font-bold mb-3 flex items-center justify-center gap-1.5"
             style={{ background: "linear-gradient(135deg,var(--gradFrom),var(--gradTo))", color: "var(--panel)" }}><Hammer size={14} /> صرف للورشة</button>
         ) : (
           <Card style={{ padding: 12, marginBottom: 12 }}>

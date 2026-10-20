@@ -744,6 +744,7 @@ function normalizeBootstrap(boot) {
           postSaleSheet: boot.settings.sale_prefs?.postSaleSheet === true,
           sellDuringStocktake: boot.settings.sale_prefs?.sellDuringStocktake === true,
           quoteDays: Number(boot.settings.sale_prefs?.quoteDays) || 7,
+          ...(boot.settings.sale_prefs?.wastage ? { wastage: boot.settings.sale_prefs.wastage } : {}),
           codingModel: ["branch", "hq", "both"].includes(boot.settings.coding_model) ? boot.settings.coding_model : "both",
           zakatYear: boot.settings.zakat_year === "hijri" ? "hijri" : "gregorian",
         }

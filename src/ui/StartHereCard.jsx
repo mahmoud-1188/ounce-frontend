@@ -52,4 +52,8 @@ function StartHereCard({ steps = [], onGo }) {
   );
 }
 
-export { StartHereCard, branchStartSteps };
+// يُعيد «ابدأ هنا» للرئيسية بعد إخفائه (من الإعدادات)
+const showStartHere = () => { try { localStorage.removeItem(HIDE_KEY); } catch { /* تفضيلٌ محلّي */ } };
+const startHereHidden = readHidden;
+
+export { StartHereCard, branchStartSteps, showStartHere, startHereHidden };

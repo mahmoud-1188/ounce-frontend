@@ -318,7 +318,7 @@ import { buildWeightEntries } from "../domain/buildWeightEntries.js";
 import { computeCommission } from "../domain/computeCommission.js";
 import { computeReturnAmounts } from "../domain/computeReturnAmounts.js";
 import { hashPin } from "../domain/hashPin.js";
-import { applyHqMarkup, sellPrice24, markupLabel, documentIndex, aiAllowedFor, aiScope, branchDataKey, branchSnapshotKey, bundleById, cardFeeOf, cashAccountFor, categoryLabel, contentWidth, exchangeKind, expenseAccountFor, exportTablesPdf, fetchGoldPriceSAR, generateUnitCode, goldDestLabel, goldProfit, inPeriod, isBundle, isLiveScrap, itemLabel, lotAllocatedWeight, migrateLegacyKeys, modeAllowsAction, modeAllowsPage, modeAllowsTab, nameExists, navPerRow, normalizeFundingSource, normalizeName, r2, r3, remainingQty, saleProfitOf, saveAttachment, setRuntimeCategories, streamBase, trustBalance, unitCostBasis, unitCurrentValue, useViewport, weightTrialBalance } from "../domain/helpers.js";
+import { applyHqMarkup, sellPrice24, markupLabel, documentIndex, aiAllowedFor, aiScope, branchDataKey, branchSnapshotKey, bundleById, cardFeeOf, cashAccountFor, categoryLabel, contentWidth, exchangeKind, expenseAccountFor, exportTablesPdf, fetchGoldPriceSAR, generateUnitCode, goldDestLabel, goldProfit, inPeriod, isBundle, isLiveScrap, itemLabel, codingVarianceOf, lotAllocatedWeight, migrateLegacyKeys, wastageSettingsOf, modeAllowsAction, modeAllowsPage, modeAllowsTab, nameExists, navPerRow, normalizeFundingSource, normalizeName, r2, r3, remainingQty, saleProfitOf, saveAttachment, setRuntimeCategories, streamBase, trustBalance, unitCostBasis, unitCurrentValue, useViewport, weightTrialBalance } from "../domain/helpers.js";
 import { isPeriodClosed } from "../domain/isPeriodClosed.js";
 import { key } from "../domain/key.js";
 import { nextCashRef } from "../domain/nextCashRef.js";
@@ -1250,7 +1250,8 @@ export default function GoldInventoryApp() {
       (Number(merged.creditOverdueDays) || 0) !== (Number(appSettings.creditOverdueDays) || 0) ||
       !!merged.postSaleSheet !== !!appSettings.postSaleSheet ||
       !!merged.sellDuringStocktake !== !!appSettings.sellDuringStocktake ||
-      (Number(merged.quoteDays) || 7) !== (Number(appSettings.quoteDays) || 7);
+      (Number(merged.quoteDays) || 7) !== (Number(appSettings.quoteDays) || 7) ||
+      JSON.stringify(merged.wastage || null) !== JSON.stringify(appSettings.wastage || null);
     if (!taxOrFeesChanged) {
       flashToast("تم حفظ الإعدادات");
       return true;
@@ -1266,7 +1267,7 @@ export default function GoldInventoryApp() {
         zakatYear: merged.zakatYear === "hijri" ? "hijri" : "gregorian",
         creditLimitDefault: Number(merged.creditLimitDefault) || 0,
         creditOverdueDays: Number(merged.creditOverdueDays) || 0,
-        salePrefs: { postSaleSheet: !!merged.postSaleSheet, sellDuringStocktake: !!merged.sellDuringStocktake, quoteDays: Number(merged.quoteDays) || 7 },
+        salePrefs: { postSaleSheet: !!merged.postSaleSheet, sellDuringStocktake: !!merged.sellDuringStocktake, quoteDays: Number(merged.quoteDays) || 7, ...(merged.wastage ? { wastage: merged.wastage } : {}) },
       });
       persistSettings({
         ...merged,
@@ -1276,7 +1277,7 @@ export default function GoldInventoryApp() {
         workdayMode: res.settings.workday_mode || "required",
         ...(res.settings.zakat_enabled != null ? { zakatEnabled: res.settings.zakat_enabled !== false, zakatYear: res.settings.zakat_year || "gregorian" } : {}),
         ...(res.settings.credit_limit_default != null ? { creditLimitDefault: Number(res.settings.credit_limit_default) || 0, creditOverdueDays: Number(res.settings.credit_overdue_days) || 0 } : {}),
-        ...(res.settings.sale_prefs ? { postSaleSheet: res.settings.sale_prefs.postSaleSheet === true, sellDuringStocktake: res.settings.sale_prefs.sellDuringStocktake === true, quoteDays: Number(res.settings.sale_prefs.quoteDays) || 7 } : {}),
+        ...(res.settings.sale_prefs ? { postSaleSheet: res.settings.sale_prefs.postSaleSheet === true, sellDuringStocktake: res.settings.sale_prefs.sellDuringStocktake === true, quoteDays: Number(res.settings.sale_prefs.quoteDays) || 7, ...(res.settings.sale_prefs.wastage ? { wastage: res.settings.sale_prefs.wastage } : {}) } : {}),
       });
       flashToast("تم حفظ الإعدادات");
       return true;
@@ -5030,7 +5031,7 @@ export default function GoldInventoryApp() {
       // ⚠ دمج لا استبدال: appSettings يحمل أيضًا تفضيلات محلية بحتة
       // (الثيم، طباعة، requirePin...) لا وجود لها في الباك إند بعد —
       // استبدال الكائن كاملًا كان سيمحوها.
-      setAppSettings((prev) => ({ ...prev, taxEnabled: n.appSettings.taxEnabled, taxRate: n.appSettings.taxRate, cardFees: n.appSettings.cardFees, workdayMode: n.appSettings.workdayMode, openingMode: n.appSettings.openingMode, openingFinishedAt: n.appSettings.openingFinishedAt, approvalsEnabled: n.appSettings.approvalsEnabled, approvalThresholds: n.appSettings.approvalThresholds, periodLocks: n.appSettings.periodLocks, serverModules: n.appSettings.serverModules || {}, zakatEnabled: n.appSettings.zakatEnabled, zakatYear: n.appSettings.zakatYear, creditLimitDefault: n.appSettings.creditLimitDefault, creditOverdueDays: n.appSettings.creditOverdueDays, postSaleSheet: n.appSettings.postSaleSheet, sellDuringStocktake: n.appSettings.sellDuringStocktake, quoteDays: n.appSettings.quoteDays, codingModel: n.appSettings.codingModel }));
+      setAppSettings((prev) => ({ ...prev, taxEnabled: n.appSettings.taxEnabled, taxRate: n.appSettings.taxRate, cardFees: n.appSettings.cardFees, workdayMode: n.appSettings.workdayMode, openingMode: n.appSettings.openingMode, openingFinishedAt: n.appSettings.openingFinishedAt, approvalsEnabled: n.appSettings.approvalsEnabled, approvalThresholds: n.appSettings.approvalThresholds, periodLocks: n.appSettings.periodLocks, serverModules: n.appSettings.serverModules || {}, zakatEnabled: n.appSettings.zakatEnabled, zakatYear: n.appSettings.zakatYear, creditLimitDefault: n.appSettings.creditLimitDefault, creditOverdueDays: n.appSettings.creditOverdueDays, postSaleSheet: n.appSettings.postSaleSheet, sellDuringStocktake: n.appSettings.sellDuringStocktake, quoteDays: n.appSettings.quoteDays, wastage: n.appSettings.wastage, codingModel: n.appSettings.codingModel }));
     }
   };
 
@@ -7792,6 +7793,14 @@ export default function GoldInventoryApp() {
     // تركُه بلا تسجيل يعني فرقًا دائمًا لا يُفسَّر.
     const entered = Number(lot.enteredWeight) || lotAllocatedWeight(lot.id, items);
     const variance = (Number(lot.weight) || 0) - entered; // موجب = هالك، سالب = فائض
+    // فوق تسامح فرق التكويد (الإعدادات ← الهدر والفروق) لا تُقفل الدفعة بلا سبب مكتوب
+    const wcfg = wastageSettingsOf(appSettings);
+    const cv = codingVarianceOf({ receivedW: Number(lot.weight) || 0, codedW: entered, tolG: wcfg.receiveTolG, codingTolPct: wcfg.codingTolPct });
+    if (cv.needsReason && !String(note || "").trim()) {
+      const why = typeof window !== "undefined" ? window.prompt(`فرق التكويد ${fmtW(Math.abs(cv.diff))} جم (${cv.pct}٪) فوق التسامح ${wcfg.codingTolPct}٪ — اكتب السبب`) : "";
+      if (!String(why || "").trim()) { flashToast("لم تُقفل الدفعة — السبب مطلوب لفرقٍ فوق التسامح"); return null; }
+      note = String(why).trim();
+    }
     const purity = PURITY[lot.karat] || (Number(lot.karat) || 0) / 24;
     const fine = Math.abs(variance) * purity;
     const value = Math.abs(variance) * (Number(lot.costPerGram) || 0);
