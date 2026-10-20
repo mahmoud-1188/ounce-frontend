@@ -8986,6 +8986,11 @@ export default function GoldInventoryApp() {
             price24={priceData.current}
             onProcess={processSalesReturn}
             onExchange={processExchange}
+            branchName={branchIdentity?.name || appSettings?.storeName || ""}
+            branchInfo={{ ...(branchProvision?.profile || {}), name: branchIdentity?.name || "" }}
+            officialPrint={!!appSettings?.officialPrint}
+            onPrintSale={invoicePrintOn ? printSale : null}
+            flashToast={flashToast}
             onBack={() => { setReturnPreset(null); setMorePage(null); }}
           />
         )}

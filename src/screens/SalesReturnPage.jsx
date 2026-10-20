@@ -2,13 +2,14 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Check, Receipt, RotateCcw, Trash2 } from "lucide-react";
 import { fmt, fmtMoney, fmtW } from "../core/money.js";
 import { EXCHANGE_SETTLE, REFUND_TARGETS, RETURN_REASONS, refundTargetFor } from "../core/workflow.js";
+import { printOfficialDoc } from "../domain/officialDocs.js";
 import { accountByCode } from "../domain/accountByCode.js";
 import { buildReturnJournal } from "../domain/buildReturnJournal.js";
 import { computeExchangeAmounts } from "../domain/computeExchangeAmounts.js";
 import { computeReturnAmounts } from "../domain/computeReturnAmounts.js";
 import { lineCodesLeft, lineReturnLeft, lineReturnedCodes, piecePartOf } from "../domain/returnParts.js";
 import { findSoldUnit } from "../domain/findSoldUnit.js";
-import { inputStyle, itemLabel } from "../domain/helpers.js";
+import { inputStyle, itemLabel, printDocumentPdf } from "../domain/helpers.js";
 import { suggestedUnitPrice } from "../domain/suggestedUnitPrice.js";
 import { validateExchangeRequest } from "../domain/validateExchangeRequest.js";
 import { validateReturnRequest } from "../domain/validateReturnRequest.js";
@@ -19,11 +20,24 @@ import { NumericInput } from "../ui/NumericInput.jsx";
 import { ScanField } from "../ui/ScanField.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 
+// حال القطعة المرتجعة — تحدّد أيّ أسباب الإرجاع تُعرض
+const RETURN_CONDITIONS = [
+  { id: "available", label: "سليمة", hint: "تعود للعرض" },
+  { id: "damaged", label: "تالفة", hint: "لا تعود للعرض — تُفحص" },
+];
+const reasonsFor = (restock) => RETURN_REASONS.filter((r) => r.restock === restock);
+
 function SalesReturnPage({
   sales = [], returns = [], items = [], openDay, stocktakeLock,
   currency, taxRate = 0, price24 = 0, appSettings = {}, onProcess, onExchange = null, onBack,
-  initialSaleId = null, initialMode = "return",
+  initialSaleId = null, initialMode = "return", branchName = "", branchInfo = null, officialPrint = false, onPrintSale = null, flashToast = null,
 }) {
+  // بعد التسجيل: بطاقةٌ بسند المرتجع للطباعة (والفاتورة الجديدة في الاستبدال) ثم «مرتجع آخر»
+  const [done, setDone] = useState(null);
+  const [helpOpen, setHelpOpen] = useState(() => { try { return localStorage.getItem("ounce_return_help_seen_v1") !== "1"; } catch { return true; } });
+  useEffect(() => { try { localStorage.setItem("ounce_return_help_seen_v1", "1"); } catch { /* تفضيلٌ محلّي */ } }, []);
+  const [changeTarget, setChangeTarget] = useState(false);
+  const [targetPicked, setTargetPicked] = useState(false);
   const [mode, setMode] = useState(initialMode === "exchange" ? "exchange" : "return");   // "return" | "exchange"
   const [query, setQuery] = useState("");
   // الباب الرابع: من تفاصيل الفاتورة في سجل المبيعات — الفاتورة محدَّدة سلفًا
@@ -42,7 +56,7 @@ function SalesReturnPage({
   const [note, setNote] = useState("");
   // الجهة تُقترح من طريقة دفع الفاتورة كلما تغيّرت الفاتورة، ويغيّرها البائع (إلا الآجل)
   const saleId = hit?.sale?.id;
-  useEffect(() => { if (hit?.sale) setTarget(refundTargetFor(hit.sale)); }, [saleId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (hit?.sale) { setTarget(refundTargetFor(hit.sale)); setTargetPicked(false); setChangeTarget(false); } }, [saleId]); // eslint-disable-line react-hooks/exhaustive-deps
   const [err, setErr] = useState([]);
   const [busy, setBusy] = useState(false);
 
@@ -180,7 +194,7 @@ function SalesReturnPage({
     return [...sales]
       .filter((x) => !x.voided && (x.lines || []).length)
       .filter((x) => (x.lines || []).some((_, i) => lineReturnLeft(x, returns, i) > 0))
-      .filter((x) => !q || [x.ref, x.customerName, x.sellerName, String(x.date).slice(0, 10)]
+      .filter((x) => !q || [x.ref, x.customerName, x.customerPhone, x.sellerName, String(x.date).slice(0, 10)]
         .some((f) => String(f || "").toLowerCase().includes(q)))
       .sort((a, b) => String(b.date).localeCompare(String(a.date)))
       .slice(0, 40);
@@ -197,7 +211,7 @@ function SalesReturnPage({
     setBusy(true);
     const res = await onProcess(req);
     setBusy(false);
-    if (res?.ok) reset();
+    if (res?.ok) { reset(); setDone({ kind: "return", ref: res.ref, amount: Number(res.record?.refund ?? res.amounts?.gross) || 0, record: res.record || null }); }
     else setErr(res?.errors || ["تعذّر تسجيل المرتجع"]);
   };
 
@@ -217,19 +231,66 @@ function SalesReturnPage({
     setBusy(true);
     const res = await onExchange(req);
     setBusy(false);
-    if (res?.ok) reset();
+    if (res?.ok) { reset(); setDone({ kind: "exchange", ref: res.ref, saleRef: res.saleRef || null, amount: Number(res.amounts?.diff) || 0 }); }
     else setErr(res?.errors || ["تعذّر تسجيل الاستبدال"]);
   };
 
   const cell = { border: "1px solid var(--line)", padding: "6px 8px", fontSize: 11 };
+  const blocked = () => flashToast?.("اسمح بالنوافذ المنبثقة للطباعة");
+  // سند المرتجع: الصيغة الرسمية تطبعه إشعارًا دائنًا، وإلا سندًا مختصرًا. في الاستبدال يُقرأ السجل بعد تحديث البيانات
+  const printReturn = () => {
+    const rec = done?.record || returns.find((r) => r.ref === done?.ref) || null;
+    if (!rec) { flashToast?.("السند يُحمَّل — أعد المحاولة بعد لحظة"); return; }
+    const orig = sales.find((x) => x.id === rec.saleId) || null;
+    const doc = { kind: "ret", ref: rec.ref || done.ref, date: rec.date || new Date().toISOString(), party: rec.customerName || orig?.customerName || "", amount: Number(rec.refund) || 0, rec };
+    if (!officialPrint) { printDocumentPdf(doc, { currency, branchName, onBlocked: blocked }); return; }
+    if (!printOfficialDoc(doc, { currency, info: { ...(branchInfo || {}), name: branchInfo?.name || branchName }, sale: orig })) blocked();
+  };
+  const printNewSale = () => {
+    const ns = sales.find((x) => x.ref === done?.saleRef);
+    if (!ns) { flashToast?.("الفاتورة الجديدة تُحمَّل — أعد المحاولة بعد لحظة"); return; }
+    onPrintSale(ns);
+  };
 
   return (
     <div>
       <SubPageHeader title="المرتجعات والاستبدال" onBack={onBack} />
       <div className="px-4 pt-3">
-        <p style={{ color: "var(--text3)" }} className="text-[11px] mb-2">
-          ⚖ القطعة تعود بالسعر الذي دفعه الزبون يوم اشتراها. سعر اليوم للمقارنة فقط.
-        </p>
+        {done && (
+          <div data-return-done={done.ref}>
+          <Card style={{ padding: 12, marginBottom: 10, border: "1px solid var(--goodLine)", background: "var(--goodBg)" }}>
+            <p style={{ color: "var(--good)", margin: 0 }} className="text-sm font-bold">
+              {done.kind === "exchange" ? `تمّ الاستبدال ${done.ref}${done.saleRef ? ` — الفاتورة الجديدة ${done.saleRef}` : ""}` : `تمّ المرتجع ${done.ref} — ${fmtMoney(done.amount)} ${currency}`}
+            </p>
+            <div className="flex flex-wrap gap-2 mt-2">
+              <button type="button" data-return-print={done.ref} onClick={printReturn} className="flex-1 rounded-xl text-xs font-bold"
+                data-help="يفتح سند المرتجع للطباعة أو الحفظ PDF — يُسلَّم للزبون مع المبلغ المردود."
+                style={{ minHeight: 44, background: "var(--panel)", color: "var(--accent)", border: "1px solid var(--accentLine)" }}>اطبع سند المرتجع</button>
+              {done.kind === "exchange" && done.saleRef && onPrintSale && (
+                <button type="button" data-exchange-print={done.saleRef} onClick={printNewSale} className="flex-1 rounded-xl text-xs font-bold"
+                  data-help="يطبع الفاتورة الجديدة التي أُنشئت بالاستبدال — تُسلَّم للزبون مع القطعة الجديدة."
+                  style={{ minHeight: 44, background: "var(--panel)", color: "var(--accent)", border: "1px solid var(--accentLine)" }}>اطبع الفاتورة الجديدة</button>
+              )}
+              <button type="button" data-return-again onClick={() => { setMode(done.kind === "exchange" ? "exchange" : "return"); setDone(null); }}
+                className="flex-1 rounded-xl text-xs font-bold" data-help="يغلق هذه البطاقة ويعيدك لمسح القطعة التالية."
+                style={{ minHeight: 44, background: "linear-gradient(135deg,var(--gradFrom),var(--gradTo))", color: "var(--panel)" }}>{done.kind === "exchange" ? "استبدال آخر" : "مرتجع آخر"}</button>
+            </div>
+          </Card>
+          </div>
+        )}
+        {helpOpen ? (
+          <div className="flex items-start gap-2 mb-2" data-return-help>
+            <p style={{ color: "var(--text3)", margin: 0 }} className="text-[11px] flex-1">
+              ⚖ القطعة تعود بالسعر الذي اشتراها به الزبون يوم اشتراها — وبتكلفة شرائها إلى الرفّ. سعر اليوم للمقارنة فقط.
+              المسح يختار السطر مباشرة · رقم الفاتورة يعرض أسطرها لتختار.
+            </p>
+            <button type="button" onClick={() => setHelpOpen(false)} aria-label="إخفاء الشرح" className="text-[11px] font-bold px-2 rounded-full"
+              style={{ minHeight: 32, color: "var(--text3)", border: "1px solid var(--line)" }}>إخفاء</button>
+          </div>
+        ) : (
+          <button type="button" onClick={() => setHelpOpen(true)} aria-label="كيف يعمل المرتجع؟" data-return-help-toggle
+            className="text-[12px] font-bold mb-2 rounded-full" style={{ minWidth: 36, minHeight: 36, color: "var(--accent)", border: "1px solid var(--accentLine)", background: "var(--accentBg)" }}>؟</button>
+        )}
         {/* ── مرتجع أم استبدال ── */}
         <div className="grid grid-cols-2 gap-2 mb-3">
           {[["return", "مرتجع", "تعود القطعة ويُردّ المبلغ"], ["exchange", "استبدال", "تعود القطعة وتُؤخذ أخرى — والفرق فقط"]].map(([id, l, h]) => (
@@ -272,9 +333,6 @@ function SalesReturnPage({
               بحث
             </button>
           </div>
-          <p style={{ color: "var(--text3)" }} className="text-[10px] mt-1.5">
-            ⚖ المسح يختار السطر مباشرة · رقم الفاتورة يعرض أسطرها لتختار
-          </p>
           <button onClick={() => setShowList((v) => !v)}
             className="w-full mt-2 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5"
             style={{ background: showList ? "var(--accentBg)" : "var(--panel)", color: "var(--accent)", border: "1px solid var(--accentLine)" }}>
@@ -285,7 +343,7 @@ function SalesReturnPage({
         {showList && (
           <Card style={{ padding: 12, marginBottom: 10 }}>
             <input style={inputStyle} value={browse} onChange={(e) => setBrowse(e.target.value)}
-              placeholder="رقم الفاتورة · اسم الزبون · البائع · التاريخ (2026-09-23)" />
+              placeholder="رقم الفاتورة · اسم الزبون · جواله · البائع · التاريخ (2026-09-23)" />
             {recentSales.length === 0 ? (
               <p style={{ color: "var(--text3)" }} className="text-[11px] mt-2">لا فواتير قابلة للإرجاع تطابق</p>
             ) : (
@@ -443,28 +501,26 @@ function SalesReturnPage({
             </div>
 
             {/* ── السبب ── */}
-            <p style={{ color: "var(--accent)" }} className="text-[11px] font-bold mb-1">
-              سبب الإرجاع
-            </p>
-            <div className="grid grid-cols-2 gap-2 mb-1">
-              {RETURN_REASONS.map((r) => {
-                const on = r.id === reasonId;
+            {/* ── حال القطعة أوّلًا (سليمة/تالفة) ثم السبب من أسبابها ── */}
+            <p style={{ color: "var(--accent)" }} className="text-[11px] font-bold mb-1">حال القطعة</p>
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              {RETURN_CONDITIONS.map((c) => {
+                const on = (reason?.restock || "available") === c.id;
                 return (
-                  <button key={r.id} onClick={() => setReasonId(r.id)}
-                    className="text-right rounded-xl p-2.5"
-                    style={{
-                      background: on ? "var(--accentBg)" : "var(--field)",
-                      border: `1px solid ${on ? "var(--accentLine)" : "var(--edge)"}`,
-                    }}>
-                    <p style={{ color: on ? "var(--accent)" : "var(--text)", margin: 0 }}
-                      className="text-[11px] font-bold">{r.label}</p>
-                    <p style={{ color: "var(--text3)", margin: 0 }} className="text-[10px]">
-                      {r.hint}
-                    </p>
+                  <button key={c.id} type="button" aria-pressed={on} data-return-cond={c.id} onClick={() => setReasonId(reasonsFor(c.id)[0].id)}
+                    data-help={`حال القطعة المرتجعة: ${c.label} (${c.hint}) — اخترها ثم اختر السبب من القائمة تحتها.`}
+                    className="text-right rounded-xl p-2.5" style={{ background: on ? "var(--accentBg)" : "var(--field)", border: `1px solid ${on ? "var(--accentLine)" : "var(--edge)"}` }}>
+                    <p style={{ color: on ? "var(--accent)" : "var(--text)", margin: 0 }} className="text-[11px] font-bold">{c.label}</p>
+                    <p style={{ color: "var(--text3)", margin: 0 }} className="text-[11px]">{c.hint}</p>
                   </button>
                 );
               })}
             </div>
+            <Field label="السبب">
+              <select style={inputStyle} value={reasonId} onChange={(e) => setReasonId(e.target.value)} aria-label="سبب الإرجاع" data-return-reason>
+                {reasonsFor(reason?.restock || "available").map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
+              </select>
+            </Field>
             {reason?.restock === "damaged" && (
               <p style={{ color: "var(--bad)" }} className="text-[10px] mb-3">
                 ⚠ لن تعود للعرض — تبقى في المخزون غير قابلة للبيع حتى تُفحص.
@@ -579,12 +635,23 @@ function SalesReturnPage({
             <p style={{ color: "var(--accent)" }} className="text-[11px] font-bold mb-1">
               ردّ المبلغ
             </p>
+            <div className="flex items-center justify-between mb-2">
+              <p style={{ color: "var(--text)", margin: 0 }} className="text-[12px]" data-refund-target={target}>
+                يُردّ إلى: <b>{REFUND_TARGETS.find((t) => t.id === target)?.label}</b>
+                {!targetPicked && <span style={{ color: "var(--text3)" }} className="text-[11px]"> — كطريقة دفع الفاتورة</span>}
+              </p>
+              {sale.paymentMethod !== "credit" && (
+                <button type="button" data-refund-change onClick={() => setChangeTarget((v) => !v)} className="text-[11px] font-bold"
+                  style={{ color: "var(--accent)", minHeight: 44 }}>{changeTarget ? "تمّ" : "غيّر"}</button>
+              )}
+            </div>
+            {changeTarget && (
             <div className="grid grid-cols-2 gap-2 mb-3">
               {REFUND_TARGETS.map((t) => {
                 const on = t.id === target;
                 const blocked = sale.paymentMethod === "credit" && t.id !== "credit";
                 return (
-                  <button key={t.id} disabled={blocked} onClick={() => setTarget(t.id)}
+                  <button key={t.id} disabled={blocked} onClick={() => { setTarget(t.id); setTargetPicked(true); setChangeTarget(false); }}
                     className="rounded-xl py-2.5 text-[11px] font-bold"
                     style={{
                       opacity: blocked ? 0.4 : 1,
@@ -597,6 +664,7 @@ function SalesReturnPage({
                 );
               })}
             </div>
+            )}
 
             <Field label="ملاحظة (اختياري)">
               <input style={inputStyle} value={note} onChange={(e) => setNote(e.target.value)} />
@@ -605,9 +673,10 @@ function SalesReturnPage({
             {/* ── القيد المتوقَّع ── */}
             {amounts && (
               <>
-                <p style={{ color: "var(--accent)" }} className="text-[11px] font-bold mb-1">
-                  قيد اليومية المتوقَّع
-                </p>
+                <details data-return-journal style={{ marginBottom: 10 }}>
+                <summary style={{ color: "var(--accent)", minHeight: 36, cursor: "pointer" }} className="text-[11px] font-bold mb-1">
+                  قيد اليومية المتوقَّع (للمحاسب)
+                </summary>
                 <div style={{ overflowX: "auto", marginBottom: 10 }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 320 }}>
                     <thead>
@@ -644,11 +713,12 @@ function SalesReturnPage({
                     </tbody>
                   </table>
                 </div>
+                </details>
 
                 <Card style={{ padding: 12, marginBottom: 12 }}>
                   {[
                     ["قيمة السلعة", amounts.net],
-                    ["الضريبة المسترجعة", amounts.tax],
+                    ["الضريبة المرتجعة", amounts.tax],
                   ].map(([l, v], i) => (
                     <div key={i} className="flex items-center justify-between">
                       <span style={{ color: "var(--text2)" }} className="text-[11px]">{l}</span>
@@ -673,6 +743,7 @@ function SalesReturnPage({
 
                 <button
                   onClick={submit}
+                  data-return-submit
                   disabled={busy || !picked.length}
                   className="w-full py-3 rounded-xl text-sm font-bold mb-6"
                   style={{
