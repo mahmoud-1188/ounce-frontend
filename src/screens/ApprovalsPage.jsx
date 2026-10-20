@@ -13,8 +13,16 @@ import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 /// المدير يقرّر؛ والمعتمَد يُنفَّذ فورًا بحمولته مرةً واحدة (الخادم يختم
 /// التنفيذ في معاملته)، والمرفوض يبقى شاهدًا.
 const LIVE_KINDS = ["expense", "refund", "supplier_settle", "asset_purchase", "asset_disposal", "payroll_run", "hq_purchase"];
+// من طلب لا يعتمد طلبه في هذه الأنواع — الشخص الثاني (الخادم يرفض أيضًا)
+const NO_SELF_KINDS = ["count_variance", "workshop_wastage"];
+// الشاشة التي يظهر فيها أثر الطلب بعد تنفيذه
+const KIND_PAGE = {
+  expense: "expenses", refund: "salesReturn", supplier_settle: "suppliers", asset_purchase: "fixedAssets", asset_disposal: "fixedAssets",
+  payroll_run: "payroll", workshop_wastage: "workshop", count_variance: "workday", safe_audit: "safeAudit", credit_limit: "sales",
+  price_floor: "sales", item_uncode: "inventory", label_reprint: "inventory", journal_reverse: "generalLedger", period_close: "settings",
+};
 
-function ApprovalsPage({ approvals = [], currency, canDecide = false, settings = {}, routing = {}, onDecide, onExecute, onBack, meId = null, onCancel = null }) {
+function ApprovalsPage({ approvals = [], currency, canDecide = false, settings = {}, routing = {}, onDecide, onExecute, onBack, meId = null, onCancel = null, onOpenPage = null }) {
   const [tab, setTab] = useState("pending");
   const [openId, setOpenId] = useState(null);
   const [note, setNote] = useState("");
@@ -24,7 +32,9 @@ function ApprovalsPage({ approvals = [], currency, canDecide = false, settings =
   const awaitingRun = (a) => a.status === "approved" && !a.executedAt;
   const pending = approvals.filter((a) => a.status === "pending" || awaitingRun(a));
   const done = approvals.filter((a) => a.status !== "pending" && !awaitingRun(a));
-  const list = tab === "pending" ? pending : done;
+  // ما اعتمده صاحبه لنفسه — يُراجَع هنا وفي الإدارة
+  const selfApproved = approvals.filter((a) => a.selfApproved);
+  const list = tab === "pending" ? pending : tab === "self" ? selfApproved : done;
   const kindRules = APPROVAL_RULES.filter((r) => LIVE_KINDS.includes(r.id))
     .map((r) => ({ ...r, th: settings.approvalThresholds?.[r.id] ?? r.threshold }));
   const P = (v) => `${fmtMoney(v || 0)} ${currency}`;
@@ -36,6 +46,15 @@ function ApprovalsPage({ approvals = [], currency, canDecide = false, settings =
     if (a.kind === "asset_purchase") return `شراء أصل · ${p.name || ""}${p.fundingSource ? ` · من ${p.fundingSource}` : ""}`;
     if (a.kind === "asset_disposal") return `استبعاد أصل · ${a.note || ""}${p.reason === "scrap" ? " · إتلاف" : p.proceeds ? ` · بيع ${fmtMoney(p.proceeds)}` : ""}`;
     if (a.kind === "payroll_run") return `مسيّر رواتب ${p.period || ""}`;
+    if (a.kind === "count_variance") return `فرق عدّ الصندوق${p.diff != null ? ` · ${fmtMoney(p.diff)}` : ""}`;
+    if (a.kind === "workshop_wastage") return `هدر الورشة فوق المسموح${a.note ? ` · ${a.note}` : ""}`;
+    if (a.kind === "credit_limit") return `بيعٌ آجل فوق حدّ العميل${p.customerName ? ` · ${p.customerName}` : ""}`;
+    if (a.kind === "price_floor") return `بيعٌ تحت أرضية السعر${p.code ? ` · ${p.code}` : ""}`;
+    if (a.kind === "go_live") return `بدء التشغيل من ${p.startDate || "—"}`;
+    if (a.kind === "safe_audit") return `فرق جرد الخزنة${p.diff != null ? ` · ${fmtMoney(p.diff)}` : ""}`;
+    if (a.kind === "item_uncode") return `إلغاء تكويد ${p.code || "قطعة"}`;
+    if (a.kind === "label_reprint") return `إعادة طباعة ملصق ${p.code || ""}`;
+    if (a.kind === "journal_reverse") return `قيد عكسي${p.ref ? ` لـ${p.ref}` : ""}`;
     if (a.kind === "hq_purchase") return `شراء الإدارة من ${p.supplierName || "مورد"} · ${(p.lines || []).reduce((x, l) => x + (Number(l.weight) || 0), 0)} جم · من ${p.payFrom === "safe_network" ? "شبكة الخزنة" : "نقد الخزنة"}${p.by ? ` · ${p.by}` : ""}`;
     return a.kindLabel;
   };
@@ -53,12 +72,15 @@ function ApprovalsPage({ approvals = [], currency, canDecide = false, settings =
     <div>
       <SubPageHeader title="الاعتمادات" onBack={onBack} />
       <div className="px-4 pt-3">
-        <div className="grid grid-cols-2 gap-2 mb-3">
-          {[["pending", `المعلّقة (${pending.length})`], ["done", `السجل (${done.length})`]].map(([id, l]) => (
-            <button key={id} onClick={() => setTab(id)} className="py-2 rounded-xl text-xs font-bold"
+        <div className={`grid ${selfApproved.length ? "grid-cols-3" : "grid-cols-2"} gap-2 mb-3`}>
+          {[["pending", `المعلّقة (${pending.length})`], ["done", `السجل (${done.length})`], ...(selfApproved.length ? [["self", `ذاتيًّا (${selfApproved.length})`]] : [])].map(([id, l]) => (
+            <button key={id} onClick={() => setTab(id)} data-approvals-tab={id} className="py-2 rounded-xl text-xs font-bold"
               style={{ background: tab === id ? "var(--accentBg)" : "var(--panel)", color: tab === id ? "var(--accent)" : "var(--text2)", border: "1px solid var(--line)" }}>{l}</button>
           ))}
         </div>
+        {tab === "self" && (
+          <p style={{ color: "var(--text3)" }} className="text-[11px] mb-2">⚖ ما اعتمده صاحبه لنفسه فوق حدّ «الشخص الثاني» لأنه لا أحد غيره يعتمده — يُراجَع هنا وفي الإدارة.</p>
+        )}
         {err && <p style={{ color: "var(--bad)" }} className="text-[11px] mb-2">⚠ {err}</p>}
         {list.length === 0 ? (
           <EmptyState icon={<Check size={30} color="var(--accentSoft)" />} title={tab === "pending" ? "لا طلبات معلّقة" : "لا سجلّ بعد"}
@@ -88,6 +110,18 @@ function ApprovalsPage({ approvals = [], currency, canDecide = false, settings =
                       {a.decisionNote ? ` — ${a.decisionNote}` : ""}{a.executedAt ? ` · نُفِّذ ${new Date(a.executedAt).toLocaleString("en-GB")}` : ""}
                     </p>
                   )}
+                  {a.status === "pending" && a.requesterId === meId && (
+                    <p style={{ color: "var(--text3)" }} className="text-[11px] mt-1">
+                      {NO_SELF_KINDS.includes(a.kind) ? "⚖ من طلب لا يعتمد طلبه — يقرّره من يملك اعتماده، ولك إلغاؤه." : a.approverKind === "hq" ? "⏳ بانتظار من يملك اعتماده في الإدارة." : "⚖ هذا طلبك — يعتمده غيرك، ولك إلغاؤه."}
+                    </p>
+                  )}
+                  {a.executedAt && onOpenPage && KIND_PAGE[a.kind] && (
+                    <button type="button" data-approval-open={a.id} onClick={() => onOpenPage(KIND_PAGE[a.kind])}
+                      data-help="يفتح الشاشة التي ظهر فيها أثر هذا الطلب بعد تنفيذه — لتراجعه أو تكمل منه."
+                      className="mt-2 px-3 rounded-xl text-[11px] font-bold" style={{ minHeight: 32, background: "var(--panel)", color: "var(--accent)", border: "1px solid var(--accentLine)" }}>
+                      افتح شاشته ←
+                    </button>
+                  )}
                   {/* الطالب يُلغي طلبه المعلّق (المرجع ت٢) */}
                   {a.status === "pending" && onCancel && (a.requesterId === meId || canDecide) && (
                     <button onClick={async () => { setBusyId(a.id); try { await onCancel(a); } finally { setBusyId(null); } }} disabled={busy}
@@ -110,7 +144,7 @@ function ApprovalsPage({ approvals = [], currency, canDecide = false, settings =
                       ⏳ بانتظار قرار الإدارة — يظهر هنا «نفِّذ الآن» فور اعتمادها
                     </p>
                   )}
-                  {a.status === "pending" && a.approverKind !== "hq" && canDecide && (
+                  {a.status === "pending" && a.approverKind !== "hq" && canDecide && !(NO_SELF_KINDS.includes(a.kind) && a.requesterId === meId) && (
                     <div className="mt-2 pt-2" style={{ borderTop: "1px solid var(--line)" }}>
                       {open && <Field label="ملاحظة القرار (إجبارية عند الرفض)"><input style={inputStyle} value={note} onChange={(e) => setNote(e.target.value)} /></Field>}
                       <div className="grid grid-cols-3 gap-2">

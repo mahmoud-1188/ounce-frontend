@@ -9751,6 +9751,7 @@ export default function GoldInventoryApp() {
             routing={approvalRouting}
             onDecide={handleDecideApproval}
             onExecute={executeApproval}
+            onOpenPage={(pg) => openPage(pg)}
             meId={currentUser?.id || null}
             onCancel={async (ap) => {
               try {
