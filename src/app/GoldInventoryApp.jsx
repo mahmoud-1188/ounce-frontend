@@ -8882,7 +8882,7 @@ export default function GoldInventoryApp() {
           <AppSettingsPage
             onOpen={openPage}
             priceData={priceData}
-            settings={appSettings} onSave={handleUpdateSettings} branchIdentity={branchIdentity} onSaveBranch={handleSaveBranchIdentity} hqPermissions={hqPermissions}
+            settings={appSettings} onSave={handleUpdateSettings} branchIdentity={branchIdentity} onSaveBranch={handleSaveBranchIdentity} hqLink={{ linked: !!hqControl.linked, name: branchLink?.branchName || branchIdentity?.name || "", ref: branchLink?.branchRef || "" }} hqPermissions={hqPermissions}
             canEditControls={role === "manager"} onSaveControls={handleSaveControls}
             hqManaged={branchProvision?.locked ? { by: branchProvision.by, at: branchProvision.at } : null} limitsByHq={hqOwnsStaff}
             onBack={() => setMorePage(null)}
