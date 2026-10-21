@@ -12,7 +12,7 @@ import { NumericInput } from "./NumericInput.jsx";
 ///   والقيد في فترةٍ مقفلة يُرفض.
 ///   · قفلٌ نهائيّ: لا قيود حتى هذا التاريخ — للجميع.
 ///   · قفلٌ جزئيّ: المدير وحده يعدّل حتى هذا التاريخ.
-const KINDS = ["expense", "refund", "supplier_settle"];
+const KINDS = ["expense", "refund", "supplier_settle", "asset_purchase", "payroll_run", "journal_reverse", "count_variance", "safe_audit", "workshop_wastage"];
 
 function ControlsSettingsCard({ settings = {}, canEdit = false, onSave, limitsByHq = false }) {
   const rules = APPROVAL_RULES.filter((r) => KINDS.includes(r.id));
