@@ -39,14 +39,20 @@ function RemoteStocktakeInbox({ items = [], price24 = 0, canDecide = false, onAp
               <p className="text-sm font-bold flex-1" style={{ color: "var(--text)", margin: 0 }}>جردٌ من الإدارة {r.ref}</p>
             </div>
             <p className="text-[11px]" style={{ color: "var(--text2)", margin: "4px 0 0" }}>
-              عدّه {r.requestedBy} · {r.counts.length} صنف{r.note ? ` — ${r.note}` : ""}
+              عدّه {r.requestedBy} · {r.counts.length} صنف · {r.applyMode === "report" ? "تقريرٌ فقط — لا يتغيّر المخزون" : "تُعتمد الفروق"}{r.note ? ` — ${r.note}` : ""}
             </p>
+            {r.scan && (
+              <p data-remote-scan className="text-[11px]" style={{ color: r.scan.missing?.length ? "var(--bad)" : "var(--good)", margin: "2px 0 0" }}>
+                بالمسح: حاضر {r.scan.matched} من {r.scan.expected} · ناقص {(r.scan.missing || []).length}{(r.scan.missing || []).length ? ` (${r.scan.missing.slice(0, 6).join("، ")}${r.scan.missing.length > 6 ? " …" : ""})` : ""}
+                {(r.scan.unknown || []).length ? ` · مجهول ${r.scan.unknown.length}` : ""}{(r.scan.soldFound || []).length ? ` · مباعٌ وُجد ${r.scan.soldFound.length}` : ""}
+              </p>
+            )}
             <div className="mt-2 flex flex-col gap-1" style={{ maxHeight: 160, overflowY: "auto" }}>
               {r.counts.slice(0, 40).map((c) => {
                 const it = byId.get(c.itemId);
                 return (
                   <p key={c.itemId} className="text-[11px]" style={{ color: "var(--text3)", margin: 0 }}>
-                    {it?.ref || c.itemId.slice(0, 8)} — عدّ الإدارة {c.countedQty}
+                    {it?.ref || c.itemId.slice(0, 8)} — عدّ الإدارة {c.countedQty}{(c.missingCodes || []).length ? ` · ناقص ${c.missingCodes.join("، ")}` : ""}
                   </p>
                 );
               })}
@@ -55,7 +61,7 @@ function RemoteStocktakeInbox({ items = [], price24 = 0, canDecide = false, onAp
               <div className="grid grid-cols-2 gap-2 mt-2">
                 <button disabled={busy === r.id} onClick={() => act(r, "reject")} className="py-2 rounded-xl text-xs font-bold" style={{ background: "var(--field)", color: "var(--text2)", border: "1px solid var(--line)" }}>ارفض</button>
                 <button disabled={busy === r.id} onClick={() => act(r, "apply")} className="py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1"
-                  style={{ background: "linear-gradient(135deg,var(--gradFrom),var(--gradTo))", color: "var(--panel)" }}>{busy === r.id && <Loader2 size={12} className="animate-spin" />} طبّق الجرد</button>
+                  style={{ background: "linear-gradient(135deg,var(--gradFrom),var(--gradTo))", color: "var(--panel)" }}>{busy === r.id && <Loader2 size={12} className="animate-spin" />} {r.applyMode === "report" ? "احفظ التقرير" : "طبّق الجرد"}</button>
               </div>
             ) : <p className="text-[11px] mt-2" style={{ color: "var(--text3)" }}>ينتظر قرار المدير.</p>}
           </Card>

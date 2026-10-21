@@ -29,6 +29,8 @@ function normalizeItems(itemRows, itemUnitRows) {
       epcBoundAt: u.epc_bound_at || null,
       // الوضع الخفي (migration 047): خرجت من الرفّ لا من الدفتر — حتى يُكمَل بيعها
       held: !!u.held,
+      // حجز القطعة بعينها (migration 088) — باقي الصنف يُباع
+      reservedFor: u.reserved_for || null,
       heldAt: u.held_at || null,
       heldBy: u.held_by || "",
       heldRef: u.held_ref || "",
@@ -316,6 +318,7 @@ function normalizeTaskirOfficeTx(rows) {
     type: t.direction === "in" ? "debit" : "credit", kind: t.kind || "gold",
     karat: t.karat, weight: toWeight(t.weight), amount: toMoney(t.amount),
     note: t.note || "", createdBy: null, businessDayId: t.business_day_id,
+    refTable: t.ref_table || null, refId: t.ref_id || null,
   }));
 }
 
@@ -739,7 +742,7 @@ function normalizeBootstrap(boot) {
           openingFinishedAt: boot.settings.opening_finished_at || null,
           approvalsEnabled: boot.settings.approvals_enabled !== false,
           approvalThresholds: boot.settings.approval_thresholds || {},
-          periodLocks: { lockAll: boot.settings.lock_all || null, lockPosted: boot.settings.lock_posted || null },
+          periodLocks: { lockAll: boot.settings.lock_all || null, lockPosted: boot.settings.lock_posted || null, hqLockAll: boot.settings.hq_lock_all || null, hqLockPosted: boot.settings.hq_lock_posted || null },
           // الوحدات الاختيارية من الخادم (migration 050) — { id: { on, cfg } }
           serverModules: boot.settings.modules || {},
           // الزكاة (migration 065): مفعّلةٌ افتراضًا، والسنة ميلادية افتراضًا

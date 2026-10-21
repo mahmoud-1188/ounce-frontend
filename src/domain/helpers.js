@@ -3832,7 +3832,7 @@ function diffPermissions(before, after, registry = []) {
 const wastageSettingsOf = (settings = {}) => {
   const w = settings?.wastage || {};
   const num = (v, d) => (v === "" || v == null || !Number.isFinite(Number(v)) || Number(v) < 0 ? d : Number(v));
-  return { defaultAllowPct: num(w.defaultAllowPct, 2), codingTolPct: num(w.codingTolPct, 0.1), receiveTolG: num(w.receiveTolG, 0.05) };
+  return { defaultAllowPct: num(w.defaultAllowPct, 2), codingTolPct: num(w.codingTolPct, 0.1), receiveTolG: num(w.receiveTolG, 0.05), claimDays: num(w.claimDays, 30) || 30 };
 };
 
 // فرق التكويد: المستلَم − المكوَّد. داخل تسامح الميزان «مطابق»، وفوق codingTolPct يلزم سبب

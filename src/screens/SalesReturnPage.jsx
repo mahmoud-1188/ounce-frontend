@@ -92,7 +92,7 @@ function SalesReturnPage({
     if (!code) return;
     setErr([]);
     const taken = (it) => newLines.filter((l) => l.itemId === it.id).length;
-    const free = (it) => (it.units || []).filter((u) => !u.sold && !u.issued);
+    const free = (it) => (it.units || []).filter((u) => !u.sold && !u.issued && !u.reservedFor);
     const add = (it, unitCode) => {
       setNewLines((p) => [...p, {
         itemId: it.id, unitCode, name: itemLabel(it), karat: it.karat, weight: it.weight,
@@ -105,6 +105,7 @@ function SalesReturnPage({
       if (!u) continue;
       if (u.sold) { setErr([`${code}: قطعةٌ مباعة`]); return; }
       if (u.issued) { setErr([`${code}: غير قابلة للبيع — تُفحص أولًا`]); return; }
+      if (u.reservedFor || it.reservedFor) { setErr([`${code}: محجوزةٌ لعميل — تُباع لصاحب حجزها`]); return; }
       if (newLines.some((l) => l.unitCode === u.code)) { setErr([`${code}: مضافة سلفًا`]); return; }
       if (taken(it) >= free(it).length) { setErr([`${code}: لا قطعة متاحة أخرى في هذا الصنف`]); return; }
       add(it, u.code);

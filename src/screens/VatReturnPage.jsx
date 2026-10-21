@@ -26,6 +26,9 @@ const ERR = {
   insufficient_safe_balance: "رصيد الخزنة لا يكفي للسداد",
   not_latest_settlement: "تُلغى آخر تسويةٍ وحدها",
   reason_required: "اكتب سبب الإلغاء",
+  settle_via_group_vat: "الإقرار موحّد — يُسدَّد من التطبيق المركزي",
+  vat_received_by_hq: "استلمت الإدارة التحويل — لا يُلغى من الفرع",
+  group_vat_settled: "سُدِّد الإقرار الموحّد لهذه الفترة — لا يُلغى",
 };
 const errText = (e, fallback) => ERR[e?.body?.error] || e?.body?.why || fallback;
 
@@ -136,7 +139,8 @@ function VatReturnPage({ currency = "ر.س", info = {}, canSettle = false, flash
               <Line n="—" l="المبيعات الخاضعة بعد المرتجعات" base={net} vat={outVat} strong />
               <Line n="4" l={`مبيعات بلا ضريبة / معفاة (${d.sales.exempt.count})`} base={d.sales.exempt.base} vat={0} />
               <Line n="6" l="إجمالي المبيعات" base={net + d.sales.exempt.base} vat={outVat} strong />
-              <Line n="7" l="المشتريات الخاضعة (ضريبة المدخلات)" base={null} vat={d.purchases.vat} />
+              <Line n="7" l="ضريبة المشتريات والمصروفات (المدخلات)" base={null} vat={-d.purchases.vat} tone="var(--good)" />
+              {d.purchases.carried > 0.005 && <Line n="—" l="مدخلاتٌ مرحَّلة من إقرارٍ سابق (تُخصم عند التسوية)" base={null} vat={-d.purchases.carried} tone="var(--good)" />}
               <Line n="13" l={d.netDue >= 0 ? "صافي الضريبة المستحقة للهيئة" : "ضريبة مستردّة من الهيئة"} base={null} vat={Math.abs(d.netDue)} strong tone={d.netDue >= 0 ? "var(--bad)" : "var(--good)"} />
               <p style={{ color: "var(--text3)", margin: "6px 0 0" }} className="text-[11px] leading-6">
                 {info.vat ? `الرقم الضريبي ${info.vat}` : "⚠ أدخل الرقم الضريبي في الإعدادات ← معلومات الفرع والترويسة."}
@@ -155,11 +159,19 @@ function VatReturnPage({ currency = "ر.س", info = {}, canSettle = false, flash
             )}
             {canSettle && !custom && (
               <Card style={{ padding: 12, marginBottom: 10 }}>
-                <p style={{ color: "var(--accent)", margin: "0 0 4px" }} className="text-xs font-bold">تسوية الإقرار وسداده</p>
-                {d.settlement ? (
+                <p style={{ color: "var(--accent)", margin: "0 0 4px" }} className="text-xs font-bold">{d.filing?.group ? "الإقرار الموحّد للمنشأة" : "تسوية الإقرار وسداده"}</p>
+                {d.filing?.group && (
+                  <p data-vat-group-note style={{ color: "var(--text2)", margin: "0 0 6px" }} className="text-[11px] leading-6">
+                    {d.filing.isHq
+                      ? "هذا دفتر الإدارة: الإقرار الموحّد يُسدَّد من التطبيق المركزي (الضريبة ← الإقرار الموحّد) بعد أن تحوّل الفروع ضرائبها."
+                      : "الإدارة تُقِرّ عن المنشأة كلّها: سوِّ فترتك هنا فيُحوَّل صافي ضريبتك للإدارة لا للهيئة، وتسدّد الإدارة الإقرار الموحّد."}
+                  </p>
+                )}
+                {d.filing?.group && d.filing.isHq && !d.settlement ? null : d.settlement ? (
                   <>
                     <p style={{ color: "var(--good)", margin: 0 }} className="text-[11px] leading-6" data-vat-settled>
-                      ✓ سُوّيت الفترة {d.settlement.from} ← {d.settlement.to} · سُدّد {m(d.settlement.paid)} من {d.settlement.source === "safe_network" ? "شبكة الخزنة" : "نقد الخزنة"} · {new Date(d.settlement.at).toLocaleDateString("en-GB")}
+                      ✓ سُوّيت الفترة {d.settlement.from} ← {d.settlement.to}{d.settlement.inputVat > 0 ? ` · خُصمت مدخلات ${m(d.settlement.inputVat)}` : ""} · {d.settlement.toHq ? "حُوِّل للإدارة" : "سُدّد"} {m(d.settlement.paid)}{d.settlement.paid > 0 ? ` من ${d.settlement.source === "safe_network" ? "شبكة الخزنة" : d.settlement.source === "bank" ? "البنك" : "نقد الخزنة"}` : ""} · {new Date(d.settlement.at).toLocaleDateString("en-GB")}
+                      {d.settlement.groupId ? " · ضمن الإقرار الموحّد المسدَّد" : ""}
                     </p>
                     <div className="mt-2">
                       <Field label="سبب إلغاء التسوية">
@@ -174,19 +186,39 @@ function VatReturnPage({ currency = "ر.س", info = {}, canSettle = false, flash
                   </>
                 ) : d.ledgerNet > 0.005 ? (
                   <>
-                    <div className="flex items-center justify-between py-1">
-                      <span className="text-[12px]" style={{ color: "var(--text2)" }}>ضريبة المبيعات (المخرجات) في الدفتر</span>
-                      <b className="text-[12px]" style={{ color: "var(--bad)" }}>{m(d.ledgerNet)}</b>
-                    </div>
+                    {(() => {
+                      const inAvail = d.purchases.vat + d.purchases.carried;
+                      const offset = Math.min(d.ledgerNet, Math.max(0, inAvail));
+                      const pay = Math.max(0, d.ledgerNet - offset);
+                      return (
+                        <>
+                          <div className="flex items-center justify-between py-1">
+                            <span className="text-[12px]" style={{ color: "var(--text2)" }}>ضريبة المبيعات (المخرجات) في الدفتر</span>
+                            <b className="text-[12px]" style={{ color: "var(--bad)" }}>{m(d.ledgerNet)}</b>
+                          </div>
+                          {offset > 0.005 && (
+                            <div className="flex items-center justify-between py-1">
+                              <span className="text-[12px]" style={{ color: "var(--text2)" }}>تُخصم المدخلات</span>
+                              <b className="text-[12px]" style={{ color: "var(--good)" }}>−{m(offset)}</b>
+                            </div>
+                          )}
+                          <div className="flex items-center justify-between py-1" style={{ borderTop: "1px solid var(--line)" }} data-vat-pay>
+                            <span className="text-[12px] font-bold" style={{ color: "var(--text)" }}>{d.filing?.group ? "يُحوَّل للإدارة" : "يُسدَّد للهيئة"}</span>
+                            <b className="text-[13px]" style={{ color: "var(--bad)" }}>{m(pay)}</b>
+                          </div>
+                          {inAvail - offset > 0.005 && <p style={{ color: "var(--text3)", margin: 0 }} className="text-[11px]">ويُرحَّل {m(inAvail - offset)} مدخلاتٍ للإقرار القادم</p>}
+                        </>
+                      );
+                    })()}
                     <Field label="يُدفع من">
                       <select style={inputStyle} value={source} onChange={(e) => setSource(e.target.value)} aria-label="مصدر سداد الضريبة">
                         <option value="safe_cash">نقد الخزنة</option>
                         <option value="safe_network">شبكة الخزنة (البنك)</option>
                       </select>
                     </Field>
-                    <p style={{ color: "var(--text3)", margin: "0 0 6px" }} className="text-[11px] leading-6">قيدٌ واحد: يُقفل ضريبة الفترة في الدفتر (2220) ويُسجّل المدفوع من الخزنة.</p>
+                    <p style={{ color: "var(--text3)", margin: "0 0 6px" }} className="text-[11px] leading-6">قيدٌ واحد: يُقفل ضريبة الفترة (2220)، ويخصم المدخلات (1360)، ويُسجّل المدفوع من الخزنة.</p>
                     <button onClick={settle} disabled={busy} data-vat-settle-go className="w-full py-2.5 rounded-xl text-[12px] font-bold"
-                      style={{ minHeight: 44, background: "var(--accent)", color: "var(--panel)", border: "none" }}>{busy ? "جارٍ التسجيل…" : "سجّل التسوية والسداد"}</button>
+                      style={{ minHeight: 44, background: "var(--accent)", color: "var(--panel)", border: "none" }}>{busy ? "جارٍ التسجيل…" : d.filing?.group ? "سوِّ الفترة وحوّل الضريبة للإدارة" : "سجّل التسوية والسداد"}</button>
                   </>
                 ) : (
                   <p style={{ color: "var(--text3)", margin: 0 }} className="text-[11px]">لا ضريبة مستحقّة في الدفتر لهذه الفترة.</p>
@@ -202,7 +234,7 @@ function VatReturnPage({ currency = "ر.س", info = {}, canSettle = false, flash
                 style={{ minHeight: 44, background: "var(--field)", color: "var(--accent)", border: "1px solid var(--line)" }}>CSV</button>
             </div>
             <p className="text-[11px]" style={{ color: "var(--text3)" }}>
-              ⚠ ضريبة المدخلات على المشتريات والمصروفات لا تُسجَّل في النظام بعد — أضِفها من فواتير مورديك عند تقديم الإقرار في بوابة هيئة الزكاة والضريبة والجمارك. الأرقام بتوقيت الرياض.
+              ضريبة المدخلات تُسجَّل من «منها ضريبة القيمة المضافة» في المصروف، و«ضريبة القيمة المضافة على الفاتورة» في الشراء. الأرقام بتوقيت الرياض.
             </p>
           </>
         )}

@@ -11,7 +11,6 @@ import { THEMES, THEME_DESIGNS, applyTheme, designOfTheme, effectiveTheme, isDar
 import { hashPin } from "../domain/hashPin.js";
 import { generateRecoveryCode, inputStyle, wastageSettingsOf, normalizeRecovery, openWhatsApp, prettyPhone, toIntlPhone } from "../domain/helpers.js";
 import { sanitizeNumeric } from "../domain/sanitizeNumeric.js";
-import { verifyToken } from "../domain/verifyToken.js";
 import { Card } from "../ui/Card.jsx";
 import { ControlsSettingsCard } from "../ui/ControlsSettingsCard.jsx";
 import { Field } from "../ui/Field.jsx";
@@ -38,7 +37,7 @@ const SETTINGS_ROWS = [
     screens: [["modules", "الوحدات"], ["backup", "النسخ"]], status: () => "الوحدات الاختيارية والنسخ الاحتياطي" },
 ];
 
-function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSaveBranch, hqPermissions, priceData = {}, onBackfill, canEditControls = false, onSaveControls = null, hqManaged = null, limitsByHq = false, onBack, provision = null, onSaveProfile = null }) {
+function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSaveBranch, hqPermissions, hqLink = null, priceData = {}, onBackfill, canEditControls = false, onSaveControls = null, hqManaged = null, limitsByHq = false, onBack, provision = null, onSaveProfile = null }) {
   const [newRecovery, setNewRecovery] = useState("");
   const [uiLangSel, setUiLangSel] = useState(readUiLang);
   const [fees, setFees] = useState(() => ({ ...DEFAULT_CARD_FEES, ...(settings.cardFees || {}) }));
@@ -46,12 +45,6 @@ function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSa
   const [adj, setAdj] = useState(() => ({ ...DEFAULT_SETTINGS.priceAdjust, ...(settings.priceAdjust || {}) }));
   const [taxEnabled, setTaxEnabled] = useState(settings.taxEnabled);
   const [taxRate, setTaxRate] = useState(String(settings.taxRate * 100));
-  const [activationCode, setActivationCode] = useState("");
-  // The branch can no longer be linked by typing an arbitrary code — it must
-  // present an activation code signed by the vendor, which carries the branch
-  // code, its name and the owning company.
-  const decodedBranch = activationCode.trim() ? verifyToken(activationCode, "BRN") : null;
-  const branchValid = !!decodedBranch?.ok;
   const hasOverride = !!hqPermissions?.byBranch?.[branchIdentity?.code];
   const valid = Number(taxRate) >= 0 && Number(taxRate) <= 100;
 
@@ -567,49 +560,28 @@ function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSa
           </button>
         </Card>
 
+        {/* ── الربط بالإدارة يتمّ على الخادم (الإدارة تضيف الفرع ويُربط الجهاز برمزه) — لا كود تفعيلٍ يُلصق هنا ── */}
         <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">
-          ربط الفرع بالبرنامج المركزي
+          الربط بالإدارة المركزية
         </p>
         <Card style={{ padding: 14, marginBottom: 12 }}>
-          <p style={{ color: "var(--text2)" }} className="text-xs mb-3">
-            الصق كود التفعيل الصادر من مزوّد النظام لهذا الفرع. بعد الربط، يُرسل هذا الفرع ملخصًا دوريًا (أرصدة وأرباح ومبيعات فقط — بدون بيانات تفصيلية أو أرقام سرية) ليظهر بتقارير الإدارة.
-          </p>
-          <Field label="كود تفعيل الفرع (من مزوّد النظام)">
-            <textarea
-              style={{ ...inputStyle, minHeight: 80, direction: "ltr", textAlign: "left", fontFamily: "monospace", fontSize: 12 }}
-              value={activationCode}
-              onChange={(e) => setActivationCode(e.target.value)}
-              placeholder="KB2A-XXXX-XXXX-..."
-            />
-          </Field>
-          {decodedBranch?.ok && (
-            <p style={{ color: "var(--good)" }} className="text-[11px] mb-2 flex items-center gap-1">
-              <Check size={12} /> {decodedBranch.payload.n} ({decodedBranch.payload.b}) — شركة {decodedBranch.payload.t}
+          <div data-branch-link-info>
+            {hqLink?.linked ? (
+              <p style={{ color: "var(--good)" }} className="text-[12px] font-bold flex items-center gap-1">
+                <Check size={13} /> مرتبط بالإدارة — {hqLink.name || ""}{hqLink.ref ? ` (${hqLink.ref})` : ""}
+              </p>
+            ) : (
+              <p style={{ color: "var(--text2)" }} className="text-[12px]">هذا الفرع غير مرتبطٍ بإدارةٍ مركزية.</p>
+            )}
+            <p style={{ color: "var(--text3)" }} className="text-[11px] mt-1 leading-6">
+              الربط يتمّ من التطبيق المركزي: الإدارة تضيف الفرع، ثم يُربط الجهاز برمز الربط. لا كود يُلصق هنا.
             </p>
-          )}
-          {activationCode.trim() && decodedBranch && !decodedBranch.ok && (
-            <p style={{ color: "var(--bad)" }} className="text-[11px] mb-2">
-              {decodedBranch.reason}
-            </p>
-          )}
-          {branchIdentity?.code && (
-            <p style={{ color: "var(--good)" }} className="text-[11px] mb-2 flex items-center gap-1">
-              <Check size={12} /> مرتبط حاليًا بكود: {branchIdentity.code}
-            </p>
-          )}
-          {hasOverride && (
-            <p style={{ color: "var(--accentText)" }} className="text-[11px] mb-2 flex items-center gap-1">
-              <ShieldCheck size={12} /> الإدارة المركزية طبّقت قيودًا على صلاحيات هذا الفرع
-            </p>
-          )}
-          <button
-            disabled={!branchValid}
-            onClick={() => onSaveBranch({ code: decodedBranch.payload.b, name: decodedBranch.payload.n, tenantId: decodedBranch.payload.t })}
-            className="w-full py-2.5 rounded-xl text-xs font-bold"
-            style={{ background: branchValid ? "linear-gradient(135deg,var(--gradFrom),var(--gradTo))" : "var(--accentBg)", color: branchValid ? "var(--panel)" : "var(--text3)" }}
-          >
-            حفظ ربط الفرع
-          </button>
+            {hasOverride && (
+              <p style={{ color: "var(--accentText)" }} className="text-[11px] mt-1 flex items-center gap-1">
+                <ShieldCheck size={12} /> الإدارة المركزية طبّقت قيودًا على صلاحيات هذا الفرع
+              </p>
+            )}
+          </div>
         </Card>
 
         <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">
@@ -714,9 +686,10 @@ function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSa
               { key: "defaultAllowPct", label: "المسموح من الهدر ٪ (إن لم يحدّده عقد الورشة)", max: 20 },
               { key: "codingTolPct", label: "تسامح فرق التكويد ٪", max: 10 },
               { key: "receiveTolG", label: "تسامح الميزان (جم)", max: 5 },
+              { key: "claimDays", label: "مهلة مطالبة الورشة (يوم)", max: 365 },
             ];
             return (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2" data-wastage-settings>
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-2" data-wastage-settings>
                 {fields.map((f) => (
                   <label key={f.key} className="text-[11px]" style={{ color: "var(--text2)" }}>
                     {f.label}

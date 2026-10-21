@@ -12,7 +12,7 @@ import { NumericInput } from "./NumericInput.jsx";
 ///   والقيد في فترةٍ مقفلة يُرفض.
 ///   · قفلٌ نهائيّ: لا قيود حتى هذا التاريخ — للجميع.
 ///   · قفلٌ جزئيّ: المدير وحده يعدّل حتى هذا التاريخ.
-const KINDS = ["expense", "refund", "supplier_settle"];
+const KINDS = ["expense", "refund", "supplier_settle", "asset_purchase", "payroll_run", "journal_reverse", "count_variance", "safe_audit", "workshop_wastage"];
 
 function ControlsSettingsCard({ settings = {}, canEdit = false, onSave, limitsByHq = false }) {
   const rules = APPROVAL_RULES.filter((r) => KINDS.includes(r.id));
@@ -76,6 +76,11 @@ function ControlsSettingsCard({ settings = {}, canEdit = false, onSave, limitsBy
           <input type="date" style={inputStyle} disabled={dis} value={f.lockPosted} onChange={(e) => setF((x) => ({ ...x, lockPosted: e.target.value }))} />
         </Field>
       </div>
+      {(settings.periodLocks?.hqLockAll || settings.periodLocks?.hqLockPosted) && (
+        <p data-hq-period-lock style={{ color: "var(--bad)" }} className="text-[11px] mb-1">
+          🔒 قفل الإدارة: {settings.periodLocks.hqLockAll ? `نهائي حتى ${settings.periodLocks.hqLockAll}` : ""}{settings.periodLocks.hqLockAll && settings.periodLocks.hqLockPosted ? " · " : ""}{settings.periodLocks.hqLockPosted ? `جزئي حتى ${settings.periodLocks.hqLockPosted}` : ""} — النافذ أبعد القفلين، ولا يفكّه الفرع.
+        </p>
+      )}
       <p style={{ color: "var(--text3)" }} className="text-[11px] mb-2">
         ⚖ من سلّم قوائم الربع يُقفل حتى آخر يومٍ فيه ولو كان في منتصف الشهر التالي — فلا يُصلَح قيدٌ بعد شهرين ويختلف التقرير المُسلَّم عمّا في النظام.
       </p>

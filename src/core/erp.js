@@ -126,6 +126,12 @@ const APPROVAL_RULES = [
     hint: "الردّ الكبير يُعتمد" },
   { id: "hq_purchase", label: "شراء من الإدارة على حساب الفرع", threshold: 0, approver: "manager",
     hint: "مدير الفرع يوافق قبل الخصم من خزنته" },
+  { id: "count_variance", label: "فرق عدّ الصندوق", threshold: 100, approver: "manager",
+    hint: "فرق العدّ فوق الحدّ يعتمده غير من عدّ" },
+  { id: "safe_audit", label: "فرق جرد الخزنة", threshold: 500, approver: "manager",
+    hint: "فرق جرد الخزنة فوق الحدّ يُعتمد" },
+  { id: "workshop_wastage", label: "هدر ورشة فوق المسموح", threshold: 0, approver: "manager",
+    hint: "الزائد على عقد الورشة يعتمده غير من سجّله" },
 ];
 
 const APPROVAL_STATUS = {

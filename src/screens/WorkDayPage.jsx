@@ -1,3 +1,4 @@
+import { EndOfDayWizard } from "../ui/EndOfDayWizard.jsx";
 import React, { useState } from "react";
 import { AlertTriangle, Check, Lock } from "lucide-react";
 import { fmt, fmtW } from "../core/money.js";
@@ -12,7 +13,7 @@ import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 function WorkDayPage({
   priceData, cashBalance, safeBalance, openCustodySession, sales, expenses, items, lots = [],
   openDay, businessDays = [], dayAsks = [], onOpenDay, onCloseDay2, workdayOff = false,
-  currency, onOpenCustody, onCloseCustody, onCloseDay, onGo, onBack,
+  currency, onOpenCustody, onCloseCustody, onCloseDay, onGo, onBack, blockers = [],
 }) {
   const [form, setForm] = useState(null); // "open" | "close"
   const [dayNote, setDayNote] = useState("");
@@ -179,53 +180,19 @@ function WorkDayPage({
             {form !== "closeDay" ? (
               <button
                 onClick={() => setForm("closeDay")}
+                data-eod-open
                 className="w-full mt-3 py-2.5 rounded-xl text-xs font-bold"
                 style={{ background: "var(--badBg)", color: "var(--bad)", border: "1px solid var(--badLine)" }}
               >
-                إقفال يوم العمل
+                إنهاء اليوم — عُدّ وورّد وأقفل
               </button>
             ) : (
-              <div className="mt-3">
-                <p style={{ color: "var(--text2)" }} className="text-[11px] mb-2">
-                  ستُحفظ لقطة بأرقام اليوم عند الإقفال، ولن يُقبل تسجيل حركات جديدة حتى تفتح يومًا آخر.
-                </p>
-                {/* ⚖ عدٌّ أعمى إلزامي (المرجع ت٢): المعدود يُورَّد للخزنة والفرق فوق 100 يعتمده غير من عدّ */}
-                <div className="grid grid-cols-2 gap-2">
-                  <Field label="النقد في الدرج">
-                    <input style={inputStyle} inputMode="decimal" value={countCash} onChange={(e) => setCountCash(e.target.value)} placeholder="0" />
-                  </Field>
-                  <Field label="إيصالات الشبكة">
-                    <input style={inputStyle} inputMode="decimal" value={countNet} onChange={(e) => setCountNet(e.target.value)} placeholder="0" />
-                  </Field>
-                </div>
-                <Field label="ملاحظة الإقفال (اختياري)">
-                  <input style={inputStyle} value={dayNote} onChange={(e) => setDayNote(e.target.value)} />
-                </Field>
-                <div className="grid grid-cols-2 gap-2">
-                  <button onClick={() => setForm(null)} className="py-2 rounded-xl text-xs font-bold" style={{ background: "var(--panel)", color: "var(--text2)", border: "1px solid var(--line)" }}>
-                    تراجع
-                  </button>
-                  <button
-                    disabled={submitting || String(countCash).trim() === ""}
-                    onClick={async () => {
-                      setSubmitting(true);
-                      try {
-                        const ok = await onCloseDay2(dayNote, { countedCash: Number(countCash) || 0, countedNetwork: Number(countNet) || 0 });
-                        if (ok) {
-                          setDayNote(""); setCountCash(""); setCountNet("");
-                          setForm(null);
-                        }
-                      } finally {
-                        setSubmitting(false);
-                      }
-                    }}
-                    className="py-2 rounded-xl text-xs font-bold"
-                    style={{ background: "var(--badBg)", color: "var(--bad)", border: "1px solid var(--badLine)" }}
-                  >
-                    {submitting ? "جارٍ الإقفال..." : String(countCash).trim() === "" ? "اكتب العدّ أوّلًا" : "عُدّ وورّد وأقفل"}
-                  </button>
-                </div>
-              </div>
+              <EndOfDayWizard blockers={blockers} cashBalance={cashBalance || {}} currency={currency} onGo={onGo} onCancel={() => setForm(null)}
+                onEndOfDay={async ({ countedCash, countedNetwork, note }) => {
+                  const r = await onCloseDay2(note, { countedCash, countedNetwork });
+                  if (r && !r.approvalPending) setForm(null);
+                  return r;
+                }} />
             )}
           </Card>
         )}

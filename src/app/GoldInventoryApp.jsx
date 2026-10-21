@@ -344,6 +344,7 @@ import { StartHereCard, branchStartSteps } from "../ui/StartHereCard.jsx";
 import { HqDrawsBanner } from "../ui/HqDrawsBanner.jsx";
 import { GlossaryPage } from "../screens/GlossaryPage.jsx";
 import { ACCOUNTING_PAGES, SIMPLE_ACCOUNTING_HIDDEN } from "../core/storePackage.js";
+import { endOfDayBlockers } from "../domain/endOfDay.js";
 import { entityActionsSpec } from "../domain/entities.js";
 import { BudgetsPage } from "../screens/BudgetsPage.jsx";
 import { VatReturnPage } from "../screens/VatReturnPage.jsx";
@@ -1393,7 +1394,10 @@ export default function GoldInventoryApp() {
       // هذا المسار تحديدًا — لا يُطلب من الخزنة، فلا حاجة لفحص pool هنا.
       if (res.cashTx) setCashTx((prev) => [normalizeCashTxRow(res.cashTx), ...prev]);
       if (entry.itemId) {
-        setItems((prev) => prev.map((it) => (it.id === entry.itemId ? { ...it, reservedFor: rec.id } : it)));
+        const codes = new Set((rec.unitCodes || []).map((c) => String(c).toUpperCase()));
+        setItems((prev) => prev.map((it) => (it.id !== entry.itemId ? it : codes.size
+          ? { ...it, units: (it.units || []).map((u) => (codes.has(String(u.code).toUpperCase()) ? { ...u, reservedFor: rec.id } : u)) }
+          : { ...it, reservedFor: rec.id })));
       }
       flashToast(`سُجّل الحجز ${rec.ref}`);
       return rec;
@@ -1413,7 +1417,8 @@ export default function GoldInventoryApp() {
       const res = await api.reservationsApi.cancel(id, refund);
       setReservations((prev) => prev.map((x) => (x.id === id ? { ...x, status: "cancelled", cancelledAt: new Date().toISOString(), refunded: !!refund } : x)));
       if (res.cashTx) setCashTx((prev) => [normalizeCashTxRow(res.cashTx), ...prev]);
-      if (r.itemId) setItems((prev) => prev.map((it) => (it.id === r.itemId ? { ...it, reservedFor: null } : it)));
+      if (r.itemId) setItems((prev) => prev.map((it) => (it.id === r.itemId
+        ? { ...it, reservedFor: it.reservedFor === r.id ? null : it.reservedFor, units: (it.units || []).map((u) => (u.reservedFor === r.id ? { ...u, reservedFor: null } : u)) } : it)));
       flashToast(refund ? "أُلغي الحجز وأُرجع العربون" : Number(res?.forfeited) > 0 ? `أُلغي الحجز — صودر العربون ${fmtMoney(res.forfeited)} إيرادًا` : "أُلغي الحجز");
       return res;
     } catch (err) {
@@ -1579,7 +1584,7 @@ export default function GoldInventoryApp() {
     if (!realOpenDay) { flashToast("لا يوجد يوم مفتوح"); return null; }
     try {
       const res = await api.day.end({ ...counts, note: note || null });
-      if (res?.approvalPending) { notePendingApproval(res.approvalPending); return true; }
+      if (res?.approvalPending) { notePendingApproval(res.approvalPending); return { approvalPending: res.approvalPending }; }
       const c = res.count || {};
       const v = (Number(c.varianceCash) || 0) + (Number(c.varianceNetwork) || 0);
       flashToast(`أُقفل ${realOpenDay.ref} · وُرِّد ${fmtMoney((Number(res.swept?.cash) || 0) + (Number(res.swept?.network) || 0))} للخزنة` +
@@ -1911,7 +1916,12 @@ export default function GoldInventoryApp() {
         if (res?.approvalPending) { notePendingApproval(res.approvalPending); return false; }
       } else if (ap.kind === "safe_audit") await api.safe.audit(p);
       else if (ap.kind === "go_live") { await api.setupApi.goLive({ ...(ap.payload || {}), approvalId: ap.id }); refreshSetup(); }
-      else if (ap.kind === "workshop_wastage") { const { jobId, ...body } = ap.payload || {}; await api.workshopApi.receive(jobId, { ...body, approvalId: ap.id }); }
+      // هدر الورشة: إقفالٌ بشطب الزائد أو تسوية مطالبة — والطلب القديم (قبل 090) إقفالٌ بالشطب
+      else if (ap.kind === "workshop_wastage") {
+        const { jobId, action, ...body } = ap.payload || {};
+        if (action === "settle") await api.workshopApi.settle(jobId, { ...body, approvalId: ap.id });
+        else await api.workshopApi.close(jobId, { decision: "writeoff", price24: body.price24, approvalId: ap.id });
+      }
       else if (ap.kind === "item_uncode") { if (!(await handleUncodeUnits(ap.payload?.codes || [], ap.payload?.reason || "", ap.id))) return false; }
       else if (ap.kind === "label_reprint") {
         const r = await api.labelReprint({ ...(ap.payload || {}), approvalId: ap.id });
@@ -3285,17 +3295,18 @@ export default function GoldInventoryApp() {
 
     const amt = Number(form.amount) || 0;
     const p24 = Number(priceData.current) || 0;
-    if (amt <= 0 || p24 <= 0) { flashToast("أدخل مبلغًا وسعرًا صالحًا"); return null; }
+    // سدادُ شراءٍ آجلٍ بعينه يُطفئ بنسبته لا بسعر اليوم — فلا يلزمه سعر
+    if (amt <= 0 || (p24 <= 0 && !form.forTxId)) { flashToast("أدخل مبلغًا وسعرًا صالحًا"); return null; }
     try {
       await api.taskirApi.settleOffice(officeId, {
-        mode: "cash", amount: amt, source: form.source || "safe_cash", priceAtSettle: p24,
+        mode: "cash", amount: amt, source: form.source || "safe_cash", priceAtSettle: p24, forTxId: form.forTxId || undefined,
       });
       const officeTxRes = await api.taskirApi.officeTx(officeId);
       setTaskirOfficeTx((prev) => [
         ...normalizeTaskirOfficeTx(officeTxRes.officeTx || []),
         ...prev.filter((t) => t.officeId !== officeId),
       ]);
-      flashToast(`سُدّد ${fmtMoney(amt)} — يعادل ${fmtW(roundW(amt / p24))} جم24`);
+      flashToast(form.forTxId ? `سُدّد ${fmtMoney(amt)} من الشراء الآجل` : `سُدّد ${fmtMoney(amt)} — يعادل ${fmtW(roundW(amt / p24))} جم24`);
       return true;
     } catch (err) {
       flashToast(apiErrorMessage(err, "تعذّر سداد المكتب"));
@@ -6172,7 +6183,8 @@ export default function GoldInventoryApp() {
     const lot = lots.find((l) => l.id === lotId);
     let res;
     try {
-      res = await api.createLotItems(lotId, rows, distributionMode);
+      // باقة «بدون محاسبة»: تكويدٌ بالجرام بلا دفعة
+      res = lotId ? await api.createLotItems(lotId, rows, distributionMode) : await api.createDirectItems(rows);
     } catch (err) {
       flashToast(addItemsErrorMessage(err));
       return null;
@@ -7076,6 +7088,7 @@ export default function GoldInventoryApp() {
         periodMonth: isPayroll ? entry.periodMonth || new Date().toISOString().slice(0, 7) : null,
         installments: entry.category === "advance" ? Number(entry.installments) || 1 : undefined,
         nameId: entry.nameId || null,
+        ...(Number(entry.vatAmount) > 0 ? { vatAmount: Number(entry.vatAmount) } : {}),
         // مصروفٌ من قالبٍ ثابت: الخادم يعلّم شهره مسجَّلًا بعد نجاح القيد
         ...(entry.fixedId ? { fixedId: entry.fixedId } : {}),
       });
@@ -7687,6 +7700,7 @@ export default function GoldInventoryApp() {
         scrapKarat: paymentMethod === "scrap" ? Number(draft.scrapKarat) || null : undefined,
         scrapWeight: paymentMethod === "scrap" ? Number(draft.scrapWeight) || 0 : undefined,
         invoicePending: !draft.invoiceFile,
+        ...(Number(draft.inputVat) > 0 ? { inputVat: Number(draft.inputVat) } : {}),
         lines: linesIn.map((ln) => ({
           karat: Number(ln.karat), weight: Number(ln.weight) || 0,
           costPerGram: Number(ln.costPerGram) || 0, workmanshipTotal: Number(ln.workmanshipTotal) || 0,
@@ -7822,14 +7836,10 @@ export default function GoldInventoryApp() {
     if (lot) flashToast("تم إنشاء دفعة جديدة");
     return lot;
   };
-  const handleCloseLot = (lot, note) => txn("handleCloseLot", () => {
-    // الفرق بين وزن الدفعة المشتراة وما دخل المخزون فعلًا ذهب حقيقي:
-    // إمّا فُقد في التصنيع والتداول (هالك) أو زاد عن المتوقع (فائض).
-    // تسجيله بقيمته يجعل تكلفة البضاعة صحيحة ويُبقي الجرد متطابقًا؛
-    // تركُه بلا تسجيل يعني فرقًا دائمًا لا يُفسَّر.
+  // إقفال الدفعة على الخادم (POST /lots/:id/close): الفرق بين المشترى والمكوَّد ذهبٌ حقيقي — عجزٌ أو زيادة يُرحَّل
+  // وزنًا وقيدًا. فوق تسامح فرق التكويد (الإعدادات ← الهدر والفروق) لا تُقفل بلا سببٍ مكتوب.
+  const handleCloseLot = async (lot, note = "") => {
     const entered = Number(lot.enteredWeight) || lotAllocatedWeight(lot.id, items);
-    const variance = (Number(lot.weight) || 0) - entered; // موجب = هالك، سالب = فائض
-    // فوق تسامح فرق التكويد (الإعدادات ← الهدر والفروق) لا تُقفل الدفعة بلا سبب مكتوب
     const wcfg = wastageSettingsOf(appSettings);
     const cv = codingVarianceOf({ receivedW: Number(lot.weight) || 0, codedW: entered, tolG: wcfg.receiveTolG, codingTolPct: wcfg.codingTolPct });
     if (cv.needsReason && !String(note || "").trim()) {
@@ -7837,51 +7847,19 @@ export default function GoldInventoryApp() {
       if (!String(why || "").trim()) { flashToast("لم تُقفل الدفعة — السبب مطلوب لفرقٍ فوق التسامح"); return null; }
       note = String(why).trim();
     }
-    const purity = PURITY[lot.karat] || (Number(lot.karat) || 0) / 24;
-    const fine = Math.abs(variance) * purity;
-    const value = Math.abs(variance) * (Number(lot.costPerGram) || 0);
-    const now = new Date().toISOString();
-
-    persistLots(
-      lots.map((l) =>
-        l.id === lot.id
-          ? { ...l, status: "closed", closedAt: now, enteredWeight: entered, wastageWeight: variance > 0 ? variance : 0, surplusWeight: variance < 0 ? -variance : 0 }
-          : l
-      )
-    );
-
-    if (Math.abs(variance) > 0.0005) {
-      const adj = {
-        id: Date.now().toString() + "wa",
-        ref: nextRef("scrap", weightAdjustments).replace("SCR", "WGT"),
-        ...dayStamp(),
-        date: now,
-        lotId: lot.id,
-        lotRef: lot.ref || null,
-        supplierId: lot.supplierId,
-        karat: lot.karat,
-        kind: variance > 0 ? "wastage" : "surplus",
-        weight: Math.abs(variance),
-        fineWeight: fine,
-        costPerGram: Number(lot.costPerGram) || 0,
-        value,
-        purchasedWeight: Number(lot.weight) || 0,
-        enteredWeight: entered,
-        note: note || "",
-        createdBy: currentUser?.name || "",
-        category: variance > 0 ? "gold_wastage" : "gold_weight_surplus",
-      };
-      persistWeightAdjustments([adj, ...weightAdjustments]);
-      flashToast(
-        variance > 0
-          ? `أُقفلت الدفعة — هالك ${fmtW(Math.abs(variance))} جم`
-          : `أُقفلت الدفعة — فائض ${fmtW(Math.abs(variance))} جم`
-      );
-    } else {
-      flashToast("أُقفلت الدفعة — مطابقة تامة");
+    try {
+      const r = await api.closeLot(lot.id, note);
+      const up = normalizeLots([r.lot])[0];
+      setLots((prev) => prev.map((l) => (l.id === lot.id ? { ...l, ...up } : l)));
+      flashToast(Math.abs(r.diff) > 0.0005
+        ? `أُقفلت الدفعة — ${r.diff > 0 ? "عجز" : "زيادة"} تكويد ${fmtW(Math.abs(r.diff))} جم`
+        : "أُقفلت الدفعة — الوزن مطابق");
+      return true;
+    } catch (err) {
+      flashToast(err?.body?.error === "reason_required" ? "فرقٌ فوق التسامح — السبب مطلوب" : apiErrorMessage(err, "تعذّر إقفال الدفعة"));
+      return null;
     }
-  
-  });
+  };
 
   const handleSetPrinted = (itemId, codes, printedValue) => {
     const next = items.map((it) => {
@@ -8683,6 +8661,8 @@ export default function GoldInventoryApp() {
             }}
             openingMode={!!appSettings.openingMode}
             onCreateOpeningLot={handleCreateOpeningLot}
+            inventoryOnly={storePackage === "no_accounting"}
+            onCloseLot={role === "manager" ? handleCloseLot : null}
             currency={priceData.currency}
             price24={priceData.current}
             onDeleteItem={handleDeleteItem}
@@ -8882,7 +8862,7 @@ export default function GoldInventoryApp() {
           <AppSettingsPage
             onOpen={openPage}
             priceData={priceData}
-            settings={appSettings} onSave={handleUpdateSettings} branchIdentity={branchIdentity} onSaveBranch={handleSaveBranchIdentity} hqPermissions={hqPermissions}
+            settings={appSettings} onSave={handleUpdateSettings} branchIdentity={branchIdentity} onSaveBranch={handleSaveBranchIdentity} hqLink={{ linked: !!hqControl.linked, name: branchLink?.branchName || branchIdentity?.name || "", ref: branchLink?.branchRef || "" }} hqPermissions={hqPermissions}
             canEditControls={role === "manager"} onSaveControls={handleSaveControls}
             hqManaged={branchProvision?.locked ? { by: branchProvision.by, at: branchProvision.at } : null} limitsByHq={hqOwnsStaff}
             onBack={() => setMorePage(null)}
@@ -9357,6 +9337,14 @@ export default function GoldInventoryApp() {
             lots={lots}
             onOpenDay={handleOpenBusinessDay}
             onCloseDay2={(note, counts) => handleEndOfDay(note || "", counts)}
+            blockers={endOfDayBlockers({
+              stocktakeLock,
+              heldUnits: (items || []).reduce((a, it) => a + (it.units || []).filter((u) => u.held && !u.sold).length, 0),
+              parked: (saleDrafts || []).filter((d) => d.kind === "parked" && d.status === "open").length,
+              suspendedScrap: (scrapEntries || []).filter((e) => ["pending_break", "in_box", "received"].includes(e.stage)).length,
+              approvalsPending: (approvals || []).filter((a) => a.status === "pending").length,
+              openCustody: !!openCustodySession,
+            })}
             priceData={priceData}
             cashBalance={cashBalance}
             safeBalance={safeBalance}
@@ -9557,7 +9545,8 @@ export default function GoldInventoryApp() {
         )}
         {morePage === "workshop" && (
           <WorkshopPage settings={appSettings} price24={Number(priceData.current) || 0} currency={priceData.currency} flashToast={flashToast}
-            onPending={notePendingApproval} onBack={() => setMorePage(null)} />
+            categories={categories} isManager={role === "manager"} taxRate={appSettings?.taxEnabled ? Number(appSettings?.taxRate) || 0.15 : 0}
+            onChanged={() => loadBootstrap(currentUser).catch(() => {})} onPending={notePendingApproval} onBack={() => setMorePage(null)} />
         )}
         {morePage === "scrapCustody" && (
           <ScrapCustodyPage
@@ -9845,6 +9834,10 @@ export default function GoldInventoryApp() {
         )}
         {morePage === "openingBalance" && (
           <OpeningBalancePage
+            suppliers={suppliers}
+            supplierOpenings={supplierOpenings}
+            onAddSupplierOpening={role === "manager" ? handleAddSupplierOpening : null}
+            onVoidSupplierOpening={role === "manager" ? handleVoidSupplierOpening : null}
             openingBalance={openingBalance}
             onSave={handleSaveOpeningBalance}
             setupMode={setupInfo?.ledgerState === "setup"}

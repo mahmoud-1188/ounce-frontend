@@ -21,6 +21,8 @@ function AddPurchaseModal({ suppliers, offices = [], onClose, onSave }) {
   const [invoiceFile, setInvoiceFile] = useState(null);
   const [skipInvoice, setSkipInvoice] = useState(false);
   const [payFeesNow, setPayFeesNow] = useState(false);
+  // ضريبة المدخلات على فاتورة المورد — فوق الإجمالي، تُطرح من ضريبة المبيعات في الإقرار
+  const [inputVat, setInputVat] = useState("");
 
   const addLine = () =>
     setLines((p) => [...p, { key: Math.random().toString(36).slice(2), karat: 21, weight: "", costPerGram: "", workmanshipTotal: "" }]);
@@ -250,6 +252,17 @@ function AddPurchaseModal({ suppliers, offices = [], onClose, onSave }) {
         </button>
       )}
 
+      <Field label="ضريبة القيمة المضافة على الفاتورة (اختياري)">
+        <div className="flex gap-2">
+          <div className="flex-1"><NumericInput value={inputVat} onChange={setInputVat} placeholder="0" ariaLabel="ضريبة المدخلات" /></div>
+          <button type="button" data-input-vat-15 onClick={() => setInputVat((Math.round(totalWorkmanship * 0.15 * 100) / 100).toFixed(2))}
+            className="px-3 rounded-xl text-[11px] font-bold" style={{ minHeight: 44, background: "var(--panel)", color: "var(--accent)", border: "1px solid var(--accentLine)" }}>
+            15٪ من الأجور
+          </button>
+        </div>
+        <p style={{ color: "var(--text3)" }} className="text-[11px] mt-1">تُدفع فوق الإجمالي من نفس طريقة السداد، وتُخصم من ضريبة مبيعاتك في الإقرار (حساب 1360).</p>
+      </Field>
+
       <Field label="ملاحظات (اختياري)">
         <input style={inputStyle} value={notes} onChange={(e) => setNotes(e.target.value)} />
       </Field>
@@ -263,8 +276,9 @@ function AddPurchaseModal({ suppliers, offices = [], onClose, onSave }) {
         </div>
         <div className="flex items-center justify-between py-1" style={{ borderTop: "1px solid var(--line)" }}>
           <span style={{ color: "var(--text)" }} className="text-sm font-bold">الإجمالي المستحق</span>
-          <span style={{ color: "var(--accent)" }} className="text-base font-bold">{fmtMoney(grandTotal)}</span>
+          <span style={{ color: "var(--accent)" }} className="text-base font-bold">{fmtMoney(grandTotal + (Number(inputVat) || 0))}</span>
         </div>
+        {Number(inputVat) > 0 && <p style={{ color: "var(--text3)", margin: 0 }} className="text-[11px]">منها ضريبة مدخلات {fmtMoney(Number(inputVat))}</p>}
       </Card>
 
       <button
@@ -283,6 +297,7 @@ function AddPurchaseModal({ suppliers, offices = [], onClose, onSave }) {
             scrapWeight: paymentMethod === "scrap" ? Number(scrapWeight) || 0 : 0,
             scrapKarat: paymentMethod === "scrap" ? scrapKarat : null,
             payFeesNow,
+            inputVat: Number(inputVat) || 0,
             invoiceFile,
             invoicePending: !invoiceFile,
             notes: notes.trim(),

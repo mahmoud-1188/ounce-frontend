@@ -1,6 +1,6 @@
 import React from "react";
 
-function Card({ children, style, className = "" }) {
+function Card({ children, style, className = "", ...rest }) {
   // ⚠ الظلّ لا الحدّ.
   //
   // على خلفية داكنة يفصل الحدُّ البطاقةَ عن محيطها. على الفاتحة يصير
@@ -11,6 +11,7 @@ function Card({ children, style, className = "" }) {
   // «طريقة المربعات» تبدو مرتّبة لا مزدحمة.
   return (
     <div
+      {...rest}
       className={className}
       style={{
         background: "var(--panel)",

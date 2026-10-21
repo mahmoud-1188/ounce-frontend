@@ -1,9 +1,9 @@
 import React, { useState } from "react";
 import { CodingScaleBar } from "../ui/CodingScaleBar.jsx";
-import { scaleAutoPref, scaleSettingsWrap, setScaleAutoPref } from "../domain/scale.js";
-import { Barcode, Camera, Check, Landmark, Loader2, Plus, Trash2, Truck } from "lucide-react";
+import { SCALE_LINK, scaleAutoPref, scaleSettingsWrap, setScaleAutoPref } from "../domain/scale.js";
+import { Barcode, Camera, Check, Copy, Landmark, Loader2, Pin, Plus, Trash2, Truck } from "lucide-react";
 import { CATEGORY_STATE } from "../core/constants.js";
-import { fmt, fmtW, fromHalalas, halalas, roundW } from "../core/money.js";
+import { KARATS, fmt, fmtW, fromHalalas, halalas, pricePerGram, roundW } from "../core/money.js";
 import { SET_PIECE_PRESETS } from "../core/workflow.js";
 import { compressImage, emptyRow, inputStyle, itemLabel, remainingQty } from "../domain/helpers.js";
 import { key } from "../domain/key.js";
@@ -19,7 +19,8 @@ import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 
 function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions = [], onSetPrinted, onCreateSupplierLot, onDeleteItem, onBack, flashToast,
   openingMode = false, onCreateOpeningLot = null, currency = "ر.س", price24 = 0, modules = {},
-  codingModel = "both", onSendLotToHq = null, onRecallLot = null, printerCfg = null, onSavePrinter = null, onBindEpc = null, onUncode = null }) {
+  codingModel = "both", onSendLotToHq = null, onRecallLot = null, printerCfg = null, onSavePrinter = null, onBindEpc = null, onUncode = null,
+  inventoryOnly = false, onCloseLot = null }) {
   const gemOn = !!modules?.gemstones?.on, watchOn = !!modules?.watches?.on;
   const defWarranty = Number(modules?.watches?.cfg?.warrantyMonths) || 24;
   const [detailItem, setDetailItem] = useState(null);
@@ -41,7 +42,11 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
     return { ...base, ...(okCat ? { category: st.category } : {}), ...(st.wmMode ? { wmMode: st.wmMode } : {}),
       workmanshipPerGram: st.workmanshipPerGram ?? "", workmanshipPerUnit: st.workmanshipPerUnit ?? "" };
   };
+  // تثبيت الصورة: قطعٌ متشابهة بصورةٍ واحدة — تنتقل للصنف التالي حتى يُلغى التثبيت
+  const [photoPin, setPhotoPin] = useState(false);
+  const [pinnedPhoto, setPinnedPhoto] = useState(null);
   const [rows, setRows] = useState(() => [seededRow()]);
+  const [saveNote, setSaveNote] = useState("");
   // الميزان: شريطٌ واحد أعلى القائمة يكتب في الصنف الحالي (آخر ما أُضيف أو ما ضغطت خانة وزنه)
   const scaleCfg = scaleSettingsWrap();
   const scaleOn = !!scaleCfg.scale.enabled;
@@ -56,19 +61,31 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
   const allLots = [...localLots, ...lots];
   // ⚠ وضع الافتتاح يرى الدفعات الافتتاحية وحدها، والوضع العادي يرى دفعات
   //   الموردين وحدها — فلا يُكوَّد شراءٌ على أنه افتتاحي ولا العكس.
-  const openLots = allLots.filter((l) => l.status === "open" && (openingMode ? l.source === "opening" : l.source !== "opening"));
+  // في مرحلة تكويد الافتتاح يُختار المصدر باسمه (دفعة مورد أو بضاعة افتتاحية) كي لا يُكوَّد شراءٌ افتتاحيًّا ولا العكس؛
+  // بعد إنهائها دفعات الموردين وحدها.
+  const openLots = allLots.filter((l) => l.status === "open" && (l.source !== "opening" || openingMode));
   const supplierName = (id) => suppliers.find((s) => s.id === id)?.name || "مورد";
   const isOpeningLot = (l) => l?.source === "opening";
-  const lotLabel = (l) => (isOpeningLot(l) ? `رصيد افتتاحي ${l.ref || ""}`.trim() : supplierName(l?.supplierId));
+  const lotLabel = (l) => (isOpeningLot(l) ? `بضاعة افتتاحية ${l.ref || ""}`.trim() : supplierName(l?.supplierId));
   const selectedLot = allLots.find((l) => l.id === lotId);
   const activeItems = items.filter((i) => remainingQty(i) > 0);
 
   const updateRow = (key, field, val) => {
     // الوزن المكتوب باليد يفقد دليل الميزان — فلا يغيّره الوزن التلقائي بعدها
+    if (field === "photoDataUrl" && photoPin) setPinnedPhoto(val);
     setRows((prev) => prev.map((r) => (r.key === key ? { ...r, [field]: val, ...(field === "weight" ? { weightEv: null } : {}) } : r)));
   };
+  const withPin = (r) => (photoPin && pinnedPhoto ? { ...r, photoDataUrl: pinnedPhoto } : r);
+  // نسخ صنفٍ لقطعةٍ شبيهة: كل حقوله عدا الوزن ودليله — الميزان يزن النسخة من جديد
+  const cloneRow = (key) => {
+    const from = rows.find((r) => r.key === key);
+    if (!from) return;
+    const n = withPin({ ...from, key: emptyRow().key, weight: "", weightEv: null });
+    setRows((prev) => { const i = prev.findIndex((r) => r.key === key); return [...prev.slice(0, i + 1), n, ...prev.slice(i + 1)]; });
+    setCurKey(n.key); setFresh(Date.now());
+  };
   const addRow = () => {
-    const next = seededRow(rows[rows.length - 1]);
+    const next = withPin(seededRow(rows[rows.length - 1]));
     setRows((prev) => [...prev, next]);
     setCurKey(next.key); setFresh(Date.now());
   };
@@ -91,7 +108,7 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
     // ⚠ onCreateSupplierLot صار غير متزامن (يستدعي الباك إند فعليًا) —
     // لازم انتظار النتيجة قبل استخدامها، وإلا كان lot كائن Promise لا
     // الدفعة الفعلية.
-    const lot = openingMode && onCreateOpeningLot ? await onCreateOpeningLot(draft) : await onCreateSupplierLot(draft);
+    const lot = showQuickLot === "opening" && openingMode && onCreateOpeningLot ? await onCreateOpeningLot(draft) : await onCreateSupplierLot(draft);
     if (lot) {
       setLocalLots((prev) => [lot, ...prev]);
       setLotId(lot.id);
@@ -104,7 +121,13 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
   // التكويد في الإدارة (migration 069): الدفعة المُرسلة تكوّدها الإدارة، وفرعٌ نموذجه «الإدارة تكوّد» يرسل ولا يكوّد
   const lotAtHq = selectedLot?.codingAt === "hq";
   const codingBlocked = codingModel === "hq" && !isOpeningLot(selectedLot);
-  const canSave = !!lotId && allRowsValid && !lotAtHq && !codingBlocked;
+  const canSave = (inventoryOnly || !!lotId) && allRowsValid && !lotAtHq && !codingBlocked;
+  // تكلفة جرام القطعة الافتتاحية: ما كُتب لها، وإلا تكلفة الدفعة، وإلا سعر اليوم بعيارها (ويُوسم بذلك)
+  const openingCostOf = (r) => {
+    if (Number(r.costPerGram) > 0) return { costPerGram: Number(r.costPerGram), basis: "row" };
+    if (Number(selectedLot?.costPerGram) > 0) return { costPerGram: Number(selectedLot.costPerGram), basis: "lot" };
+    return price24 > 0 && selectedLot ? { costPerGram: pricePerGram(selectedLot.karat, price24), basis: "today" } : { costPerGram: 0, basis: "none" };
+  };
 
   const [saving, setSaving] = useState(false);
 
@@ -118,6 +141,14 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
     : Number(r.workmanshipPerUnit) || 0);
 
   const handleSubmit = async () => {
+    // الصنف الحالي يتبع الميزان ولم يستقرّ وزنه — لا يُحفظ بقراءةٍ سابقة (ما كُتب باليد لا يعنيه)
+    const act = rows.find((r) => r.key === curKey) || rows[rows.length - 1];
+    const L = SCALE_LINK;
+    if (scaleOn && scaleAuto && act?.weightEv?.source === "scale" && L.last?.ok && !L.stable && Math.abs((Number(L.last.grams) || 0) - (Number(act.weight) || 0)) > 0.0005) {
+      setSaveNote(`الميزان لم يستقرّ على صنف ${rows.indexOf(act) + 1} — انتظر ✓، أو ارفع القطعة، أو اكتب وزنها بيدك ثم احفظ`);
+      return;
+    }
+    setSaveNote("");
     // ⚠ categoryId لا category: الباك إند يتحقق من category_id حقيقي في
     // جدول categories — إرسال المفتاح القديم (category) كان سيُرفض
     // برسالة category غير موجود مهما كانت القيمة صحيحة.
@@ -126,8 +157,9 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
       stonesWeight: Number(r.stonesWeight) || 0,
       weight: Number(r.weight),
       quantity: Math.max(1, Number(r.quantity) || 1),
-      costPerGram: selectedLot.costPerGram,
-      workmanshipPerUnit: rowWorkmanship(r),
+      ...(inventoryOnly ? { karat: Number(r.karat) || 21 } : {}),
+      costPerGram: inventoryOnly ? 0 : isOpeningLot(selectedLot) ? openingCostOf(r).costPerGram : selectedLot.costPerGram,
+      workmanshipPerUnit: inventoryOnly ? 0 : rowWorkmanship(r),
       photoDataUrl: r.photoDataUrl,
       isSet: r.category === "set",
       setPieces: r.category === "set" ? (r.setPieces || []).filter((x) => (x || "").trim()) : [],
@@ -135,13 +167,13 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
     }));
     setSaving(true);
     try {
-      const created = await onSave(lotId, cleanRows, distMode);
+      const created = await onSave(inventoryOnly ? null : lotId, cleanRows, distMode);
       // الطباعة جزء من الإدخال لا صفحة منفصلة: الرقاقة تُلصق على القطعة
       // فور إدخالها، وتأجيلها يعني قطعًا بلا رقاقة في الصندوق اليومي.
       if (created && created.length) {
         setJustEntered(created);
         saveSticky(rows[rows.length - 1]);
-        setRows([seededRow(rows[rows.length - 1])]);
+        setRows([withPin(seededRow(rows[rows.length - 1]))]);
         setCurKey(null);
       }
     } finally {
@@ -185,7 +217,7 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
 
   return (
     <div>
-      <SubPageHeader title="التكويد" onBack={onBack} />
+      <SubPageHeader title={inventoryOnly ? "التكويد — بالجرام" : "التكويد"} onBack={onBack} />
       <div className="px-4 pt-3">
         {entrySessions.length > 0 && (
           <>
@@ -229,12 +261,20 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
           <Card style={{ padding: 12, marginBottom: 12, border: "1px solid var(--accentLine)", background: "var(--accentBg)" }}>
             <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-1">وضع الافتتاح</p>
             <p style={{ color: "var(--text2)" }} className="text-[11px]">
-              ما تُكوّده الآن رصيدٌ افتتاحي لا شراءٌ من مورد: يدخل المخزون مقابل رأس المال، ولا يُستحقّ عليه شيء لأحد.
-              حين تنتهي من إدخال البضاعة القائمة اضغط «إنهاء الافتتاح والبدء» في صفحة الرصيد الافتتاحي.
+              بضاعة المحل الموجودة يوم البدء تُكوَّد من «بضاعة افتتاحية (بلا مورد)»: تدخل المخزون مقابل رأس المال ولا يُستحقّ عليها شيء لأحد.
+              وما اشتُري من موردٍ يُكوَّد من دفعته. حين تنتهي من الافتتاحية يُنهي المدير المرحلة من صفحة الرصيد الافتتاحي.
             </p>
           </Card>
         )}
-        <Field label={openingMode ? "الدفعة الافتتاحية (إجباري)" : "المورد / الدفعة (إجباري)"}>
+        {inventoryOnly ? (
+          <Card style={{ padding: 12, marginBottom: 12, border: "1px solid var(--accentLine)" }} data-inventory-only>
+            <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-1">تكويد بالجرام — بلا مورد</p>
+            <p style={{ color: "var(--text2)" }} className="text-[11px]">
+              نظام مخزونٍ بالجرام — بلا حسابات: كل قطعةٍ بصورتها وعيارها ووزنها (وعددها) فقط — لا مورد ولا دفعة ولا تكلفة ولا مصنعية ولا قيد. يُطبع ملصقها بعد الحفظ، وتُعدّ في الجرد ويظهر رصيدها بالجرام.
+            </p>
+          </Card>
+        ) : (
+        <Field label={openingMode ? "المصدر — دفعة مورد أو بضاعة افتتاحية (إجباري)" : "المورد / الدفعة (إجباري)"}>
           <select style={inputStyle} value={lotId} onChange={(e) => setLotId(e.target.value)}>
             <option value="">اختر دفعة...</option>
             {openLots.map((l) => (
@@ -244,6 +284,7 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
             ))}
           </select>
         </Field>
+        )}
         {selectedLot && isOpeningLot(selectedLot) && (
           <Card style={{ padding: 12, marginBottom: 12, border: "1px solid var(--accentLine)" }}>
             <p style={{ color: "var(--text2)" }} className="text-xs mb-2">دفعة افتتاحية {selectedLot.ref} · عيار {selectedLot.karat}</p>
@@ -261,7 +302,7 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
                 <span style={{ color: "var(--accentText)" }} className="text-xs font-bold">{fmt(wDraft)} جم</span>
               </div>
             )}
-            <p style={{ color: "var(--text3)" }} className="text-[11px] mt-1">لا وزنَ مشترى يُقارن به — وزن الدفعة هو ما يُكوَّد فيها.</p>
+            <p style={{ color: "var(--text3)" }} className="text-[11px] mt-1">لا وزنَ مشترى يُقارن به — وزن الدفعة هو ما يُكوَّد فيها.{!(Number(selectedLot.costPerGram) > 0) ? " بلا تكلفةٍ للدفعة — القطعة بتكلفتها أو بسعر اليوم." : ""}</p>
           </Card>
         )}
         {selectedLot && !isOpeningLot(selectedLot) && (
@@ -362,24 +403,34 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
           </>
         )}
 
-        {!showQuickLot ? (
-          <button
-            onClick={() => setShowQuickLot(true)}
-            className="text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1 w-fit mb-4"
-            style={{ background: "var(--accentBg)", color: "var(--accent)", border: "1px solid var(--accentLine)" }}
-          >
-            {openingMode ? <><Landmark size={13} /> دفعة افتتاحية جديدة</> : <><Truck size={13} /> مورد / دفعة جديدة</>}
-          </button>
-        ) : openingMode ? (
+        {inventoryOnly ? null : !showQuickLot ? (
+          <div className="flex flex-wrap gap-2 mb-4">
+            <button
+              onClick={() => setShowQuickLot(true)}
+              className="text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1 w-fit"
+              style={{ background: "var(--accentBg)", color: "var(--accent)", border: "1px solid var(--accentLine)" }}
+            >
+              <Truck size={13} /> مورد / دفعة جديدة
+            </button>
+            {openingMode && onCreateOpeningLot && (
+              <button data-new-opening-lot onClick={() => setShowQuickLot("opening")}
+                data-help="يكوّد بضاعةً افتتاحية بلا مورد (في مرحلة تكويد الافتتاح وحدها) — اضغطه ثم اكتب العيار والوزن والتكلفة."
+                className="text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1 w-fit"
+                style={{ background: "var(--panel)", color: "var(--accent)", border: "1px solid var(--accentLine)" }}>
+                <Landmark size={13} /> بضاعة افتتاحية (بلا مورد)
+              </button>
+            )}
+          </div>
+        ) : showQuickLot === "opening" ? (
           <OpeningLotForm onCancel={() => setShowQuickLot(false)} onCreate={handleQuickLotCreated} price24={price24} currency={currency} />
         ) : (
           <QuickLotForm onCancel={() => setShowQuickLot(false)} onCreate={handleQuickLotCreated} suppliers={suppliers} />
         )}
 
-        {!lotId && (
+        {!lotId && !inventoryOnly && (
           <p style={{ color: "var(--bad)" }} className="text-xs mb-4">
             {openingMode
-              ? "اختر أو أنشئ دفعةً افتتاحية (عيار وتقييم) قبل إضافة أي صنف — كل قطعة تبقى مرتبطةً بدفعتها."
+              ? "اختر المصدر: دفعة مورد، أو «بضاعة افتتاحية (بلا مورد)» لبضاعة المحل الموجودة — كل قطعة تبقى مرتبطةً بمصدرها."
               : "لازم تختار أو تنشئ دفعة مورد قبل إضافة أي صنف — كل قطعة يجب أن تكون مرتبطة بمصدرها."}
           </p>
         )}
@@ -411,7 +462,7 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
           </Card>
         )}
 
-        {lotId && selectedLot && !lotAtHq && !codingBlocked && (
+        {(inventoryOnly || (lotId && selectedLot && !lotAtHq && !codingBlocked)) && (
           <div className="flex flex-col gap-4 mb-4">
             {scaleOn && (() => {
               const cur = rows.find((r) => r.key === curKey) || rows[rows.length - 1];
@@ -430,11 +481,16 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
                   <span style={{ color: "var(--text2)" }} className="text-xs font-bold">
                     صنف {idx + 1}
                   </span>
-                  {rows.length > 1 && (
-                    <button onClick={() => removeRow(r.key)} style={{ color: "var(--bad)" }}>
-                      <Trash2 size={15} />
+                  <div className="flex items-center gap-3">
+                    <button type="button" data-clone-row={idx} onClick={() => cloneRow(r.key)} title="نسخ لقطعةٍ شبيهة" style={{ color: "var(--accentText)" }}>
+                      <Copy size={15} />
                     </button>
-                  )}
+                    {rows.length > 1 && (
+                      <button onClick={() => removeRow(r.key)} style={{ color: "var(--bad)" }}>
+                        <Trash2 size={15} />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-3 mb-3">
@@ -454,6 +510,13 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
                       onChange={(e) => handlePhotoSelect(r.key, e.target.files?.[0])}
                     />
                   </label>
+                  {r.photoDataUrl && (
+                    <button type="button" data-photo-pin onClick={() => { const on = !photoPin; setPhotoPin(on); setPinnedPhoto(on ? r.photoDataUrl : null); }}
+                      className="text-[10px] font-bold px-1.5 py-1 rounded-lg flex items-center gap-0.5 flex-shrink-0"
+                      style={{ background: photoPin && pinnedPhoto === r.photoDataUrl ? "var(--accentBg)" : "var(--panel)", color: "var(--accent)", border: "1px solid var(--line)" }}>
+                      <Pin size={11} /> {photoPin && pinnedPhoto === r.photoDataUrl ? "📌 مثبّتة — تثبت للتالية" : "ثبّت الصورة"}
+                    </button>
+                  )}
                   <div className="flex-1">
                     <Field label="التصنيف">
                       <select style={inputStyle} value={r.category} onChange={(e) => updateRow(r.key, "category", e.target.value)}>
@@ -512,6 +575,31 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
                     <input style={inputStyle} type="text" inputMode="decimal" value={r.stonesWeight} onChange={(e) => updateRow(r.key, "stonesWeight", sanitizeNumeric(e.target.value))} placeholder="0.00" />
                   </Field>
                 </div>
+                {inventoryOnly ? (
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label={`العيار — صنف ${idx + 1}`}>
+                    <select style={inputStyle} value={r.karat || 21} data-row-karat={idx} onChange={(e) => updateRow(r.key, "karat", Number(e.target.value))}>
+                      {KARATS.map((k) => <option key={k} value={k}>{k}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="العدد (قطع)">
+                    <input style={inputStyle} type="text" inputMode="numeric" value={r.quantity} onChange={(e) => updateRow(r.key, "quantity", sanitizeNumeric(e.target.value))} />
+                  </Field>
+                </div>
+                ) : (<>
+                {isOpeningLot(selectedLot) && (() => {
+                  const c = openingCostOf(r);
+                  return (
+                    <Field label={`تكلفة الجرام — ${currency} (${Number(selectedLot.costPerGram) > 0 ? `تكلفة الدفعة ${fmt(Number(selectedLot.costPerGram), 2)} إن تركتها، أو اكتب غيرها` : price24 > 0 ? `سعر اليوم ${fmt(pricePerGram(selectedLot.karat, price24), 2)} إن تركتها، أو اكتب غيره` : "اكتبها"})`}>
+                      <input style={inputStyle} type="text" inputMode="decimal" value={r.costPerGram || ""} data-row-cost={idx} onChange={(e) => updateRow(r.key, "costPerGram", sanitizeNumeric(e.target.value))} placeholder="0.00" />
+                      <span style={{ color: c.basis === "today" ? "var(--accent)" : c.basis === "none" ? "var(--bad)" : "var(--text3)" }} className="text-[10px]">
+                        {c.basis === "today" ? `⚠ بسعر اليوم: ${fmt(c.costPerGram, 2)} للجرام (ع${selectedLot.karat}) — لم تُكتب تكلفة شراء`
+                          : c.basis === "none" ? "⚠ لا سعر لليوم — اكتب التكلفة"
+                          : `بتكلفة ${c.basis === "row" ? "الشراء" : "الدفعة"}: ${fmt(c.costPerGram, 2)} للجرام${Number(r.weight) > 0 ? ` · قيمة القطعة ${fmt(c.costPerGram * Number(r.weight) + rowWorkmanship(r), 2)}` : ""}`}
+                      </span>
+                    </Field>
+                  );
+                })()}
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="الكمية">
                     <input style={inputStyle} type="text" inputMode="numeric" value={r.quantity} onChange={(e) => updateRow(r.key, "quantity", sanitizeNumeric(e.target.value))} />
@@ -536,6 +624,7 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
                     </span>
                   )}
                 </div>
+                </>)}
                 {gemOn && (
                   <details className="text-[11px]" style={{ color: "var(--text2)" }}>
                     <summary className="font-bold" style={{ color: "var(--accentText)" }}>حجرٌ كريم (اختياري)</summary>
@@ -574,6 +663,7 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
           </div>
         )}
 
+        {saveNote && <p data-save-note style={{ color: "var(--bad)" }} className="text-[11px] mb-1">{saveNote}</p>}
         <button
           disabled={!canSave}
           onClick={handleSubmit}
@@ -627,6 +717,13 @@ function AddGoodsPage({ items, onSave, lots = [], suppliers = [], entrySessions 
                     </Card>
                   ))}
                 </div>
+              )}
+              {onCloseLot && !isOpeningLot(selectedLot) && selectedLot.status === "open" && selectedLot.codingAt !== "hq" && mine.length > 0 && (
+                <button type="button" data-close-lot onClick={() => onCloseLot(selectedLot)}
+                  data-help="يُقفل هذه الدفعة ويسجّل فرق وزنها عن المكوَّد عجزًا أو زيادة — اضغطه حين تنتهي من تكويدها كلّها."
+                  className="w-full mt-3 py-2.5 rounded-xl text-xs font-bold" style={{ background: "var(--panel)", color: "var(--accent)", border: "1px solid var(--accentLine)" }}>
+                  أقفل الدفعة وسجّل الفرق
+                </button>
               )}
               {remain < -0.0005 && (
                 <Card style={{ padding: 10, marginTop: 8, border: "1px solid var(--badLine)" }}>
