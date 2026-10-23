@@ -27,6 +27,13 @@ import { normalizeBootstrap, normalizeReviews, normalizeCashTxRow, normalizeLots
 // توزيعه على أجهزة الفروع القائمة فعليًّا.
 const BRANCH_LINK_PATH_PREFIX = "/b/";
 
+// شاشةٌ تُفتح بعد الدخول من رابط الإدارة («?open=<شاشة>»): تطبيق المركزي يفتح شاشات دفتر الإدارة
+// (المخزون المركزي · المشتريات · الخزنة المركزية · الدفاتر…) هنا على الفرع الرئيسي، كما في المرجع.
+// يُقرأ عند التحميل قبل أن يُعاد كتابة الرابط إلى /b/<ref>.
+const OPEN_PAGE_ON_LOAD = (() => {
+  try { const v = new URLSearchParams(window.location.search).get("open"); return v && /^[a-zA-Z]+(:[a-zA-Z]+)?$/.test(v) ? v : null; } catch { return null; }
+})();
+
 /** يقرأ رمز الفرع من مسار الرابط الحالي إن وُجد (/b/<ref>...)، وإلا null. */
 function branchRefFromUrl() {
   try {
@@ -3059,6 +3066,15 @@ export default function GoldInventoryApp() {
       setMorePage(id);
     }
   };
+
+  // الشاشة المطلوبة من رابط الإدارة تُفتح مرّةً واحدة بعد الدخول
+  const openOnLoadDone = useRef(false);
+  useEffect(() => {
+    if (!currentUser || !OPEN_PAGE_ON_LOAD || openOnLoadDone.current) return;
+    openOnLoadDone.current = true;
+    openPage(OPEN_PAGE_ON_LOAD);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser]);
 
   // -------- handlers: repairs (إصلاحات) --------
   // ── تعديل وزن قطعة عند الإصلاح ──
