@@ -6950,6 +6950,11 @@ export default function GoldInventoryApp() {
       }
       return res;
     } catch (err) {
+      const b = err?.body || {};
+      if (b.error === "safe_gold_insufficient") {
+        flashToast(`${b.kind === "crafted" ? "مشغول" : "كسر"} الخزنة عيار ${b.karat} فيه ${fmtW(b.have)} جم — لا يكفي لـ${fmtW(b.requested)} جم`);
+        return null;
+      }
       flashToast(apiErrorMessage(err, "تعذّر تنفيذ حركة الذهب بالخزنة"));
       return null;
     }

@@ -9,6 +9,8 @@ import { CustodyOpenForm } from "../ui/CustodyOpenForm.jsx";
 import { FundCustodyForm } from "../ui/FundCustodyForm.jsx";
 import { Hallmark } from "../ui/Hallmark.jsx";
 import { SafeGoldForm } from "../ui/SafeGoldForm.jsx";
+import { SafeGoldList } from "../ui/SafeGoldList.jsx";
+import { SafeStatementSheet } from "../modals/SafeStatementSheet.jsx";
 import { SimpleAmountForm } from "../ui/SimpleAmountForm.jsx";
 import { TransactionList } from "../ui/TransactionList.jsx";
 
@@ -47,6 +49,7 @@ function CashTab({
   const [pill, setPill] = useState("daily"); // 'safe' | 'daily' | 'scrap'
   const [showSafeForm, setShowSafeForm] = useState(null); // 'transfer' | 'in' | 'out' | 'gold' | null
   const [showFundForm, setShowFundForm] = useState(false);
+  const [showStatement, setShowStatement] = useState(false);
   const [custodyForm, setCustodyForm] = useState(null); // "open" | "close" | null
 
   const sourceLabel = {
@@ -449,11 +452,24 @@ function CashTab({
             >
               إيداع / سحب ذهب من الخزنة
             </button>
+            <button
+              type="button"
+              onClick={() => setShowStatement(true)}
+              data-help="كشف الخزنة لمدّة: النقد بطريقتيه والذهب بنوعيه وعياراته — افتتاحيٌّ ووارد وصادر وختامي، مع Excel وPDF."
+              className="w-full mt-3 py-2 rounded-xl text-xs font-bold"
+              style={{ background: "var(--accentBg)", color: "var(--accent)", border: "1px solid var(--accentLine)" }}
+            >
+              كشف الخزنة
+            </button>
           </Card>
+          {showStatement && (
+            <SafeStatementSheet safeTx={safeTx} safeGoldTx={safeGoldTx} safeBalance={safeBalance} safeGoldBalance={safeGoldBalance} currency={currency} onClose={() => setShowStatement(false)} />
+          )}
           {showSafeForm === "gold" && (
             <SafeGoldForm suppliers={suppliers} onCancel={() => setShowSafeForm(null)} onSubmit={async (type, kind, weight, note, karat, dest, supId) => { const res = await onAddSafeGold(type, kind, weight, note, karat, dest, supId); if (res) setShowSafeForm(null); }} />
           )}
 
+          <SafeGoldList list={safeGoldTx} />
           <TransactionList transactions={safeTx} currency={currency} sourceLabel={sourceLabel} methodLabel={methodLabel} emptyTitle="لا توجد حركات بعد" emptySub="التحويلات من صندوق اليومي ستظهر هنا" />
         </>
       )}
