@@ -9522,6 +9522,9 @@ export default function GoldInventoryApp() {
         {morePage === "attendanceHr" && (
           <AttendanceHrPage
             users={users}
+            currentUser={currentUser}
+            currency={priceData.currency || "ر.س"}
+            onOpenPayroll={() => openPage("payroll")}
             canManage={role !== "employee"}
             onBack={() => setMorePage(null)}
             flashToast={flashToast}

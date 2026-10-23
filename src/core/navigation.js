@@ -68,7 +68,7 @@ const NAV_REGISTRY = [
   { id: "openingBalance", label: "الرصيد الافتتاحي", icon: PiggyBank },
   { id: "fixedAssets", label: "الأصول الثابتة", icon: Landmark },
   { id: "payroll", label: "الرواتب", icon: Users },
-  { id: "attendanceHr", label: "الحضور والإجازات", icon: CalendarCheck },
+  { id: "attendanceHr", label: "الموارد البشرية", icon: CalendarCheck },
   { id: "hqReports", label: "تقرير الفروع", icon: Building2 },
   { id: "hqDocs", label: "معاملات الإدارة", icon: ClipboardList },
   { id: "codingReport", label: "تقرير التكويد", icon: Tag },
