@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Plus } from "lucide-react";
 import { EXPENSE_CATEGORIES, ROLES } from "../core/constants.js";
+import { selectableExpenseCategories } from "../domain/customAccounts.js";
 import { fmtMoney } from "../core/money.js";
 import { FUNDING_SOURCES } from "../core/workflow.js";
 import { inputStyle } from "../domain/helpers.js";
@@ -74,7 +75,7 @@ function AddExpenseForm({ expenseNames = [], fixedDue = [], users = [], onAddExp
           </div>
         )}
         <div className="flex flex-wrap gap-1.5 mb-2" role="radiogroup" aria-label="تصنيف المصروف">
-          {EXPENSE_CATEGORIES.map((c) => (
+          {selectableExpenseCategories().map((c) => (
             <button key={c.id} type="button" role="radio" aria-checked={category === c.id} data-cat={c.id}
               data-help={`تصنيف المصروف «${c.label}» — اختره فيُقيَّد المصروف على حسابه.`}
               onClick={() => {

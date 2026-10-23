@@ -44,6 +44,8 @@ function branchRefFromUrl() {
 // fallback عام بدل رمز الخطأ الخام (لا معنى لـ"insufficient_stock" لمستخدم
 // عادي، لكن الرسالة المطابقة له مفهومة).
 const API_ERROR_MESSAGES = {
+  action_denied_by_hq: "الإدارة منعت هذه العملية من سياستها",
+  manager_only: "هذه العملية للمدير وحده",
   // الرقابة وقسم المحاسب (migration 037)
   period_locked: "الفترة مقفلة — لا قيود فيها (أو المدير وحده يعدّل فيها)",
   ai_not_configured: "المساعد غير مفعّل على الخادم — مفتاح الذكاء غير مضبوط",
@@ -320,6 +322,7 @@ import { computeReturnAmounts } from "../domain/computeReturnAmounts.js";
 import { hashPin } from "../domain/hashPin.js";
 import { applyHqMarkup, sellPrice24, markupLabel, documentIndex, aiAllowedFor, aiScope, branchDataKey, branchSnapshotKey, bundleById, cardFeeOf, cashAccountFor, categoryLabel, contentWidth, exchangeKind, expenseAccountFor, exportTablesPdf, fetchGoldPriceSAR, generateUnitCode, goldDestLabel, goldProfit, inPeriod, isBundle, isLiveScrap, itemLabel, codingVarianceOf, lotAllocatedWeight, migrateLegacyKeys, wastageSettingsOf, modeAllowsAction, modeAllowsPage, modeAllowsTab, nameExists, navPerRow, normalizeFundingSource, normalizeName, r2, r3, remainingQty, saleProfitOf, saveAttachment, setRuntimeCategories, streamBase, trustBalance, unitCostBasis, unitCurrentValue, useViewport, weightTrialBalance } from "../domain/helpers.js";
 import { isPeriodClosed } from "../domain/isPeriodClosed.js";
+import { registerCustomAccounts } from "../domain/customAccounts.js";
 import { key } from "../domain/key.js";
 import { nextCashRef } from "../domain/nextCashRef.js";
 import { nextRef } from "../domain/nextRef.js";
@@ -569,6 +572,10 @@ export default function GoldInventoryApp() {
   const refreshSetup = () => api.setupApi.state().then(setSetupInfo).catch(() => {});
   // المصروفات الثابتة المستحقّة غير المسجّلة — تدخل الالتزامات في «صافي الفرع بالوزن»
   const [fixedDue, setFixedDue] = useState([]);
+  // حسابات المصروف المخصّصة للمتجر (migration 096) — تُسجَّل في الشجرة وفئات المصروف الحيّتين
+  const [customAccounts, setCustomAccounts] = useState([]);
+  const applyCustomAccounts = (list) => { registerCustomAccounts(list); setCustomAccounts(list); };
+  const refreshCustomAccounts = () => api.expenseAccountsApi.list().then((r) => applyCustomAccounts(r.accounts || [])).catch(() => {});
   const refreshFixedDue = () => api.fixedExpensesApi.list().then((r) => {
     const ym = new Date().toISOString().slice(0, 7), d = new Date().getDate();
     setFixedDue((r.fixed || []).filter((f) => f.active && f.lastPosted !== ym && d >= f.day));
@@ -5094,6 +5101,7 @@ export default function GoldInventoryApp() {
     api.setCachedBootstrap(boot, user);
     refreshSetup();
     refreshFixedDue();
+    refreshCustomAccounts();
   };
 
   /// الدخول باختيار المستخدم مباشرة — حين تكون الحماية مطفأة.
@@ -6955,6 +6963,28 @@ export default function GoldInventoryApp() {
     }
   };
 
+  // -------- handlers: حسابات المصروف المخصّصة --------
+  const handleAddExpenseAccount = async (name) => {
+    try {
+      const r = await api.expenseAccountsApi.add(name);
+      applyCustomAccounts([...customAccounts, r.account]);
+      flashToast(`أُضيف حساب ${r.account.name} (${r.account.code})`);
+      return true;
+    } catch (err) {
+      flashToast(err?.body?.error === "name_taken" ? "الاسم مستعمل لحسابٍ آخر" : apiErrorMessage(err, "تعذّرت إضافة الحساب"));
+      return false;
+    }
+  };
+  const handleSetExpenseAccountHidden = async (code, hidden) => {
+    try {
+      const r = await api.expenseAccountsApi.setHidden(code, hidden);
+      applyCustomAccounts(customAccounts.map((a) => (a.code === code ? r.account : a)));
+      flashToast(`${hidden ? "أُخفي" : "أُظهر"} حساب ${r.account.name}`);
+    } catch (err) {
+      flashToast(apiErrorMessage(err, "تعذّر تعديل الحساب"));
+    }
+  };
+
   // -------- handlers: taskirat (تسكيرات) --------
   // Deducts `amount` from a chosen funding source (safe / daily till in one of
   // three methods). Used by supplier settlements (taskirat), expenses, repairs
@@ -8564,7 +8594,8 @@ export default function GoldInventoryApp() {
             expenseNames={expenseNames}
             users={users}
             onAddExpenseName={handleAddExpenseName}
-            onDeleteExpenseName={handleDeleteExpenseName} fixedDue={fixedDue} expenses={expenses} totals={expensesTotals} currency={priceData.currency} onAdd={handleAddExpense} flashToast={flashToast} />
+            onDeleteExpenseName={handleDeleteExpenseName} fixedDue={fixedDue} expenses={expenses} totals={expensesTotals} currency={priceData.currency} onAdd={handleAddExpense} flashToast={flashToast}
+            customAccounts={customAccounts} onAddAccount={role === "manager" ? handleAddExpenseAccount : null} onSetAccountHidden={role === "manager" ? handleSetExpenseAccountHidden : null} />
         )}
 
         {morePage === null && tab === "stocktake" && (

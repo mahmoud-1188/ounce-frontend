@@ -819,6 +819,13 @@ export const setupApi = {
   exitUnits: (codes, note = "") => apiFetch("/setup/exit-units", { method: "POST", body: { codes, note } }),
 };
 
+// حسابات المصروف المخصّصة للمتجر (migration 096) — الإضافة والإخفاء للمدير
+export const expenseAccountsApi = {
+  list: () => apiFetch("/expense-accounts"),
+  add: (name) => apiFetch("/expense-accounts", { method: "POST", body: { name } }),
+  setHidden: (code, hidden) => apiFetch(`/expense-accounts/${code}`, { method: "PATCH", body: { hidden } }),
+};
+
 // قوالب المصروفات الثابتة (migration 074)
 export const fixedExpensesApi = {
   list: () => apiFetch("/fixed-expenses"),

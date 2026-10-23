@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { CalendarClock, Plus } from "lucide-react";
-import { EXPENSE_CATEGORIES } from "../core/constants.js";
+import { selectableExpenseCategories } from "../domain/customAccounts.js";
 import { FUNDING_SOURCES } from "../core/workflow.js";
 import { fmtMoney } from "../core/money.js";
 import * as api from "../core/api.js";
@@ -12,7 +12,8 @@ import { NumericInput } from "./NumericInput.jsx";
 const ymNow = () => new Date().toISOString().slice(0, 7);
 // المستحقّ: فعّالٌ وحلّ يومه هذا الشهر ولم يُسجَّل له
 const isDue = (f, now = new Date()) => f.active && f.lastPosted !== ymNow() && now.getDate() >= f.day;
-const CATS = EXPENSE_CATEGORIES.filter((c) => !["salaries", "advance"].includes(c.id));
+// تُقرأ وقت الرسم: الحسابات المخصّصة تُسجَّل بعد التحميل
+const fixedCats = () => selectableExpenseCategories().filter((c) => !["salaries", "advance"].includes(c.id));
 
 /// المصروفات الثابتة بمسمّيات المحل (الإيجار · الكهرباء · …): تُذكَّر بالمستحقّ وتُسجَّل بضغطة مصروفًا عاديًّا بحدوده واعتماده
 function FixedExpensesCard({ currency = "ر.س", onAdd, flashToast }) {
@@ -45,7 +46,7 @@ function FixedExpensesCard({ currency = "ر.س", onAdd, flashToast }) {
     <Card style={{ padding: 12, marginBottom: 12 }} data-fixed-expenses>
       <div className="flex items-center justify-between mb-2">
         <p style={{ color: "var(--accent)", margin: 0 }} className="text-xs font-bold flex items-center gap-1"><CalendarClock size={14} /> المصروفات الثابتة{due.length ? ` · ${due.length} مستحق` : ""}</p>
-        <button type="button" data-fixed-add onClick={() => setForm({ name: "", category: CATS[0]?.id || "rent", amount: "", day: "1", fundingSource: FUNDING_SOURCES[0].id, note: "" })}
+        <button type="button" data-fixed-add onClick={() => setForm({ name: "", category: fixedCats()[0]?.id || "rent", amount: "", day: "1", fundingSource: FUNDING_SOURCES[0].id, note: "" })}
           className="text-[11px] px-2.5 py-1 rounded-full font-bold flex items-center gap-1" style={{ background: "var(--panel)", color: "var(--accent)", border: "1px solid var(--accentLine)" }}>
           <Plus size={12} /> قالب جديد
         </button>
@@ -76,7 +77,7 @@ function FixedExpensesCard({ currency = "ر.س", onAdd, flashToast }) {
             <Field label="يوم الاستحقاق (1–28)"><NumericInput value={form.day} onChange={(v) => setForm({ ...form, day: v })} placeholder="1" /></Field>
             <Field label="التصنيف">
               <select style={inputStyle} value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
-                {CATS.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+                {fixedCats().map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
               </select>
             </Field>
             <Field label="الدفع من">
