@@ -12,7 +12,7 @@ function computeGoldPosition({
 
   // ① الذهب المادي — كل حساب أصلٍ وزني (1xxx)
   const physical = {
-    inventory: sum((r) => ["1210", "1245", "1290"].includes(String(r.code))),
+    inventory: sum((r) => ["1210", "1215", "1245", "1290"].includes(String(r.code))),
     scrap:     sum((r) => ["1220", "1225", "1230"].includes(String(r.code))),
     atOffices: sum((r) => String(r.code) === "1240"),
     inTransit: sum((r) => String(r.code) === "1246"),

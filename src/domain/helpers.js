@@ -1066,10 +1066,11 @@ function weightTrialBalance(sources) {
     const q = (it.units || []).filter((u) => !u.sold).length;
     if (q > 0) put("1210", "ذهب مشغول", it.karat, (Number(it.weight) || 0) * q, 0);
   });
-  // 1220 ذهب كسر بالخزنة
+  // 1220 ذهب كسر بالخزنة · 1215 مشغولها غير المكوَّد
   if (derived) safeGoldTx.forEach((t) => {
     const w = Number(t.weight) || 0;
-    put("1220", "ذهب كسر بالخزنة", t.karat, t.type === "in" ? w : 0, t.type === "in" ? 0 : w);
+    const [code, name] = t.kind === "crafted" ? ["1215", "ذهب مشغول بالخزنة — غير مُكوَّد"] : ["1220", "ذهب كسر بالخزنة"];
+    put(code, name, t.karat, t.type === "in" ? w : 0, t.type === "in" ? 0 : w);
   });
   // 1230 الكسر
   //
@@ -2479,7 +2480,7 @@ function accountRoot(code, accounts = CHART_OF_ACCOUNTS) {
 }
 
 /// صنف الذهب في المركز المالي: مشغول (المُدخل بالتكويد) أو غير مشغول (الكسر أينما كان).
-const GOLD_CLASS_ACCOUNTS = { worked: ["1210"], unworked: ["1220", "1225", "1230", "1240"] };
+const GOLD_CLASS_ACCOUNTS = { worked: ["1210", "1215"], unworked: ["1220", "1225", "1230", "1240"] };
 function goldClassOf(code) {
   if (GOLD_CLASS_ACCOUNTS.worked.includes(code)) return "worked";
   if (GOLD_CLASS_ACCOUNTS.unworked.includes(code)) return "unworked";

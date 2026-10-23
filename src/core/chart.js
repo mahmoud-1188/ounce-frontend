@@ -35,6 +35,8 @@ const CHART_OF_ACCOUNTS = [
   // مخزون الذهب — يُمسك بالوحدتين: الوزن حقيقة والقيمة تقدير
   { code: "1200", name: "مخزون الذهب", parent: "1000", unit: "both", nature: "debit", statement: "balance", group: true },
   { code: "1210", name: "ذهب مشغول — جاهز للبيع", parent: "1200", unit: "both", nature: "debit", statement: "balance" },
+  // المشغول غير المكوَّد في الخزنة — غير 1210 (المكوَّد على الرفّ) وغير 1220 (الكسر) — migration 095
+  { code: "1215", name: "ذهب مشغول بالخزنة — غير مُكوَّد", parent: "1200", unit: "both", nature: "debit", statement: "balance" },
   { code: "1220", name: "ذهب كسر بالخزنة", parent: "1200", unit: "both", nature: "debit", statement: "balance" },
   // ⚠ خزنة الكسر غير خزنة المشغول.
   //
@@ -830,6 +832,19 @@ const POSTING_RULES = {
     requires: "destination",
     note: "الوجهة إجبارية — سحب بلا وجهة يضيع أثره",
   },
+  // المشغول غير المكوَّد في الخزنة (1215): وزنٌ بلا مال، كالكسر في 1220
+  safe_crafted_in: {
+    label: "إدخال ذهب مشغول للخزنة",
+    cash: null,
+    weight: { from: null, to: "1215" },
+  },
+  safe_crafted_out: {
+    label: "سحب ذهب مشغول من الخزنة",
+    cash: null,
+    weight: { from: "1215", to: null },
+    requires: "destination",
+    note: "الوجهة إجبارية — سحب بلا وجهة يضيع أثره",
+  },
   // ⚠ الاتجاه: أنت تشتري من المكتب ولا تبيع له.
   //
   // كانت القاعدة تُقيَّد بيعًا (نقدٌ يدخل وذهبٌ يخرج) — وهو عكس ما يحدث:
@@ -967,7 +982,7 @@ const JOURNALS = [
     ops: ["scrap_buy", "scrap_send", "scrap_assay_gain", "scrap_assay_loss", "scrap_receive",
       "scrap_to_product", "product_to_scrap", "repair_add", "repair_reduce", "gold_out",
       "goods_in_transit", "transit_received", "branch_out", "branch_in", "branch_receive",
-      "safe_gold_in", "safe_gold_out", "wastage", "gold_wastage", "weight_surplus",
+      "safe_gold_in", "safe_gold_out", "safe_crafted_in", "safe_crafted_out", "wastage", "gold_wastage", "weight_surplus",
       "audit_missing", "trust_in", "trust_out"] },
   { id: "payroll", label: "يومية الرواتب", prefix: "PAY",
     ops: ["payroll_run"] },
@@ -978,7 +993,7 @@ const JOURNALS = [
 
 /// الحسابات الوزنية المسموح بها — أي حساب خارجها في قيد وزني خطأ.
 
-const WEIGHT_ACCOUNTS = ["1210", "1220", "1230", "1240", "1250", "2110", "7100", "7200"];
+const WEIGHT_ACCOUNTS = ["1210", "1215", "1220", "1230", "1240", "1250", "2110", "7100", "7200"];
 
 /// يبني قيد الوزن من قاعدة عملية. يُعيد سطرين: خروج ودخول.
 
