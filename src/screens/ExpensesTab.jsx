@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { GoldEq } from "../ui/GoldEq.jsx";
 import { FixedExpensesCard } from "../ui/FixedExpensesCard.jsx";
 import { CustomAccountsCard } from "../ui/CustomAccountsCard.jsx";
@@ -12,8 +12,10 @@ import { AddExpenseForm } from "../ui/AddExpenseForm.jsx";
 import { Card } from "../ui/Card.jsx";
 import { EmptyState } from "../ui/EmptyState.jsx";
 
-function ExpensesTab({ expenseNames = [], users = [], onAddExpenseName, onDeleteExpenseName, fixedDue = [], expenses, totals, currency, onAdd, flashToast, customAccounts = [], onAddAccount = null, onSetAccountHidden = null }) {
-  const [showForm, setShowForm] = useState(false);
+function ExpensesTab({ expenseNames = [], users = [], onAddExpenseName, onDeleteExpenseName, fixedDue = [], expenses, totals, currency, onAdd, flashToast, customAccounts = [], onAddAccount = null, onSetAccountHidden = null, sub = null }) {
+  const [showForm, setShowForm] = useState(sub?.v === "new");
+  // «سجّل مصروفًا» من الباب يفتح النموذج مباشرة
+  useEffect(() => { if (sub?.v === "new") setShowForm(true); }, [sub?.n]); // eslint-disable-line react-hooks/exhaustive-deps
   const [view, setView] = useState("list"); // list | byCategory | payroll
   const [period, setPeriod] = useState("month");
   const [search, setSearch] = useState("");

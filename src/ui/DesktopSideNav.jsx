@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { ChevronDown, FileText, Home, X } from "lucide-react";
 import { MENU_GROUPS, NAV_REGISTRY } from "../core/navigation.js";
-import { BRANCH_HUBS, hubPages, visibleHub } from "../core/hubs.js";
+import { BRANCH_HUBS, hubPages, pageOf, visibleHub } from "../core/hubs.js";
 
 const SIDE_NAV_W = 248;
 
@@ -15,7 +15,7 @@ function DesktopSideNav({ permitted, disabled = [], current, onSelect, onHome, d
   const inHubs = hubPages();
   const groups = BRANCH_HUBS.map((h) => visibleHub(h, (id) => allowed(id) && reg.has(id)))
     .filter(Boolean)
-    .map((h) => ({ id: h.key, label: h.title, icon: h.icon, items: h.tabs.flatMap((t) => t.views) }));
+    .map((h) => ({ id: h.key, label: h.menuLabel || h.title, icon: h.icon, items: [...new Set(h.tabs.flatMap((t) => t.views.map(pageOf)))] }));
   // ⚠ شاشةٌ في القائمة القديمة بلا باب لا تضيع: تظهر في «أدوات»
   const tools = [...new Set(MENU_GROUPS.flatMap((g) => g.items))].filter((id) => !inHubs.has(id) && allowed(id) && reg.has(id));
   if (tools.length) groups.push({ id: "tools", label: "أدوات", icon: FileText, items: tools });

@@ -1,6 +1,6 @@
 import { ArrowLeftRight, Layers, Globe2, Gift, Boxes, Repeat, Puzzle, ShieldAlert, ClipboardPen, Hammer, Bot, Gem, Check, Home, Barcode, BarChart3, BookmarkCheck, Building2, CalendarCheck, ClipboardCheck, ClipboardList, Coins, Database, FileMinus, FileText, Flame, Grid, Handshake, Landmark, LayoutGrid, Lock, PiggyBank, Plus, Printer, Receipt, RefreshCw, RotateCcw, Scale, Search, Send, Settings, ShieldCheck, ShoppingCart, Sparkles, Sun, SlidersHorizontal, Tag, Truck, UserRound, Users, Wallet, Warehouse, Wrench } from "lucide-react";
 import { ROLES } from "./constants.js";
-import { BRANCH_HUBS } from "./hubs.js";
+import { BRANCH_HUBS, hubBasePages } from "./hubs.js";
 
 const TAB_KIND_IDS = ["home", "inventory", "sales", "cash", "expenses", "stocktake"];
 
@@ -302,9 +302,9 @@ const HUB_GROUP_ID = { sale: "sales", scrap: "purchasing", stock: "inventory", m
 const MENU_GROUPS = [
   ...BRANCH_HUBS.map((h) => ({
     id: HUB_GROUP_ID[h.key] || h.key,
-    label: h.title,
+    label: h.menuLabel || h.title,
     icon: h.icon,
-    items: h.tabs.flatMap((t) => t.views),
+    items: hubBasePages(h),
   })),
   // ما لا باب له: البحث والمساعد
   { id: "tools", label: "أدوات", icon: Search, items: ["search", "aiAccountant", "trustGold"] },

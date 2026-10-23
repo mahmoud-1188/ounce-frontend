@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { FileText } from "lucide-react";
 import { CASH_LEDGER_CODES, WAGES_LEDGER_CODES } from "../core/constants.js";
 import { fmtMoney, fmtW } from "../core/money.js";
@@ -16,8 +16,9 @@ import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 import { EntryDetail } from "../ui/EntryDetail.jsx";
 import { LedgerHealthCard } from "../ui/LedgerHealthCard.jsx";
 
-function GeneralLedgerPage({ journal = [], goldLedger = [], accounts = [], agingEntries = [], agingWeightEntries = [], currency = "ر.س", branchName = "", preparedBy = "", onBackfill, onBack }) {
+function GeneralLedgerPage({ journal = [], goldLedger = [], accounts = [], agingEntries = [], agingWeightEntries = [], currency = "ر.س", branchName = "", preparedBy = "", onBackfill, onBack, sub = null }) {
   const [tab, setTab] = useState("tree");        // tree | account | gold | cash | wages
+  useEffect(() => { if (["tree", "account", "gold", "cash", "wages", "aging", "official"].includes(sub?.v)) setTab(sub.v); }, [sub?.n]); // eslint-disable-line react-hooks/exhaustive-deps
   const [treeView, setTreeView] = useState("balance");
   const [agingUnit, setAgingUnit] = useState("money");   // moved | balance | all
   // ⚠ أي سطرٍ يُضغط تظهر تفاصيله — لا رقمٌ بلا مستند خلفه
