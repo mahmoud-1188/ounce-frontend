@@ -23,7 +23,7 @@ import { SubPageHeader } from "../ui/SubPageHeader.jsx";
  * (section) يُمرَّر كـ{rfid: rfidCfg} لأن rfidSettingsFor نفسها منقولة
  * حرفيًا وتتوقع الشكل settings.rfid.
  */
-function RfidReaderPage({ items = [], suppliers = [], lots = [], categories = [], branch = {}, userName = "", storeId = 0, rfidCfg, canManage, onBindEpc, onApplyCount, onBack }) {
+function RfidReaderPage({ items = [], suppliers = [], lots = [], categories = [], branch = {}, userName = "", storeId = 0, rfidCfg, canManage, onBindEpc, onApplyCount, onBack, csvSep = "," }) {
   const [tab, setTab] = useState("live");        // live | batch | find
   const [tags, setTags] = useState(new Map());   // epc → {rssi, total}
   const [logLines, setLogLines] = useState([]);
@@ -120,7 +120,7 @@ function RfidReaderPage({ items = [], suppliers = [], lots = [], categories = []
 
   return (
     <div>
-      <SubPageHeader title="قارئ RFID" onBack={onBack} right={<ShareMenu compact getSession={getSession} />} />
+      <SubPageHeader title="قارئ RFID" onBack={onBack} right={<ShareMenu compact getSession={getSession} csvSep={csvSep} />} />
       <div className="px-4 pt-3">
 
         <Card style={{ padding: 12, marginBottom: 10, border: `1px solid ${r.state === "idle" ? "var(--line)" : "var(--accentLine)"}` }}>

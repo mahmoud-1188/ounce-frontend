@@ -322,6 +322,23 @@ function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSa
           )}
         </Card>
 
+        {/* ── قفل الخمول (المرجع idleLock): على هذا الجهاز ── */}
+        <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">قفل الخمول</p>
+        <Card style={{ padding: 14, marginBottom: 12 }} data-idle-lock>
+          <p style={{ color: "var(--text3)", margin: "0 0 8px" }} className="text-[11px]">يُقفل التطبيق بعد مدّةٍ بلا لمس — جهاز المحلّ لا يبقى مفتوحًا على الطاولة باسم آخر من دخل.</p>
+          <div className="grid grid-cols-5 gap-2">
+            {[0, 5, 15, 30, 60].map((m) => {
+              const cur = Number.isFinite(Number(settings.idleLockMin)) ? Number(settings.idleLockMin) : 15;
+              return (
+                <button key={m} type="button" onClick={() => onSave({ ...settings, idleLockMin: m })} className="py-2 rounded-xl text-[11px] font-bold"
+                  style={{ background: cur === m ? "var(--accentBg)" : "var(--field)", color: cur === m ? "var(--accent)" : "var(--text2)", border: "1px solid var(--line)" }}>
+                  {m === 0 ? "مطفأ" : `${m} د`}
+                </button>
+              );
+            })}
+          </div>
+        </Card>
+
         <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">
           مطابقة البنك
         </p>
@@ -349,7 +366,29 @@ function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSa
         <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2">
           فحص الكسر واعتماده
         </p>
-        <Card style={{ padding: 14, marginBottom: 12 }}>
+        <Card style={{ padding: 14, marginBottom: 12 }} data-scrap-flow>
+          <p style={{ color: "var(--text2)" }} className="text-[11px] mb-2">مسار الكسر بعد شرائه من الزبون</p>
+          <div className="grid grid-cols-2 gap-2 mb-2">
+            {[
+              { id: "review", label: "عبر موظف الكسر والفحص", hint: "يُستلم ويُكسَّر ويُفحص قبل الخزنة" },
+              { id: "direct", label: "مباشرةً إلى الخزنة", hint: "بلا إجراءات تدقيق" },
+            ].map((o) => {
+              const on = (settings.scrapFlow === "direct" ? "direct" : "review") === o.id;
+              return (
+                <button key={o.id} type="button" data-scrap-flow-opt={o.id} onClick={() => onSave({ ...settings, scrapFlow: o.id })}
+                  className="py-2.5 rounded-xl text-[11px] font-bold text-right px-2.5"
+                  style={{ background: on ? "var(--accentBg)" : "var(--panel)", color: on ? "var(--accent)" : "var(--text2)", border: `1px solid ${on ? "var(--accentLine)" : "var(--edge)"}` }}>
+                  {o.label}
+                  <span style={{ color: "var(--text3)" }} className="block text-[10px]">{o.hint}</span>
+                </button>
+              );
+            })}
+          </div>
+          {settings.scrapFlow === "direct" && (
+            <p style={{ color: "var(--accentText)" }} className="text-[11px] mb-3">
+              الكسر يُشترى ويدخل الخزنة مباشرةً بوزن الشراء — وما فيه فصوصٌ يبقى للتكسير أوّلًا حتى يُعرف وزنه الصافي.
+            </p>
+          )}
           <p style={{ color: "var(--text2)" }} className="text-[11px] mb-3">
             الكسر لا يدخل الخزنة إلا بعد نزع فصوصه وتثبيت وزنه الصافي. من يفعل ذلك؟
           </p>
@@ -758,6 +797,22 @@ function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSa
               </button>
             </div>
           ))}
+          <div className="flex items-center justify-between gap-3 py-2" style={{ borderBottom: "1px solid var(--line)" }} data-reservation-deposit>
+            <div className="min-w-0">
+              <p style={{ color: "var(--text)" }} className="text-[12px] font-bold">عربون الحجز</p>
+              <p style={{ color: "var(--text3)" }} className="text-[11px]">{settings.reservationDepositRequired !== false
+                ? "إلزامي — لا حجز بلا عربون"
+                : "اختياري — يُحجز بلا عربون. الحجز بلا عربون يُبقي القطعة محجوزةً بلا التزام من العميل — اجعل له «محجوز حتى» ليذكّرك."}</p>
+            </div>
+            <button type="button" role="switch" aria-checked={settings.reservationDepositRequired !== false} aria-label="عربون الحجز إلزامي"
+              onClick={() => onSave({ reservationDepositRequired: settings.reservationDepositRequired === false })}
+              className="shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold"
+              style={settings.reservationDepositRequired !== false
+                ? { background: "var(--goodBg)", color: "var(--good)", border: "1px solid var(--goodLine)" }
+                : { background: "var(--field)", color: "var(--text2)", border: "1px solid var(--line)" }}>
+              {settings.reservationDepositRequired !== false ? "إلزامي" : "اختياري"}
+            </button>
+          </div>
           <label className="block text-[11px] mt-3" style={{ color: "var(--text2)" }}>
             صلاحية عرض السعر (أيام)
             <input type="number" min="1" max="60" inputMode="numeric" defaultValue={Number(settings.quoteDays) || 7}
@@ -876,6 +931,23 @@ function AppSettingsPage({ onOpen = null, settings, onSave, branchIdentity, onSa
             <input type="checkbox" data-gold-eq-toggle checked={settings.goldEqOn !== false} onChange={(e) => onSave({ ...settings, goldEqOn: e.target.checked })} style={{ accentColor: "var(--accent)" }} />
             اعرض بجانب كل مبلغ ما يعادله ذهبًا بسعر اليوم (بخطٍّ صغير)
           </label>
+        </Card>
+
+        {/* ── فاصل ملفّات CSV (المرجع csvSeparator) ── */}
+        <Card style={{ padding: 12, marginBottom: 12 }} data-csv-sep>
+          <p style={{ color: "var(--accent)", margin: "0 0 6px" }} className="text-[12px] font-bold">فاصل ملفّات CSV</p>
+          <div className="grid grid-cols-2 gap-2">
+            {[[",", "فاصلة ,", "الافتراضيّ — Excel الإنجليزي والأنظمة"], [";", "فاصلة منقوطة ;", "Excel بإعدادٍ عربيّ/أوروبيّ"]].map(([v, l, h]) => {
+              const on = (settings.csvSeparator === ";" ? ";" : ",") === v;
+              return (
+                <button key={v} type="button" onClick={() => onSave({ ...settings, csvSeparator: v })} className="text-right px-3 py-2 rounded-xl"
+                  style={{ background: on ? "var(--accentBg)" : "var(--field)", color: on ? "var(--accent)" : "var(--text2)", border: "1px solid var(--line)" }}>
+                  <span className="block text-[11px] font-bold">{l}</span>
+                  <span style={{ color: "var(--text3)" }} className="block text-[10px]">{h}</span>
+                </button>
+              );
+            })}
+          </div>
         </Card>
 
         {/* ── واتساب المحل ── */}
