@@ -730,6 +730,8 @@ const controlApi = {
   reviews: () => apiFetch("/reviews"),
   addReview: (payload) => apiFetch("/reviews", { method: "POST", body: payload }),
   approvals: () => apiFetch("/approvals"),
+  // ما مضى بلا موافقة بتفويض الإدارة (migration 102)
+  waived: (days = 30) => apiFetch(`/approvals/waived?days=${days}`),
   decide: (id, decision, note) => apiFetch(`/approvals/${id}/decide`, { method: "POST", body: { decision, note } }),
   saveControls: (payload) => apiFetch("/settings/controls", { method: "PATCH", body: payload }),
   permissionLog: () => apiFetch("/permission-log"),
