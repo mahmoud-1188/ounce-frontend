@@ -11,9 +11,9 @@ import { NumericInput } from "../ui/NumericInput.jsx";
 import { Stat } from "../ui/Stat.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 
-function StoreLinkPage({ config, orders, items, onSave, onTest, onBack }) {
+function StoreLinkPage({ config, orders, items, onSave, onTest, onBack, initialTab = "settings" }) {
   const [cfg, setCfg] = useState(config);
-  const [tab, setTab] = useState("settings");
+  const [tab, setTab] = useState(initialTab);
   const [testText, setTestText] = useState(JSON.stringify(STORE_SAMPLE, null, 2));
   const [testResult, setTestResult] = useState(null);
   const set = (k, v) => setCfg((p) => ({ ...p, [k]: v }));
