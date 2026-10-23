@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { GoldEq } from "../ui/GoldEq.jsx";
 import { FixedExpensesCard } from "../ui/FixedExpensesCard.jsx";
+import { CustomAccountsCard } from "../ui/CustomAccountsCard.jsx";
 import { FileMinus, FileSpreadsheet, FileText, Plus } from "lucide-react";
 import * as XLSX from "xlsx";
 import { CATEGORY_TO_ACCOUNT } from "../core/chart.js";
@@ -11,7 +12,7 @@ import { AddExpenseForm } from "../ui/AddExpenseForm.jsx";
 import { Card } from "../ui/Card.jsx";
 import { EmptyState } from "../ui/EmptyState.jsx";
 
-function ExpensesTab({ expenseNames = [], users = [], onAddExpenseName, onDeleteExpenseName, fixedDue = [], expenses, totals, currency, onAdd, flashToast }) {
+function ExpensesTab({ expenseNames = [], users = [], onAddExpenseName, onDeleteExpenseName, fixedDue = [], expenses, totals, currency, onAdd, flashToast, customAccounts = [], onAddAccount = null, onSetAccountHidden = null }) {
   const [showForm, setShowForm] = useState(false);
   const [view, setView] = useState("list"); // list | byCategory | payroll
   const [period, setPeriod] = useState("month");
@@ -160,6 +161,7 @@ function ExpensesTab({ expenseNames = [], users = [], onAddExpenseName, onDelete
       </h1>
 
       <FixedExpensesCard currency={currency} onAdd={onAdd} flashToast={flashToast} />
+      {onAddAccount && <CustomAccountsCard accounts={customAccounts} onAdd={onAddAccount} onSetHidden={onSetAccountHidden} />}
 
       <div className="grid grid-cols-3 gap-2 mb-3">
         {[
