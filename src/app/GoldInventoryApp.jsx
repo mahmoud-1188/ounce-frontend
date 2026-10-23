@@ -142,6 +142,7 @@ const API_ERROR_MESSAGES = {
   branch_has_sales: "المحل يبيع فعلًا — وضع الافتتاح للمحل الجديد قبل أول بيع",
   opening_mode_off: "وضع الافتتاح مطفأ — فعّله من الرصيد الافتتاحي",
   opening_reopen_hq_only: "إعادة فتح تكويد الافتتاح للإدارة وحدها — اطلبها منها بسببها",
+  invalid_cost_center: "مركز التكلفة غير موجود أو موقوف — اختر غيره من «مزيد»",
   invalid_karat: "اختر العيار",
   invalid_cost_per_gram: "أدخل تكلفة الجرام",
   insufficient_weight: "الوزن غير متوفر",
@@ -7152,6 +7153,7 @@ export default function GoldInventoryApp() {
         installments: entry.category === "advance" ? Number(entry.installments) || 1 : undefined,
         nameId: entry.nameId || null,
         ...(Number(entry.vatAmount) > 0 ? { vatAmount: Number(entry.vatAmount) } : {}),
+        ...(entry.costCenterId ? { costCenterId: entry.costCenterId } : {}),
         // مصروفٌ من قالبٍ ثابت: الخادم يعلّم شهره مسجَّلًا بعد نجاح القيد
         ...(entry.fixedId ? { fixedId: entry.fixedId } : {}),
       });

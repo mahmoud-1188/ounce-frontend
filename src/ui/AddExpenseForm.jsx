@@ -11,7 +11,7 @@ import { Field } from "./Field.jsx";
 import { InvoiceAttachField } from "./InvoiceAttachField.jsx";
 
 /// المصروف بخطوتين: ① المبلغ ② ما هو (مسمّى محفوظ أو مصروفٌ ثابت مستحقّ أو تصنيف) — والباقي في «مزيد».
-function AddExpenseForm({ expenseNames = [], fixedDue = [], users = [], onAddExpenseName, onDeleteExpenseName = null, onCancel, onSave }) {
+function AddExpenseForm({ expenseNames = [], fixedDue = [], users = [], costCenters = [], onAddExpenseName, onDeleteExpenseName = null, onCancel, onSave }) {
   const [name, setName] = useState("");
   const [autoName, setAutoName] = useState(false);
   const [employeeId, setEmployeeId] = useState("");
@@ -27,6 +27,8 @@ function AddExpenseForm({ expenseNames = [], fixedDue = [], users = [], onAddExp
   const [more, setMore] = useState(false);
   // مصروفٌ ثابت مستحقّ اختير: الخادم يعلّم شهره مسجَّلًا بعد نجاح القيد
   const [fixedId, setFixedId] = useState(null);
+  // مركز التكلفة (اختياري) — يُرى مصروف كل مركزٍ في الموازنات
+  const [costCenterId, setCostCenterId] = useState("");
   const isPayroll = category === "salaries" || category === "advance";
   // الراتب أو السلفة بلا موظف رقم بلا معنى — لا يمكن نسبه لأحد لاحقًا.
   const valid = Number(amount) > 0 && (isPayroll ? !!employeeId : name.trim().length > 0);
@@ -143,7 +145,7 @@ function AddExpenseForm({ expenseNames = [], fixedDue = [], users = [], onAddExp
 
         <button type="button" onClick={() => setMore((v) => !v)} className="w-full rounded-xl text-[11px] font-bold mb-2" data-expense-more
           style={{ minHeight: 40, background: "var(--field)", color: "var(--text2)", border: "1px solid var(--line)" }}>
-          {more ? "إخفاء «مزيد»" : "مزيد: مصدر الدفع · حفظ المسمّى · متكرّر · ملاحظات"}
+          {more ? "إخفاء «مزيد»" : `مزيد: مصدر الدفع · حفظ المسمّى · متكرّر${costCenters.length ? " · مركز التكلفة" : ""} · ملاحظات`}
         </button>
         {more && (
           <div className="p-2 mb-2" style={{ borderRadius: 12, border: "1px solid var(--line)", background: "var(--bg)" }}>
@@ -170,6 +172,13 @@ function AddExpenseForm({ expenseNames = [], fixedDue = [], users = [], onAddExp
               <input type="checkbox" checked={recurring} onChange={(e) => setRecurring(e.target.checked)} />
               مصروف ثابت (متكرر شهريًا مثل الإيجار أو الرواتب)
             </label>
+            {costCenters.length > 0 && (
+              <Field label="مركز التكلفة (اختياري)">
+                <select style={inputStyle} value={costCenterId} onChange={(e) => setCostCenterId(e.target.value)} aria-label="مركز التكلفة">
+                  <option value="">بلا مركز</option>{costCenters.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </Field>
+            )}
             <Field label="ملاحظات (اختياري)">
               <input style={inputStyle} value={note} onChange={(e) => setNote(e.target.value)} />
             </Field>
@@ -209,6 +218,7 @@ function AddExpenseForm({ expenseNames = [], fixedDue = [], users = [], onAddExp
                 employeeId: isPayroll ? employeeId : null,
                 installments: category === "advance" ? Math.min(60, Math.max(1, Number(installments) || 1)) : undefined,
                 ...(fixedId ? { fixedId } : {}),
+                ...(costCenterId ? { costCenterId } : {}),
                 ...(!isPayroll && Number(vatAmount) > 0 && Number(vatAmount) < Number(amount) ? { vatAmount: Number(vatAmount) } : {}),
                 invoiceFile: isPayroll ? null : invoiceFile,
               })
