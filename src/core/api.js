@@ -610,6 +610,13 @@ const payrollApi = {
   hrAlerts: () => apiFetch("/hr/alerts"),
   loans: () => apiFetch("/hr/loans"),
   evaluations: (period) => apiFetch(`/hr/evaluations${period ? `?period=${period}` : ""}`),
+  // سياسة الموارد والإضافي والجزاءات والحضور بوقته (migration 099)
+  hrPolicy: () => apiFetch("/hr/policy"),
+  saveHrPolicy: (policy) => apiFetch("/hr/policy", { method: "PUT", body: policy }),
+  adjustments: (period) => apiFetch(`/hr/adjustments${period ? `?period=${period}` : ""}`),
+  addAdjustment: (body) => apiFetch("/hr/adjustments", { method: "POST", body }),
+  cancelAdjustment: (id) => apiFetch(`/hr/adjustments/${id}`, { method: "DELETE" }),
+  check: (action, userId) => apiFetch("/hr-check", { method: "POST", body: { action, userId } }),
   saveEvaluation: (body) => apiFetch("/hr/evaluations", { method: "POST", body }),
   wps: (runId) => apiFetch(`/payroll/runs/${runId}/wps?format=json`),
   accrue: (period, approvalId = null) => apiFetch("/payroll/runs", { method: "POST", body: { period, ...(approvalId ? { approvalId } : {}) } }),
