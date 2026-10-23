@@ -396,6 +396,9 @@ import { SetupGoLivePanel } from "../ui/SetupGoLivePanel.jsx";
 import { SetupExitSheet } from "../ui/SetupExitSheet.jsx";
 import { setGoldEqContext } from "../ui/GoldEq.jsx";
 import { NetWeightCard } from "../ui/NetWeightCard.jsx";
+import { NetWeightPage } from "../screens/NetWeightPage.jsx";
+import { WpsPage } from "../screens/WpsPage.jsx";
+import { WastageReportView } from "../ui/WastageReportView.jsx";
 import { netWeightPosition } from "../domain/netWeight.js";
 import { CHART_OF_ACCOUNTS as NW_CHART } from "../core/chart.js";
 import { HomeScreen } from "../ui/HomeScreen.jsx";
@@ -9680,6 +9683,22 @@ export default function GoldInventoryApp() {
             onTest={handleExternalInvoice}
             onBack={() => setMorePage(null)}
           />
+        )}
+        {morePage === "netWeight" && (
+          <NetWeightPage currency={priceData.currency || "ر.س"} onOpen={openPage} onBack={() => setMorePage(null)}
+            journal={journal} goldLedger={goldLedger} price24={Number(priceData.current) || 0} fixedDue={fixedDue} baseKarat={appSettings?.baseKarat || 21}
+            goldOwned24={(combinedGold.physical.inventory || 0) + (combinedGold.physical.scrap || 0) - (combinedGold.goldOwed.total || 0)}
+            accountName={(c) => NW_CHART.find((a) => a.code === c)?.name || c} />
+        )}
+        {morePage === "wastageReport" && (
+          <div className="px-4 pt-4 pb-24">
+            <SubPageHeader title="كم ضاع في التصنيع؟" onBack={() => setMorePage(null)} />
+            <WastageReportView currency={priceData.currency || "ر.س"} />
+          </div>
+        )}
+        {morePage === "wps" && <WpsPage currency={priceData.currency || "ر.س"} flashToast={flashToast} onBack={() => setMorePage(null)} />}
+        {morePage === "storeOrders" && (
+          <StoreLinkPage initialTab="orders" config={storeLink} orders={storeOrders} items={items} onSave={handleSaveStore} onTest={handleStoreOrder} onBack={() => setMorePage(null)} />
         )}
         {morePage === "storeLink" && (
           <StoreLinkPage

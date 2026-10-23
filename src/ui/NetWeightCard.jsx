@@ -37,6 +37,12 @@ function NetWeightCard({ pos, currency = "ر.س", onOpen }) {
               <h2 style={{ color: "var(--text)" }} className="text-lg font-bold">صافي الفرع بالوزن · عيار {K}</h2>
               <button onClick={() => setOpen(false)} style={{ color: "var(--text2)" }}><X size={20} /></button>
             </div>
+            {onOpen && (
+              <button type="button" onClick={() => { setOpen(false); onOpen("netWeight"); }} data-net-open-full
+                className="w-full mb-2 py-2 rounded-xl text-xs font-bold" style={{ background: "var(--accentBg)", color: "var(--accent)", border: "1px solid var(--accentLine)" }}>
+                افتح التقرير الكامل ←
+              </button>
+            )}
             <Row label="الذهب المملوك (مشغول وكسر بعد ما علينا للموردين)" grams={pos.gold.grams} go={onOpen ? () => onOpen("inventory") : null} />
             <Row label="النقد كلّه (كاش وشبكة) بسعر اليوم" amount={pos.cash.total} grams={pos.cash.grams} sign="+" go={onOpen ? () => onOpen("cash") : null} />
             {pos.cash.rows.map((r) => <Row key={r.code} sub label={`${r.code} ${r.name}`} amount={r.amount} />)}
