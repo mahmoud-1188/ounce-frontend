@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { fmtMoney, fmtW } from "../core/money.js";
 import { buildCashFlow } from "../domain/buildCashFlow.js";
 import { buildEquityStatement } from "../domain/buildEquityStatement.js";
@@ -14,12 +14,14 @@ import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 
 function FullStatementsPage({
   journal = [], goldLedger = [], accounts = [], assets = [],
-  currency = "ر.س", branchName = "", preparedBy = "", onBack,
+  currency = "ر.س", branchName = "", preparedBy = "", onBack, sub = null,
 }) {
   const today = new Date().toISOString().slice(0, 10);
   const [from, setFrom] = useState(`${new Date().getFullYear()}-01-01`);
   const [to, setTo] = useState(today);
   const [tab, setTab] = useState("guide");
+  // القائمة المطلوبة من الباب (fullStatements:income · bs · …)
+  useEffect(() => { if (["income", "bs", "equity", "cf", "wf", "notes", "adj", "guide", "tb"].includes(sub?.v)) setTab(sub.v); }, [sub?.n]); // eslint-disable-line react-hooks/exhaustive-deps
   const money = (v) => `${fmtMoney(v || 0)} ${currency}`;
 
   const inc = useMemo(() => buildIncomeStatement({ journal, accounts, from, to }), [journal, accounts, from, to]);

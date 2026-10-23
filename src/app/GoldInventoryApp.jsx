@@ -647,6 +647,9 @@ export default function GoldInventoryApp() {
   const [cashModalType, setCashModalType] = useState(null);
   const [showAiChat, setShowAiChat] = useState(false);
   const [showPartialSale, setShowPartialSale] = useState(false);
+  // قسم الشاشة المفتوحة من الباب (cash:safe …) — يقرؤه من يخصّه فقط
+  const [pageSub, setPageSub] = useState({ page: null, v: null, n: 0 });
+  const subOf = (page) => (pageSub.page === page ? pageSub : null);
   const [showSetPartSale, setShowSetPartSale] = useState(false);
   const [openBundle, setOpenBundle] = useState(null);
   // فاتورةٌ فُتح منها «مرتجع/استبدال» — تُحدَّد سلفًا في شاشتهما
@@ -3048,7 +3051,12 @@ export default function GoldInventoryApp() {
       window.removeEventListener("touchstart", onStart); window.removeEventListener("touchend", onEnd);
     };
   }, []);
-  const openPage = (id) => {
+  const openPage = (rawId) => {
+    // الشاشة قد تحمل قسمها بعد «:» (المرجع: cash:safe · reportsHub:gold · fullStatements:bs · expenses:new)
+    // فتُفتح الشاشة ويصلها قسمها { v, n } — n يتغيّر مع كل فتحٍ فيُطبَّق ولو تكرّر القسم نفسه.
+    const [base, subV = null] = String(rawId || "").split(":");
+    const id = base === "generalLedger" && subV === "journals" ? "journal" : base;
+    setPageSub((p) => ({ page: id, v: subV, n: (p.n || 0) + 1 }));
     // كل فتحٍ خطوةٌ في سجلّ الرجوع، وسطرٌ في سجلّ المتصفّح فيعمل زرّ الجهاز
     const cur = navRef.current;
     if ((TAB_KIND_IDS.includes(id) ? cur.tab !== id || cur.morePage : cur.morePage !== id)) {
@@ -8424,7 +8432,7 @@ export default function GoldInventoryApp() {
           </div>
         )}
         {currentUser && (
-          <HubBar current={morePage || tab}
+          <HubBar current={pageSub.v && pageSub.page === (morePage || tab) ? `${pageSub.page}:${pageSub.v}` : morePage || tab}
             allowed={(id) => (permsNow.allowedTabs.includes(id) || permsNow.allowedMore.includes(id))
               && !moduleHiddenPages.includes(id) && (id !== "bankRecon" || !!appSettings.bankReconEnabled)}
             onOpen={openPage} />
@@ -8495,6 +8503,11 @@ export default function GoldInventoryApp() {
               setShowNewSale(true);
             }}
             onScrap={() => { setMorePage(null); setOpenBundle("grp_scrap_all"); }}
+            onPartialSale={() => {
+              if (!openDay) { openPage("sales"); return; }
+              if (saleLocked) { flashToast("المخزون مقفل للجرد"); return; }
+              setShowPartialSale(true);
+            }}
             onGo={(id) => openPage(id)}
           />
         )}
@@ -8579,7 +8592,7 @@ export default function GoldInventoryApp() {
         )}
 
         {morePage === null && tab === "cash" && (
-          <CashTab
+          <CashTab sub={subOf("cash")}
             dailyBalance={cashBalance}
             safeBalance={safeBalance}
             safeGoldBalance={safeGoldBalance}
@@ -8611,7 +8624,7 @@ export default function GoldInventoryApp() {
         )}
 
         {morePage === null && tab === "expenses" && (
-          <ExpensesTab
+          <ExpensesTab sub={subOf("expenses")}
             expenseNames={expenseNames}
             users={users}
             onAddExpenseName={handleAddExpenseName}
@@ -8748,7 +8761,7 @@ export default function GoldInventoryApp() {
           />
         )}
         {morePage === "reports" && (
-          <ReportsTab
+          <ReportsTab sub={subOf("reports")}
             totals={totals}
             priceData={priceData}
             salesTotals={salesTotals}
@@ -9202,7 +9215,7 @@ export default function GoldInventoryApp() {
             periodStart={latestClosure ? latestClosure.closedAt : null} onBack={() => setMorePage(null)} />
         )}
         {morePage === "fullStatements" && (
-          <FullStatementsPage
+          <FullStatementsPage sub={subOf("fullStatements")}
             journal={journal}
             goldLedger={goldLedger}
             accounts={CHART_OF_ACCOUNTS}
@@ -9265,7 +9278,7 @@ export default function GoldInventoryApp() {
           />
         )}
         {morePage === "generalLedger" && (
-          <GeneralLedgerPage
+          <GeneralLedgerPage sub={subOf("generalLedger")}
             journal={journal}
             goldLedger={goldLedger}
             accounts={CHART_OF_ACCOUNTS}
@@ -9712,7 +9725,7 @@ export default function GoldInventoryApp() {
           />
         )}
         {morePage === "reportsHub" && (
-          <ReportsHubPage
+          <ReportsHubPage sub={subOf("reportsHub")}
             currency={priceData.currency}
             price24={priceData.current || 0}
             data={{

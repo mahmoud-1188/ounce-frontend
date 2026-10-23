@@ -7,15 +7,15 @@ const toneOf = (t) => ({ fg: `var(--tone-${t}, var(--accentText))`, bg: `var(--t
 import { ModalShell } from "./ModalShell.jsx";
 
 /// `stock`: مختصر المخزون تحت الأسعار — { title, value, unit, chips: [[تسمية, قيمة]], go } (الضغط يفتح `go`).
-function SimpleHome({ layout, has = () => true, sell24 = 0, currency = "ر.س", tasks = [], onSell, onScrap, onGo, badges = {}, stock = null }) {
+function SimpleHome({ layout, has = () => true, sell24 = 0, currency = "ر.س", tasks = [], onSell, onScrap, onPartialSale, onGo, badges = {}, stock = null }) {
   const [open, setOpen] = useState(null);
   const num = { fontFamily: "'Cairo', sans-serif", fontVariantNumeric: "tabular-nums" };
   const run = (row) => {
     setOpen(null);
     if (row.act === "sell") return onSell?.();
     if (row.act === "scrap") return onScrap?.();
-    const [p, t] = row.id.split(":");
-    return onGo(p, t || null);
+    if (row.act === "partialSale") return onPartialSale ? onPartialSale() : onGo("sales", null);
+    return onGo(row.id, null);
   };
   const withRows = (g) => ({ ...g, rows: simpleRows(g.items, has, NAV_REGISTRY) });
   const big = layout.big.map(withRows).filter((g) => g.rows.length);

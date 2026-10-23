@@ -15,7 +15,7 @@ import { SimpleHome } from "./SimpleHome.jsx";
 ///   تتبع الصلاحية: ما لا يملكه الدور لا يظهر.
 function HomeScreen({ userName = "", totals = {}, scrapTotals = {}, safeGoldBalance = {},
   cashBalance = {}, safeBalance = {}, custodyBalance = {}, priceData = {}, openDay = null,
-  permitted = [], onSell, onScrap = null, onGo, notices = [], design = "modern", sell24 = 0, alerts = 0, approvalsPending = 0 }) {
+  permitted = [], onSell, onScrap = null, onPartialSale = null, onGo, notices = [], design = "modern", sell24 = 0, alerts = 0, approvalsPending = 0 }) {
   const currency = priceData.currency || "ر.س";
   const p21 = PURITY[21];
   const to21 = (fine) => (Number(fine) || 0) / p21;
@@ -55,7 +55,7 @@ function HomeScreen({ userName = "", totals = {}, scrapTotals = {}, safeGoldBala
       <SimpleHome layout={SIMPLE_BRANCH} has={has} sell24={sell24 || Number(priceData.current) || 0} currency={currency} tasks={tasks}
         stock={{ title: "المخزون الآن · مكافئ عيار 21", value: fmtW(to21(allFine)), unit: "جم21", go: has("inventory") ? "inventory" : null,
           chips: [["القطع", totals.pieces || 0], ["مشغول", fmtW(to21(invFine))], ["كسر", fmtW(to21(scrapFine + safeFine))]] }}
-        onSell={onSell} onScrap={onScrap} onGo={(id) => onGo(id)} />
+        onSell={onSell} onScrap={onScrap} onPartialSale={onPartialSale} onGo={(id) => onGo(id)} />
     );
   }
   const radiant = design === "radiant";

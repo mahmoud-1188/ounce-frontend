@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { GoldEq } from "../ui/GoldEq.jsx";
 import { ArrowDownCircle, ArrowUpCircle, Lock } from "lucide-react";
 import { PURITY, fine24, fmt, fmtW } from "../core/money.js";
@@ -45,8 +45,11 @@ function CashTab({
   // المكوّن لم يكن يستقبله كـ prop أصلاً — فكان suppliers يُقرأ من
   // نطاقٍ غير موجود ويرمي ReferenceError فور فتح نموذج ذهب الخزنة.
   suppliers = [],
+  // القسم المطلوب من الباب (cash:daily · cash:safe · cash:scrap) — { v, n } فيُطبَّق مع كل فتح
+  sub = null,
 }) {
-  const [pill, setPill] = useState("daily"); // 'safe' | 'daily' | 'scrap'
+  const [pill, setPill] = useState(["daily", "safe", "scrap"].includes(sub?.v) ? sub.v : "daily"); // 'safe' | 'daily' | 'scrap'
+  useEffect(() => { if (["daily", "safe", "scrap"].includes(sub?.v)) setPill(sub.v); }, [sub?.n]); // eslint-disable-line react-hooks/exhaustive-deps
   const [showSafeForm, setShowSafeForm] = useState(null); // 'transfer' | 'in' | 'out' | 'gold' | null
   const [showFundForm, setShowFundForm] = useState(false);
   const [showStatement, setShowStatement] = useState(false);

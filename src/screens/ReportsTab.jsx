@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { AlertTriangle, Check, FileMinus, FileSpreadsheet, FileText, Loader2, Receipt, Search, Sparkles, Truck } from "lucide-react";
 import * as XLSX from "xlsx";
 import { REPORT_AI_RULES, TRACE_TOPICS } from "../core/assistant.js";
@@ -20,13 +20,15 @@ function ReportsTab({
   activeItems = [], items = [], lots = [], suppliers = [], scrapEntries = [],
   taskirEntries = [], weightAdjustments = [], audits = [], users = [],
   safeGoldTx = [], dailyCustody = [], safeAudits = [],
-  openingBalance = {}, openDay = null, onBack,
+  openingBalance = {}, openDay = null, onBack, sub = null,
 }) {
   const [period, setPeriod] = useState("month");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [detailed, setDetailed] = useState(false);
   const [tab, setTab] = useState("overview");
+  // التقرير المطلوب من الباب (reports:sales · purchases · expenses · inventory · overview · ai)
+  useEffect(() => { if (["overview", "sales", "purchases", "expenses", "inventory", "ai"].includes(sub?.v)) setTab(sub.v); }, [sub?.n]); // eslint-disable-line react-hooks/exhaustive-deps
   const [compare, setCompare] = useState(false);
   const [periodB, setPeriodB] = useState("yesterday");
   const [aiNarrative, setAiNarrative] = useState("");

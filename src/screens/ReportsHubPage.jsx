@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { fmtMoney } from "../core/money.js";
 import { buildReportHub } from "../domain/buildReportHub.js";
 import { inputStyle, reportPeriod, toCsv } from "../domain/helpers.js";
@@ -24,7 +24,7 @@ const REPORT_QUESTIONS = [
 ];
 const Q_KEY = "ounce_reports_question";
 
-function ReportsHubPage({ data, currency = "ر.س", price24 = 0, onOpen, onBack }) {
+function ReportsHubPage({ data, currency = "ر.س", price24 = 0, onOpen, onBack, sub = null }) {
   const zakat = useZakat(price24);
   const [periodKey, setPeriodKey] = useState("month");
   const [custom, setCustom] = useState({ from: "", to: "" });
@@ -33,6 +33,8 @@ function ReportsHubPage({ data, currency = "ر.س", price24 = 0, onOpen, onBack 
     try { const v = localStorage.getItem(Q_KEY); return REPORT_QUESTIONS.some((q) => q.id === v) ? v : "all"; } catch { return "all"; }
   });
   const setQuestion = (v) => { setQuestionRaw(v); setOpenCard(null); try { localStorage.setItem(Q_KEY, v); } catch { /* تخزينٌ محجوب */ } };
+  // السؤال المطلوب من الباب (reportsHub:profit · flow · gold · parties · cash · tax)
+  useEffect(() => { const q = sub?.v === "parties" ? "owed" : sub?.v; if (q && REPORT_QUESTIONS.some((x) => x.id === q)) setQuestion(q); }, [sub?.n]); // eslint-disable-line react-hooks/exhaustive-deps
   const [pressed, setPressed] = useState(null);
   // ⚠ **الطباعة تفتح كل البطاقات أولًا:** ما يُطبع ورقةٌ للمراجع، لا شاشةٌ تُطوى بالضغط.
   //   وتُطفأ الحركة كي لا يُلتقط الرقم في منتصف عدّه.
