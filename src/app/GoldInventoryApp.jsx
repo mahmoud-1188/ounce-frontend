@@ -134,6 +134,7 @@ const API_ERROR_MESSAGES = {
   // وضع الافتتاح
   branch_has_sales: "المحل يبيع فعلًا — وضع الافتتاح للمحل الجديد قبل أول بيع",
   opening_mode_off: "وضع الافتتاح مطفأ — فعّله من الرصيد الافتتاحي",
+  opening_reopen_hq_only: "إعادة فتح تكويد الافتتاح للإدارة وحدها — اطلبها منها بسببها",
   invalid_karat: "اختر العيار",
   invalid_cost_per_gram: "أدخل تكلفة الجرام",
   insufficient_weight: "الوزن غير متوفر",
