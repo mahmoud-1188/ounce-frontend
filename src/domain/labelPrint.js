@@ -1,8 +1,8 @@
-import { codeToEpcHex, printLabelToDevice } from "./helpers.js";
+import { codeToEpcHex, labelPrinterCfg, printLabelToDevice } from "./labelPrinter.js";
 import { PRINTER_SERVICES } from "../core/constants.js";
 
-/// طابعة الملصقات المضبوطة (بلوتوث أو USB) — غير ذلك «طابعة النظام» عبر نافذة المتصفح
-const isLabelPrinter = (cfg) => !!cfg && (cfg.mode === "bluetooth" || cfg.transport === "usb");
+/// ملصقات التكويد على طابعة الملصقات بالبلوتوث وحدها (المصدر): لا نافذة طباعة ولا PDF
+const isLabelPrinter = () => true;
 
 // جهاز البلوتوث يُحفظ للجلسة: الاقتران مرةً من «إعدادات الطابعة» ثم يُستعاد بلا مربّع اختيار
 const btRef = { current: null };
@@ -39,8 +39,10 @@ function unitEpcFor(unit, code) {
  * يطبع ملصقات القطع على طابعة الملصقات المضبوطة، ملصقًا ملصقًا.
  * units: [{ item, code }] — يُرجع عدد ما أُرسل، أو يرمي خطأً بالعربية عند أوّل فشل (وما قبله طُبع).
  */
-async function printLabelsToDevice(units, { cfg, currency, price24, onRemember, onProgress, onBindEpc }) {
-  const ref = cfg.transport === "usb" ? { current: null } : await ensureBluetooth(cfg);
+async function printLabelsToDevice(units, { cfg: cfgIn, currency, price24, onRemember, onProgress, onBindEpc }) {
+  // بلوتوث، والرقاقة مع كل ملصق، والفجوة ثابتة — مهما كان المحفوظ
+  const cfg = labelPrinterCfg(cfgIn);
+  const ref = await ensureBluetooth(cfg);
   let sent = 0;
   for (const u of units) {
     let epcHex = null;

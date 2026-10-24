@@ -1,4 +1,5 @@
 import { DEFAULT_PRINTER } from "../core/constants.js";
+import { fitLayout } from "./labelPrinter.js";
 
 /// نماذج الملصق الثلاثة: لكلٍّ اسمه ومقاسه وتخطيطه، والباقي (الطابعة · الدقّة · الرقاقة · الفجوة) مشترك.
 /// ⚠ ما حُفظ قبل النماذج يصير «نموذج 1» بمقاسه وتخطيطه.
@@ -22,7 +23,7 @@ function syncActiveLabelModel(cfg) {
     const w = Number(sv.labelWidthMm) > 0 ? Number(sv.labelWidthMm) : d.labelWidthMm;
     const h = Number(sv.labelHeightMm) > 0 ? Number(sv.labelHeightMm) : d.labelHeightMm;
     models[id] = { name: cleanLabelModelName(sv.name, d.name), labelWidthMm: w, labelHeightMm: h,
-      layout: sv.layout && typeof sv.layout === "object" ? sv.layout : DEFAULT_PRINTER.layout };
+      layout: sv.layout && typeof sv.layout === "object" ? sv.layout : fitLayout(DEFAULT_PRINTER.layout, w, h) };
   }
   // النموذج الفعّال يأخذ المقاس والتخطيط الحاليين
   const w = Number(base.labelWidthMm) > 0 ? Number(base.labelWidthMm) : models[active].labelWidthMm;
