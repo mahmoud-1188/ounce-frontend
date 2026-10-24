@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import * as api from "../core/api.js";
 import { Check } from "lucide-react";
 import { APPROVAL_RULES, APPROVAL_STATUS } from "../core/erp.js";
 import { fmtMoney } from "../core/money.js";
@@ -34,7 +35,13 @@ function ApprovalsPage({ approvals = [], currency, canDecide = false, settings =
   const done = approvals.filter((a) => a.status !== "pending" && !awaitingRun(a));
   // ما اعتمده صاحبه لنفسه — يُراجَع هنا وفي الإدارة
   const selfApproved = approvals.filter((a) => a.selfApproved);
-  const list = tab === "pending" ? pending : tab === "self" ? selfApproved : done;
+  // ما مضى بلا موافقة بتفويض الإدارة — لمن يقرّر الاعتمادات (المرجع: تبويب «بلا موافقة»)
+  const [waived, setWaived] = useState([]);
+  useEffect(() => {
+    if (!canDecide) return;
+    api.controlApi.waived(30).then((d) => setWaived(d.waived || [])).catch(() => setWaived([]));
+  }, [canDecide]);
+  const list = tab === "pending" ? pending : tab === "self" ? selfApproved : tab === "waived" ? [] : done;
   const kindRules = APPROVAL_RULES.filter((r) => LIVE_KINDS.includes(r.id))
     .map((r) => ({ ...r, th: settings.approvalThresholds?.[r.id] ?? r.threshold }));
   const P = (v) => `${fmtMoney(v || 0)} ${currency}`;
@@ -72,9 +79,11 @@ function ApprovalsPage({ approvals = [], currency, canDecide = false, settings =
     <div>
       <SubPageHeader title="الاعتمادات" onBack={onBack} />
       <div className="px-4 pt-3">
-        <div className={`grid ${selfApproved.length ? "grid-cols-3" : "grid-cols-2"} gap-2 mb-3`}>
-          {[["pending", `المعلّقة (${pending.length})`], ["done", `السجل (${done.length})`], ...(selfApproved.length ? [["self", `ذاتيًّا (${selfApproved.length})`]] : [])].map(([id, l]) => (
+        <div className="grid gap-2 mb-3" style={{ gridTemplateColumns: `repeat(${2 + (selfApproved.length ? 1 : 0) + (waived.length ? 1 : 0)}, minmax(0, 1fr))` }}>
+          {[["pending", `المعلّقة (${pending.length})`], ["done", `السجل (${done.length})`], ...(selfApproved.length ? [["self", `ذاتيًّا (${selfApproved.length})`]] : []),
+            ...(waived.length ? [["waived", `بلا موافقة (${waived.length})`]] : [])].map(([id, l]) => (
             <button key={id} onClick={() => setTab(id)} data-approvals-tab={id} className="py-2 rounded-xl text-xs font-bold"
+              data-help={id === "waived" ? "ما مضى بلا موافقةٍ بتفويض الإدارة — كل عمليةٍ بمبلغها ومن أجراها ومتى. افتحه لمراجعة ما جرى أثناء «بلا موافقات»." : undefined}
               style={{ background: tab === id ? "var(--accentBg)" : "var(--panel)", color: tab === id ? "var(--accent)" : "var(--text2)", border: "1px solid var(--line)" }}>{l}</button>
           ))}
         </div>
@@ -82,7 +91,22 @@ function ApprovalsPage({ approvals = [], currency, canDecide = false, settings =
           <p style={{ color: "var(--text3)" }} className="text-[11px] mb-2">⚖ ما اعتمده صاحبه لنفسه فوق حدّ «الشخص الثاني» لأنه لا أحد غيره يعتمده — يُراجَع هنا وفي الإدارة.</p>
         )}
         {err && <p style={{ color: "var(--bad)" }} className="text-[11px] mb-2">⚠ {err}</p>}
-        {list.length === 0 ? (
+        {tab === "waived" ? (
+          <div className="flex flex-col gap-2 mb-3" data-approvals-waived>
+            <p style={{ color: "var(--text3)" }} className="text-[11px]">ما مضى بلا موافقةٍ بتفويض الإدارة («بلا موافقات» أو نوعٌ جعلته «بلا موافقة») في 30 يومًا — يُراجَع هنا وفي الإدارة.</p>
+            {waived.map((w) => (
+              <Card key={w.id} style={{ padding: 10 }}>
+                <div className="flex items-center justify-between gap-2">
+                  <p style={{ color: "var(--text)", margin: 0 }} className="text-xs font-bold">{w.kindLabel}{w.note ? ` · ${w.note}` : ""}</p>
+                  <b style={{ color: "var(--text)" }} className="text-xs whitespace-nowrap">{P(w.amount)}</b>
+                </div>
+                <p style={{ color: "var(--text3)", margin: "2px 0 0" }} className="text-[11px]">
+                  {w.actor || "—"} · {w.at ? new Date(w.at).toLocaleString("en-GB") : ""}{w.threshold != null ? ` · الحدّ ${fmtMoney(w.threshold)}` : ""} · {w.reason === "routing_none" ? "نوعٌ بلا موافقة" : "بلا موافقات"}
+                </p>
+              </Card>
+            ))}
+          </div>
+        ) : list.length === 0 ? (
           <EmptyState icon={<Check size={30} color="var(--accentSoft)" />} title={tab === "pending" ? "لا طلبات معلّقة" : "لا سجلّ بعد"}
             sub="ما فوق الحدّ من مصروفٍ أو ردٍّ أو سدادٍ يظهر هنا طلبًا ويُنفَّذ عند اعتماده" />
         ) : (
