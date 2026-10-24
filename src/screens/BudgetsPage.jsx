@@ -7,7 +7,8 @@ import { Card } from "../ui/Card.jsx";
 import { NumericInput } from "../ui/NumericInput.jsx";
 import { SubPageHeader } from "../ui/SubPageHeader.jsx";
 
-/// الموازنات (migration 060) — المخطَّط لكل حساب مصروف وإيراد مقابل الفعلي من دفتر اليومية على الخادم
+/// الموازنات (migration 060) — المخطَّط لكل حساب مصروف وإيراد مقابل الفعلي من دفتر اليومية على الخادم،
+/// ومراكز التكلفة (migration 100): يُنسب المصروف إليها عند تسجيله ويُرى مجموع كلٍّ منها في الشهر
 const monthOf = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 const prevOf = (p) => { const [y, m] = p.split("-").map(Number); return monthOf(new Date(y, m - 2, 1)); };
 
@@ -18,6 +19,20 @@ function BudgetsPage({ currency = "ر.س", canEdit = false, onBack }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
   const [showAll, setShowAll] = useState(false);
+  const [cc, setCc] = useState("");
+  const addCenter = async () => {
+    const name = cc.trim();
+    if (name.length < 2 || busy) return;
+    setBusy(true); setMsg(null);
+    try { await api.budgetsApi.addCenter(name); setCc(""); setMsg({ text: `أُضيف مركز «${name}»` }); load(period); }
+    catch (e) { setMsg({ bad: true, text: e?.body?.error === "cost_center_exists" ? "اسمٌ مكرّر — المركز موجود" : "تعذّرت الإضافة" }); }
+    finally { setBusy(false); }
+  };
+  const toggleCenter = async (c) => {
+    setBusy(true); setMsg(null);
+    try { await api.budgetsApi.updateCenter(c.id, { active: !c.active }); load(period); }
+    catch { setMsg({ bad: true, text: "تعذّر التعديل" }); } finally { setBusy(false); }
+  };
   const load = (p = period) => { setData(null); api.budgetsApi.get(p).then((d) => { setData(d); setDraft({}); }).catch(() => setData({ rows: [], totals: {} })); };
   useEffect(() => { load(period); }, [period]);
   const m = (v) => `${fmtMoney(v)} ${currency}`;
@@ -61,7 +76,7 @@ function BudgetsPage({ currency = "ر.س", canEdit = false, onBack }) {
   };
   return (
     <div className="pb-24">
-      <SubPageHeader title="الموازنات" onBack={onBack} />
+      <SubPageHeader title="الموازنات ومراكز التكلفة" onBack={onBack} />
       <div className="px-4 pt-3">
         <Card style={{ padding: 12, marginBottom: 10 }}>
           <div className="flex gap-2 items-center mb-2">
@@ -86,6 +101,31 @@ function BudgetsPage({ currency = "ر.س", canEdit = false, onBack }) {
             {exp.length ? exp.map(Row) : <p className="text-[11px] mb-3" style={{ color: "var(--text3)" }}>لا حركة ولا موازنة هذا الشهر.</p>}
             <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2 mt-3">الإيرادات (المستهدف)</p>
             {inc.length ? inc.map(Row) : <p className="text-[11px]" style={{ color: "var(--text3)" }}>لا حركة ولا مستهدف هذا الشهر.</p>}
+            <p style={{ color: "var(--accent)" }} className="text-xs font-bold mb-2 mt-3">مراكز التكلفة — مصروفات {period}</p>
+            <Card style={{ padding: 12, marginBottom: 10 }} data-cost-centers>
+              {(data.byCenter || []).length === 0
+                ? <p style={{ color: "var(--text3)", margin: 0 }} className="text-[11px]">لا مراكز بعد — أضف مركزًا (معرض، ورشة، تسويق…) ثم انسب المصروف إليه عند تسجيله.</p>
+                : data.byCenter.map((c) => (
+                  <div key={c.id} className="flex items-center justify-between gap-2 py-1" style={{ borderBottom: "1px solid var(--line)", opacity: c.active ? 1 : 0.55 }}>
+                    <span className="text-[12px]" style={{ color: "var(--text)" }}>{c.name}{c.active ? "" : " (موقوف)"}{c.count ? <span className="text-[10px]" style={{ color: "var(--text3)" }}> · {c.count} مصروف</span> : null}</span>
+                    <span className="flex items-center gap-2">
+                      <b className="text-[12px]" style={{ color: "var(--text)" }}>{m(c.amount)}</b>
+                      {canEdit && (
+                        <button onClick={() => toggleCenter(c)} disabled={busy} className="text-[10px] px-2 py-0.5 rounded-full"
+                          data-help={c.active ? "يوقف المركز فلا يظهر في نموذج المصروف — مصروفاته السابقة تبقى منسوبةً إليه" : "يعيد المركز إلى نموذج المصروف"}
+                          style={{ background: "var(--field)", color: "var(--text2)", border: "1px solid var(--line)" }}>{c.active ? "أوقف" : "أعِد"}</button>
+                      )}
+                    </span>
+                  </div>
+                ))}
+              {canEdit && (
+                <div className="flex gap-2 mt-2">
+                  <input style={{ ...inputStyle, marginBottom: 0 }} value={cc} onChange={(e) => setCc(e.target.value)} placeholder="اسم مركزٍ جديد" aria-label="اسم مركز التكلفة" />
+                  <button onClick={addCenter} disabled={busy || cc.trim().length < 2} className="px-3 rounded-xl text-[11px] font-bold"
+                    style={{ background: "var(--accentBg)", color: "var(--accent)", border: "1px solid var(--accentLine)" }}>أضف</button>
+                </div>
+              )}
+            </Card>
           </>
         )}
       </div>

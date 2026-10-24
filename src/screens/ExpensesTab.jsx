@@ -11,6 +11,7 @@ import { accountLabel, exportTablesPdf, fundingSourceLabel, inputStyle, openAtta
 import { AddExpenseForm } from "../ui/AddExpenseForm.jsx";
 import { Card } from "../ui/Card.jsx";
 import { EmptyState } from "../ui/EmptyState.jsx";
+import * as api from "../core/api.js";
 
 function ExpensesTab({ expenseNames = [], users = [], onAddExpenseName, onDeleteExpenseName, fixedDue = [], expenses, totals, currency, onAdd, flashToast, customAccounts = [], onAddAccount = null, onSetAccountHidden = null, sub = null }) {
   const [showForm, setShowForm] = useState(sub?.v === "new");
@@ -20,6 +21,12 @@ function ExpensesTab({ expenseNames = [], users = [], onAddExpenseName, onDelete
   const [period, setPeriod] = useState("month");
   const [search, setSearch] = useState("");
   const [openMonth, setOpenMonth] = useState(null);
+  // مراكز التكلفة القائمة — تُختار في النموذج اختياريًّا
+  const [costCenters, setCostCenters] = useState([]);
+  useEffect(() => {
+    if (!showForm) return;
+    api.budgetsApi.centers().then((d) => setCostCenters((d.centers || []).filter((c) => c.active))).catch(() => setCostCenters([]));
+  }, [showForm]);
 
   const inRange = (d) => {
     if (period === "all") return true;
@@ -259,6 +266,7 @@ function ExpensesTab({ expenseNames = [], users = [], onAddExpenseName, onDelete
         <AddExpenseForm
           expenseNames={expenseNames}
           users={users}
+          costCenters={costCenters}
           onAddExpenseName={onAddExpenseName}
           onDeleteExpenseName={onDeleteExpenseName}
           fixedDue={fixedDue}

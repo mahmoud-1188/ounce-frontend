@@ -652,6 +652,10 @@ const budgetsApi = {
   get: (period) => apiFetch(`/budgets?period=${period}`),
   save: (period, lines) => apiFetch("/budgets", { method: "PUT", body: { period, lines } }),
   copy: (from, to) => apiFetch("/budgets/copy", { method: "POST", body: { from, to } }),
+  // مراكز التكلفة (migration 100)
+  centers: (period) => apiFetch(`/cost-centers${period ? `?period=${period}` : ""}`),
+  addCenter: (name) => apiFetch("/cost-centers", { method: "POST", body: { name } }),
+  updateCenter: (id, body) => apiFetch(`/cost-centers/${id}`, { method: "PATCH", body }),
   vatReturn: (from, to) => apiFetch(`/vat-return?from=${from}&to=${to}`),
   vatSettle: (from, to, source) => apiFetch("/vat-return/settle", { method: "POST", body: { from, to, source } }),
   vatUndo: (id, reason) => apiFetch(`/vat-return/settle/${id}/undo`, { method: "POST", body: { reason } }),
