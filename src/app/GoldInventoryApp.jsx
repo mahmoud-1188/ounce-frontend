@@ -3533,9 +3533,10 @@ export default function GoldInventoryApp() {
   });
 
   // ── قفل الجرد ──
-  const handleSavePrinter = (next) => {
+  // كل تغييرٍ في صفحة الطابعة يُحفظ فورًا ({ quiet }) فلا رسالة لكل ضغطة — والحفظ الصريح يُعلن
+  const handleSavePrinter = (next, { quiet = false } = {}) => {
     persist(PRINTER_KEY, next, setPrinterCfg);
-    flashToast("حُفظت إعدادات الطابعة");
+    if (!quiet) flashToast("حُفظت إعدادات الطابعة");
   };
 
   // ⚠ محلي بحتٌ مثل الطابعة تمامًا: كل متصفح/جهاز يقترن بقارئه الفعلي

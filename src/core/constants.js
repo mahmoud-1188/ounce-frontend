@@ -650,40 +650,52 @@ const EXT_SAMPLE = {
 const DEMO_VERSION = 1;
 
 const DEFAULT_PRINTER = {
-  mode: "system",            // system | bluetooth
+  mode: "bluetooth",
   deviceId: null,
   deviceName: null,
   labelWidthMm: 50,
-  labelHeightMm: 30,
-  dpi: 203,
+  labelHeightMm: 20,
+  // 300 لا 203، مثبتة على Urovo D81R. القيمة الخاطئة تطبع الملصق بثلثي مقاسه
+  dpi: 300,
   copies: 1,
-  density: 8,               // 0-15 على طابعات الملصقات
-  // ⚠ من نسخة العميل: منقولة بلا تغيير قيمها الافتراضية الأصلية
-  // (mode/labelWidthMm/labelHeightMm أُبقيت على قيم هذا التطبيق القائمة
-  // فلا يتغيّر سلوك من له إعداد محفوظ سلفًا).
-  lang: "auto",            // auto | escpos | tspl
-  transport: "system",
+  density: 8,
+  lang: "auto",
+  transport: "bluetooth",
   usbSerial: null,
-  gapMm: 2,
+  gapMm: 3,
   speed: 3,
   direction: 1,
-  rfid: false,
-  rfidCommand: 'RFID WRITE,EPC,"{HEX}"',
+  rfid: true,
+  // storeId يُكتب في الرقاقة ليفرّق رقاقة منافس عن قطعة ناقصة من مخزوننا
+  calibrateMode: "autodetect",
+  rfidVerified: true,
+  // لا rfidAutoV هنا: المحفوظ يُدمج مع الافتراضي، فيبدو كل جهاز قديم مُرحَّلًا وهو لم يُرحَّل
+  storeId: 0,
+  labelOffsetMm: 0,
+  // labelShiftDots يحرّك الصورة رأسيًا، وعند 300 dpi كل 12 نقطة نحو 1 مم
+  labelShiftDots: 0,
+  rfidLock: "none",
+  rfidSecret: "",
   codeStyle: "barcode",     // barcode | qr
-  symbology: "barcode",      // barcode | qr
+  // QR لا باركود: Code128 بثماني خانات أعرض من وسادة الملصق فلا يُقرأ
+  // عناصر layout مستطيلات (x,y,w,h) بالمليمتر، x من الحافة اليمنى وy من الأعلى
+  symbology: "qr",      // barcode | qr
+  // تخطيط 50×20 كما ضُبط على الجهاز: المحتوى على الجناح الأيسر، والوصف والسعر مخفيّان
+  // لا طباعة على الشريط بين الوسادتين، فهو يُلفّ حول القطعة وتُمحى بالاحتكاك
   layout: {
-    logo:    { show: false, x: 44, y: 1.5,  w: 9,  h: 9 },
-    desc:    { show: true,  x: 2,  y: 1.5,  w: 40, h: 4 },
-    karat:   { show: true,  x: 2,  y: 6,    w: 11, h: 3.5 },
-    weight:  { show: true,  x: 14, y: 6,    w: 16, h: 3.5 },
-    price:   { show: false, x: 31, y: 6,    w: 18, h: 3.5 },
-    barcode: { show: true,  x: 2,  y: 10.5, w: 58, h: 8 },
-    qr:      { show: false, x: 2,  y: 5,    w: 14, h: 14 },
-    code:    { show: true,  x: 2,  y: 19.5, w: 58, h: 3.5 },
+    logo:    { show: true,  x: 38,   y: 1,    w: 9,    h: 9 },
+    desc:    { show: false, x: 2,    y: 1.5,  w: 40,   h: 4 },
+    weight:  { show: true,  x: 35,   y: 11.5, w: 7,    h: 2 },
+    karat:   { show: true,  x: 36.5, y: 14,   w: 5.5,  h: 2 },
+    price:   { show: false, x: 26,   y: 8.5,  w: 20,   h: 3.5 },
+    qr:      { show: true,  x: 41.5, y: 11.5, w: 8.5,  h: 8.5 },
+    barcode: { show: false, x: 1,    y: 1,    w: 23,   h: 7 },
+    code:    { show: true,  x: 28.5, y: 16.5, w: 13.5, h: 2.5 },
   },
+
   customLogo: null,
   showLogo: true,
-  showPrice: false,         // ⚠ السعر على الرقاقة يُلزمك به أمام العميل
+  showPrice: false,         // السعر المطبوع على الملصق يُلزم المحل أمام العميل
   showKarat: true,
   showWeight: true,
   autoCut: true,
@@ -873,6 +885,17 @@ const WEAK_PINS = ["0000", "1111", "1234", "1122", "2222", "9999", "4321",
 /// رقاقة Impinj M830 — لوحة تعريف بـ96 بتًا: 8 رمز + 2 محل + 2 تاريخ
 const EPC_EPOCH = Date.UTC(2020, 0, 1);
 const M830 = { epcBits: 96, epcBytes: 12, epcWords: 6, pcWord: "3000", tidBits: 96, userBits: 0 };
+
+// 11 حدّ أدنى للخط، فالأصغر لا يُقرأ في ضوء المحل
+const FS = { xs: 11, sm: 12, md: 13, lg: 15, xl: 20, hero: 26 };
+
+// الطريقة المعتمدة في الإصدارين: الهواء ISO 18000-6C (EPC Gen2) والوصلة بلوتوث منخفض الطاقة، والجرد بأعلى طاقة
+const RFID_PROTOCOL = {
+  air: "ISO 18000-6C (EPC Gen2) — UHF",
+  link: "بلوتوث منخفض الطاقة (BLE) · قارئ NHR-10",
+  powerDbm: NHR_POWER_MAX_DBM,
+  label: "ISO 18000-6C (EPC Gen2) · بلوتوث · 30 dBm",
+};
 
 const CASH_LEDGER_CODES = ["1110", "1120", "1130", "1140", "1150"];
 
@@ -1242,5 +1265,5 @@ const QUERY_OPS = [
   { id: "not", label: "لا يحتوي" },
 ];
 
-export { DOC_KINDS, ENROLL_TTL_MIN, EPC_EPOCH, M830, REVIEW_KINDS, REVIEW_SEVERITY, REVIEW_VERDICTS, WEAK_PINS, ACCOUNT_GROUPS, ACCOUNT_TREE, AUTO_WORKDAY, AI_APP_MANUAL, AI_PROMPTS, AI_SYSTEM_RULES, ALL_ACCOUNT_NODES, APP_MODES, ATTACH_PREFIX, B32, BREAKPOINTS, C128, CASH_ACCOUNT_OF, CASH_LEDGER_CODES, CATEGORY_STATE, COMPARE_MODES, CUST_EVENTS, DEFAULT_APP_MODE, DEFAULT_CATEGORIES, DEFAULT_INTEGRATION, DEFAULT_OPENING_BALANCE, DEFAULT_PRINTER, DEFAULT_SETTINGS, DEFAULT_STORE, DEFAULT_USERS, DEMO_VERSION, DOC_CYCLE, DOC_REFS, EXCHANGE_KINDS, EXCHANGE_VERSION, EXPENSE_ACCOUNT_OF, EXPENSE_CATEGORIES, EXT_SAMPLE, FIX_KINDS, ISSUE_REASONS, KPI_DEFS, LEGACY_ACCOUNT_NODES, LOGO_FADE_MS, LOGO_SWAP_MS, MANUAL_ACCOUNT_TREE, MAX_ATTACH_BYTES, MGR_FEE_DEFAULT, MIGRATION_FLAG, NHR, NHR_POWER_MAX_DBM, OUNCE_SECRET, PARTNER_REQUIRED, PRICE_SANE, PRICE_SOURCES, PRINTER_SERVICES, PUBLISH_CAP, QR_ALNUM, QR_EXP, QR_VER, RECOVERY_ALPHABET, RECOVERY_WINDOW_MIN, REPORT_RANGES, RFID_DEFAULTS, RFID_MODES, RFID_SECTIONS, ROLES, QUERY_FIELDS, QUERY_OPS, STATEMENT_ENTITIES, STORE_SAMPLE, TRUST_MOVES, WAGES_LEDGER_CODES };
+export { FS, RFID_PROTOCOL, DOC_KINDS, ENROLL_TTL_MIN, EPC_EPOCH, M830, REVIEW_KINDS, REVIEW_SEVERITY, REVIEW_VERDICTS, WEAK_PINS, ACCOUNT_GROUPS, ACCOUNT_TREE, AUTO_WORKDAY, AI_APP_MANUAL, AI_PROMPTS, AI_SYSTEM_RULES, ALL_ACCOUNT_NODES, APP_MODES, ATTACH_PREFIX, B32, BREAKPOINTS, C128, CASH_ACCOUNT_OF, CASH_LEDGER_CODES, CATEGORY_STATE, COMPARE_MODES, CUST_EVENTS, DEFAULT_APP_MODE, DEFAULT_CATEGORIES, DEFAULT_INTEGRATION, DEFAULT_OPENING_BALANCE, DEFAULT_PRINTER, DEFAULT_SETTINGS, DEFAULT_STORE, DEFAULT_USERS, DEMO_VERSION, DOC_CYCLE, DOC_REFS, EXCHANGE_KINDS, EXCHANGE_VERSION, EXPENSE_ACCOUNT_OF, EXPENSE_CATEGORIES, EXT_SAMPLE, FIX_KINDS, ISSUE_REASONS, KPI_DEFS, LEGACY_ACCOUNT_NODES, LOGO_FADE_MS, LOGO_SWAP_MS, MANUAL_ACCOUNT_TREE, MAX_ATTACH_BYTES, MGR_FEE_DEFAULT, MIGRATION_FLAG, NHR, NHR_POWER_MAX_DBM, OUNCE_SECRET, PARTNER_REQUIRED, PRICE_SANE, PRICE_SOURCES, PRINTER_SERVICES, PUBLISH_CAP, QR_ALNUM, QR_EXP, QR_VER, RECOVERY_ALPHABET, RECOVERY_WINDOW_MIN, REPORT_RANGES, RFID_DEFAULTS, RFID_MODES, RFID_SECTIONS, ROLES, QUERY_FIELDS, QUERY_OPS, STATEMENT_ENTITIES, STORE_SAMPLE, TRUST_MOVES, WAGES_LEDGER_CODES };
 
