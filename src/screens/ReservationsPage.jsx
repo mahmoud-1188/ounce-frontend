@@ -53,7 +53,7 @@ function holdState(r, today = todayYmd()) {
   return { state: days < 0 ? "expired" : days <= 1 ? "due" : "ok", days };
 }
 
-function ReservationsPage({ reservations, customers, activeItems, currency, canManage, onAdd, onCancel, onPay, onHold, onDeliver = null, onBack }) {
+function ReservationsPage({ reservations, customers, activeItems, currency, canManage, onAdd, onCancel, onPay, onHold, onDeliver = null, depositRequired = true, onBack }) {
   const [showAdd, setShowAdd] = useState(false);
   const [customerId, setCustomerId] = useState("");
   const [custQ, setCustQ] = useState("");
@@ -90,7 +90,7 @@ function ReservationsPage({ reservations, customers, activeItems, currency, canM
 
   const open = reservations.filter((r) => r.status === "open");
   const held = open.reduce((a, r) => a + (Number(r.deposit) || 0), 0);
-  const valid = customerId && Number(total) > 0 && Number(deposit) > 0 && Number(deposit) <= Number(total);
+  const valid = customerId && Number(total) > 0 && Number(deposit || 0) >= 0 && (!depositRequired || Number(deposit) > 0) && Number(deposit || 0) <= Number(total);
   const preview = usePlan && valid ? instalmentPreview({ total, deposit, count: planCount, firstDue: planFirst, everyDays: planEvery }) : [];
   const attention = open.filter((r) => holdState(r).state === "expired" || (instalmentState(r)?.overdueCount || 0) > 0).length;
 
@@ -182,7 +182,7 @@ function ReservationsPage({ reservations, customers, activeItems, currency, canM
                 <Field label={`③ السعر المتفق (${currency})`}>
                   <NumericInput value={total} onChange={setTotal} />
                 </Field>
-                <Field label={`العربون (${currency})`}>
+                <Field label={`العربون (${currency})${depositRequired ? "" : " — اختياري"}`}>
                   <NumericInput value={deposit} onChange={setDeposit} />
                 </Field>
               </div>

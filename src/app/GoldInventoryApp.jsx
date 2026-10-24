@@ -141,6 +141,7 @@ const API_ERROR_MESSAGES = {
   // وضع الافتتاح
   branch_has_sales: "المحل يبيع فعلًا — وضع الافتتاح للمحل الجديد قبل أول بيع",
   opening_mode_off: "وضع الافتتاح مطفأ — فعّله من الرصيد الافتتاحي",
+  deposit_required: "العربون إلزاميٌّ في هذا الفرع — اكتب مبلغه، أو اجعله اختياريًّا من الإعدادات",
   opening_reopen_hq_only: "إعادة فتح تكويد الافتتاح للإدارة وحدها — اطلبها منها بسببها",
   invalid_cost_center: "مركز التكلفة غير موجود أو موقوف — اختر غيره من «مزيد»",
   invalid_karat: "اختر العيار",
@@ -1277,6 +1278,8 @@ export default function GoldInventoryApp() {
       !!merged.postSaleSheet !== !!appSettings.postSaleSheet ||
       !!merged.sellDuringStocktake !== !!appSettings.sellDuringStocktake ||
       (Number(merged.quoteDays) || 7) !== (Number(appSettings.quoteDays) || 7) ||
+      (merged.scrapFlow === "direct") !== (appSettings.scrapFlow === "direct") ||
+      (merged.reservationDepositRequired !== false) !== (appSettings.reservationDepositRequired !== false) ||
       JSON.stringify(merged.wastage || null) !== JSON.stringify(appSettings.wastage || null);
     if (!taxOrFeesChanged) {
       flashToast("تم حفظ الإعدادات");
@@ -1293,7 +1296,8 @@ export default function GoldInventoryApp() {
         zakatYear: merged.zakatYear === "hijri" ? "hijri" : "gregorian",
         creditLimitDefault: Number(merged.creditLimitDefault) || 0,
         creditOverdueDays: Number(merged.creditOverdueDays) || 0,
-        salePrefs: { postSaleSheet: !!merged.postSaleSheet, sellDuringStocktake: !!merged.sellDuringStocktake, quoteDays: Number(merged.quoteDays) || 7, ...(merged.wastage ? { wastage: merged.wastage } : {}) },
+        salePrefs: { postSaleSheet: !!merged.postSaleSheet, sellDuringStocktake: !!merged.sellDuringStocktake, quoteDays: Number(merged.quoteDays) || 7, ...(merged.wastage ? { wastage: merged.wastage } : {}),
+          scrapFlow: merged.scrapFlow === "direct" ? "direct" : "review", reservationDepositRequired: merged.reservationDepositRequired !== false },
       });
       persistSettings({
         ...merged,
@@ -1303,7 +1307,8 @@ export default function GoldInventoryApp() {
         workdayMode: res.settings.workday_mode || "required",
         ...(res.settings.zakat_enabled != null ? { zakatEnabled: res.settings.zakat_enabled !== false, zakatYear: res.settings.zakat_year || "gregorian" } : {}),
         ...(res.settings.credit_limit_default != null ? { creditLimitDefault: Number(res.settings.credit_limit_default) || 0, creditOverdueDays: Number(res.settings.credit_overdue_days) || 0 } : {}),
-        ...(res.settings.sale_prefs ? { postSaleSheet: res.settings.sale_prefs.postSaleSheet === true, sellDuringStocktake: res.settings.sale_prefs.sellDuringStocktake === true, quoteDays: Number(res.settings.sale_prefs.quoteDays) || 7, ...(res.settings.sale_prefs.wastage ? { wastage: res.settings.sale_prefs.wastage } : {}) } : {}),
+        ...(res.settings.sale_prefs ? { postSaleSheet: res.settings.sale_prefs.postSaleSheet === true, sellDuringStocktake: res.settings.sale_prefs.sellDuringStocktake === true, quoteDays: Number(res.settings.sale_prefs.quoteDays) || 7,
+          scrapFlow: res.settings.sale_prefs.scrapFlow === "direct" ? "direct" : "review", reservationDepositRequired: res.settings.sale_prefs.reservationDepositRequired !== false, ...(res.settings.sale_prefs.wastage ? { wastage: res.settings.sale_prefs.wastage } : {}) } : {}),
       });
       flashToast("تم حفظ الإعدادات");
       return true;
@@ -5248,6 +5253,20 @@ export default function GoldInventoryApp() {
     if (morePage !== null) setMorePage(null);
     if (!["inventory", "stocktake"].includes(tab)) setTab("inventory");
   }, [role, tab, morePage]);
+
+  const idleLockMin = Number.isFinite(Number(appSettings?.idleLockMin)) ? Number(appSettings.idleLockMin) : 15;
+  useEffect(() => {
+    if (!currentUser || !(idleLockMin > 0) || typeof window === "undefined") return undefined;
+    let last = Date.now();
+    const touch = () => { last = Date.now(); };
+    const events = ["pointerdown", "keydown", "touchstart", "wheel"];
+    events.forEach((ev) => window.addEventListener(ev, touch, { passive: true }));
+    const t = setInterval(() => {
+      if (Date.now() - last >= idleLockMin * 60000) { handleLogout(); flashToast("قُفل التطبيق بعد الخمول — ادخل برقمك"); }
+    }, 15000);
+    return () => { clearInterval(t); events.forEach((ev) => window.removeEventListener(ev, touch)); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id, idleLockMin]);
 
   const handleLogout = () => {
     // ⚠ يزيد الجيل أولًا: أي عملية دخول/استعادة جلسة لا تزال قيد
@@ -9442,6 +9461,7 @@ export default function GoldInventoryApp() {
             onCancel={handleCancelReservation}
             onPay={handlePayReservation}
             onHold={handleHoldReservation}
+            depositRequired={appSettings.reservationDepositRequired !== false}
             onDeliver={(r) => { setQuickSaleItemId(r.itemId || null); setQuickSaleCustomerId(r.customerId || null); setShowNewSale(true); }}
             onBack={() => setMorePage(null)}
           />
@@ -9519,6 +9539,7 @@ export default function GoldInventoryApp() {
             userName={currentUser?.name || ""}
             storeId={Number(printerCfg?.storeId) || 0}
             rfidCfg={rfidCfg}
+            csvSep={appSettings.csvSeparator === ";" ? ";" : ","}
             canManage={role !== "employee"}
             onBindEpc={handleBindEpc}
             onBack={() => setMorePage(null)}
